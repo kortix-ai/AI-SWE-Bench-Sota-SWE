@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import argparse
 from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 from agentpress.llm import make_llm_api_call
@@ -15,8 +16,13 @@ async def run_agent():
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--repo-path", required=True, help="Path to the repository to analyze")
+    parser.add_argument("--problem-file", required=True, help="Path to the problem description JSON file")
+    args = parser.parse_args()
+
     # Read the instance data
-    with open('/swe_util/eval_data/instances/swe-bench-instance.json', 'r') as f:
+    with open(args.problem_file, 'r') as f:
         instance_data = json.load(f)[0]
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
