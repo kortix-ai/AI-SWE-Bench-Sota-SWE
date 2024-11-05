@@ -89,21 +89,9 @@ Current Codebase:
         api_key=os.environ.get("OPENAI_API_KEY")
     )
 
-    # Extract the assistant's reply
+    # Extract and print the assistant's reply
     assistant_reply = response['choices'][0]['message']['content']
-
-    # Save the patch to a file
-    patch_file = f"/workspace/{instance_id}_patch.diff"
-    with open(patch_file, 'w') as f:
-        f.write(assistant_reply)
-
-    # Output the results
-    output = {
-        "instance_id": instance_id,
-        "model_patch": assistant_reply,
-        "model_name_or_path": model_name
-    }
-    print(json.dumps(output))
+    print(assistant_reply)
 
 if __name__ == "__main__":
     asyncio.run(run_agent())
