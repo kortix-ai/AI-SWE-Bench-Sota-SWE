@@ -19,7 +19,14 @@ async def run_agent():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-path", required=True, help="Path to the repository to analyze")
     parser.add_argument("--problem-file", required=True, help="Path to the problem description JSON file")
+    parser.add_argument("--debug", action="store_true", default=True, help="Enable debug mode")
     args = parser.parse_args()
+
+    if args.debug:
+        with open("debug.py", "w") as f:
+            f.write("# Debug mode enabled")
+        print("Debug mode enabled, exiting...")
+        return
 
     # Read the instance data
     with open(args.problem_file, 'r') as f:
