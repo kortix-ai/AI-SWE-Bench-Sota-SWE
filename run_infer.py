@@ -115,12 +115,24 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 "model_name_or_path": "YourModelName"  # Replace with actual model name if available
             }
 
-            # Save the output to a JSON file
+            # Save the output to JSON files
             output_file = os.path.join(output_dir, f'{instance_id}.json')
+            log_file = os.path.join(output_dir, f'{instance_id}__log.json')
+            
+            # Save the patch output
             with open(output_file, 'w') as f:
                 json.dump(output, f, indent=2)
+                
+            # Save the stdout/stderr log
+            with open(log_file, 'w') as f:
+                json.dump({
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "return_code": result.returncode
+                }, f, indent=2)
 
             print(f"Saved output for instance {instance_id} to {output_file}")
+            print(f"Saved logs for instance {instance_id} to {log_file}")
 
 if __name__ == "__main__":
     import argparse
