@@ -5,11 +5,9 @@ import subprocess
 from datasets import load_dataset
 from typing import Any
 
-# Configure docker image prefix
-DOCKER_IMAGE_PREFIX = os.environ.get('EVAL_DOCKER_IMAGE_PREFIX', 'docker.io/xingyaoww/')
-
 def get_instance_docker_image(instance_id: str) -> str:
     """Get the docker image name for a specific instance."""
+    DOCKER_IMAGE_PREFIX = os.environ.get('EVAL_DOCKER_IMAGE_PREFIX', 'docker.io/xingyaoww/')
     image_name = 'sweb.eval.x86_64.' + instance_id
     image_name = image_name.replace('__', '_s_')  # To comply with Docker naming conventions
     return (DOCKER_IMAGE_PREFIX.rstrip('/') + '/' + image_name).lower()
@@ -59,7 +57,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
 
         # Create temporary directory for test files
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Save instance data with a more intuitive name
+            # Save instance data
             problem_file = os.path.join(temp_dir, 'problem.json')
             with open(problem_file, 'w') as f:
                 json.dump([instance], f)
@@ -75,22 +73,54 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
                 docker_image,
                 '/bin/bash', '-c',
-                'pip install --no-cache-dir -r /agent/requirements.txt && '
-                'python /agent/agent.py '
-                f'--repo-path /workspace/repo '
-                f'--problem-file /workspace/data/problem.json'
+                (
+                    # Run the agent
+                    'pip install --no-cache-dir -r /agent/requirements.txt && '
+                    'python /agent/agent.py '
+                    f'--repo-path /workspace/{workspace_dir} '
+                    f'--problem-file /workspace/data/problem.json && '
+                    # After the agent has run, perform git operations
+                    # f'cd /workspace/{workspace_dir} && '
+                    'ls && '
+                    # Ensure that any changes made by the agent are added and committed
+                    'git config --global user.email "agent@example.com" && '
+                    'git config --global user.name "Agent" && '
+                    'git add -A && '
+                    'git commit -m "Agent modifications" || true && '
+                    # Get the git diff between base_commit and HEAD
+                    f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff'
+                )
             ]
 
             print("\nRunning test in Docker container...")
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
+                continue
             else:
                 print(f"Agent output for instance {instance_id}:\n{result.stdout}")
-                # Save the agent's output
-                output_file = os.path.join(output_dir, f'{instance_id}.json')
-                with open(output_file, 'w') as f:
-                    f.write(result.stdout)
+
+            # Read the git patch from the temporary directory
+            git_patch_file = os.path.join(temp_dir, 'git_patch.diff')
+            if os.path.exists(git_patch_file):
+                with open(git_patch_file, 'r') as f:
+                    git_patch = f.read()
+            else:
+                git_patch = ""
+
+            # Prepare the output data
+            output = {
+                "instance_id": instance_id,
+                "model_patch": git_patch,
+                "model_name_or_path": "YourModelName"  # Replace with actual model name if available
+            }
+
+            # Save the output to a JSON file
+            output_file = os.path.join(output_dir, f'{instance_id}.json')
+            with open(output_file, 'w') as f:
+                json.dump(output, f, indent=2)
+
+            print(f"Saved output for instance {instance_id} to {output_file}")
 
 if __name__ == "__main__":
     import argparse
