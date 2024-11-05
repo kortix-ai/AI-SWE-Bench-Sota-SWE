@@ -59,26 +59,26 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
 
         # Create temporary directory for test files
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Save instance data
-            instance_file = os.path.join(temp_dir, 'swe-bench-instance.json')
-            with open(instance_file, 'w') as f:
+            # Save instance data with a more intuitive name
+            problem_file = os.path.join(temp_dir, 'problem.json')
+            with open(problem_file, 'w') as f:
                 json.dump([instance], f)
 
             # Build the Docker run command
             cmd = [
                 'docker', 'run', '--rm',
-                '-v', f'{temp_dir}:/swe_util/eval_data/instances',  # Mount instance data
-                '-v', f'{os.path.abspath(agent_dir)}:/agent',        # Mount agent code
+                '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
+                '-v', f'{os.path.abspath(agent_dir)}:/agent',  # Mount agent code
                 '-e', f'SWE_INSTANCE_ID={instance_id}',
                 '-e', 'PIP_CACHE_DIR=/root/.cache/pip',
                 '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
                 '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
                 docker_image,
                 '/bin/bash', '-c',
-                # Prepare the environment and run the agent
-                # 'source /swe_util/instance_swe_entry.sh && '
-                'pip install --no-cache-dir -r /agent/requirements.txt && ',
-                # 'python /agent/agent.py .'
+                'pip install --no-cache-dir -r /agent/requirements.txt && '
+                'python /agent/agent.py '
+                f'--repo-path /workspace/repo '
+                f'--problem-file /workspace/data/problem.json'
             ]
 
             print("\nRunning test in Docker container...")
