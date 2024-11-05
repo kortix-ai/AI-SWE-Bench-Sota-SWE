@@ -71,6 +71,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 '-e', 'PIP_CACHE_DIR=/root/.cache/pip',
                 '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
                 '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
+                '-e', f'GROQ_API_KEY={os.environ.get("GROQ_API_KEY", "")}',
                 docker_image,
                 '/bin/bash', '-c',
                 (
@@ -81,7 +82,6 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                     f'--problem-file /workspace/data/problem.json && '
                     # After the agent has run, perform git operations
                     # f'cd /workspace/{workspace_dir} && '
-                    'ls && '
                     # Ensure that any changes made by the agent are added and committed
                     'git config --global user.email "agent@example.com" && '
                     'git config --global user.name "Agent" && '

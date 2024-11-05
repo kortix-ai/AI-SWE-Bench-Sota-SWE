@@ -1,0 +1,11 @@
+.aider*
+.env
+*.xml
+INSTRUCTIONS.md  
+eval  
+outputs  
+swe_bench_core  
+swe_bench_openhands  
+
+**/__pycache__/
+**/*.swp
