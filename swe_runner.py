@@ -120,19 +120,23 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
 
             # Save the output to JSON files
             output_file = os.path.join(output_dir, f'{instance_id}.json')
-            log_file = os.path.join(output_dir, f'{instance_id}__log.json')
+            log_file = os.path.join(output_dir, f'{instance_id}__log.txt')
             
             # Save the patch output
             with open(output_file, 'w') as f:
                 json.dump(output, f, indent=2)
                 
-            # Save the stdout/stderr log
+            # Save the stdout/stderr log in a readable format
             with open(log_file, 'w') as f:
-                json.dump({
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                    "return_code": result.returncode
-                }, f, indent=2)
+                f.write("=" * 50 + "\n")
+                f.write(f"RETURN CODE: {result.returncode}\n")
+                f.write("=" * 50 + "\n\n")
+                f.write("STDOUT:\n")
+                f.write("=" * 50 + "\n")
+                f.write(result.stdout)
+                f.write("\n\nSTDERR:\n")
+                f.write("=" * 50 + "\n")
+                f.write(result.stderr)
 
             # Extract tracked files if they exist
             tracked_files_archive = os.path.join(temp_dir, 'tracked_files.tar.gz')
