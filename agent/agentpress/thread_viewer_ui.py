@@ -1,10 +1,10 @@
 import streamlit as st
 import json
 import os
+import sys
 from datetime import datetime
 
 def load_thread_files(threads_dir: str):
-    """Load all thread files from the threads directory."""
     thread_files = []
     if os.path.exists(threads_dir):
         for file in os.listdir(threads_dir):
@@ -13,12 +13,10 @@ def load_thread_files(threads_dir: str):
     return thread_files
 
 def load_thread_content(thread_file: str, threads_dir: str):
-    """Load the content of a specific thread file."""
     with open(os.path.join(threads_dir, thread_file), 'r') as f:
         return json.load(f)
 
 def format_message_content(content):
-    """Format message content handling both string and list formats."""
     if isinstance(content, str):
         return content
     elif isinstance(content, list):
@@ -34,24 +32,25 @@ def format_message_content(content):
 def main():
     st.title("Thread Viewer")
     
-    # Directory selection in sidebar
     st.sidebar.title("Configuration")
     
-    # Initialize session state with default directory
     if 'threads_dir' not in st.session_state:
-        default_dir = "./threads"
-        if os.path.exists(default_dir):
-            st.session_state.threads_dir = default_dir
+        if len(sys.argv) > 1:
+            threads_path = sys.argv[1]
+            if os.path.exists(threads_path):
+                st.session_state.threads_dir = threads_path
+            else:
+                st.session_state.threads_dir = ""
+        else:
+            st.session_state.threads_dir = ""
 
-    # Use Streamlit's file uploader for directory selection
     uploaded_dir = st.sidebar.text_input(
         "Enter threads directory path",
-        value="./threads" if not st.session_state.threads_dir else st.session_state.threads_dir,
+        value=st.session_state.threads_dir,
         placeholder="/path/to/threads",
         help="Enter the full path to your threads directory"
     )
 
-    # Automatically load directory if it exists
     if os.path.exists(uploaded_dir):
         st.session_state.threads_dir = uploaded_dir
     else:
@@ -61,7 +60,6 @@ def main():
         st.sidebar.success(f"Selected directory: {st.session_state.threads_dir}")
         threads_dir = st.session_state.threads_dir
         
-        # Thread selection
         st.sidebar.title("Select Thread")
         thread_files = load_thread_files(threads_dir)
         
@@ -79,15 +77,12 @@ def main():
             thread_data = load_thread_content(selected_thread, threads_dir)
             messages = thread_data.get("messages", [])
             
-            # Display thread ID in sidebar
             st.sidebar.text(f"Thread ID: {selected_thread.replace('.json', '')}")
             
-            # Display messages in chat-like interface
             for message in messages:
                 role = message.get("role", "unknown")
                 content = message.get("content", "")
                 
-                # Determine avatar based on role
                 if role == "assistant":
                     avatar = "🤖"
                 elif role == "user":
@@ -99,7 +94,6 @@ def main():
                 else:
                     avatar = "❓"
                 
-                # Format the message container
                 with st.chat_message(role, avatar=avatar):
                     formatted_content = format_message_content(content)
                     st.markdown(formatted_content)

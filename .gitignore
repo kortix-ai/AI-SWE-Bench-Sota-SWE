@@ -9,3 +9,5 @@ swe_bench_openhands
 
 **/__pycache__/
 **/*.swp
+
+agent/workspace/

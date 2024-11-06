@@ -6,9 +6,8 @@ from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
-    # Initialize managers and tools
-    thread_manager = ThreadManager()
-    state_manager = StateManager()
+    thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
+    state_manager = StateManager(store_file="/tmp/agentpress/state.json")
     
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
@@ -17,12 +16,10 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
         pass
 
     async def pre_iteration():
-        # Update files state
         files_tool = FilesTool()
         await files_tool._init_workspace_state()
 
     async def after_iteration():
-        # Ask the user for a custom message or use the default
         custom_message = input("Enter a message to send (or press Enter to use 'Continue!!!' as message): ")
 
         message_content = custom_message if custom_message else """ 
@@ -119,7 +116,6 @@ Current development environment workspace state:
         
         print(response)
 
-        # Call after_iteration without arguments
         await after_iteration()
 
     await finalizer()
@@ -127,7 +123,7 @@ Current development environment workspace state:
 
 if __name__ == "__main__":
     async def main():
-        thread_manager = ThreadManager()
+        thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
         thread_id = await thread_manager.create_thread()
 
         await thread_manager.add_message(

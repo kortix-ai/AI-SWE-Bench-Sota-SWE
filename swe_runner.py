@@ -41,6 +41,19 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
         instance_id = instance['instance_id']
         workspace_dir = get_swebench_workspace_dir_name(instance)
 
+        # Clean up existing output files for this instance
+        output_file = os.path.join(output_dir, f'{instance_id}.json')
+        log_file = os.path.join(output_dir, f'{instance_id}__log.txt')
+        tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
+        
+        # Remove existing files if they exist
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        if os.path.exists(log_file):
+            os.remove(log_file)
+        if os.path.exists(tracked_files_dir):
+            subprocess.run(['rm', '-rf', tracked_files_dir], check=True)
+
         print(f"\n{'='*50}")
         print(f"Testing instance {idx}/{len(instances)}: {instance_id}")
         print(f"Problem statement: {instance['problem_statement']}")
@@ -166,6 +179,8 @@ if __name__ == "__main__":
                         help="Directory to save outputs (default: ./outputs)")
     parser.add_argument("--track-files", nargs="+",
                         help="List of files and/or folders to track and copy to outputs directory")
+    parser.add_argument("--streamlit", action="store_true",
+                        help="Launch streamlit thread viewer after execution")
 
     args = parser.parse_args()
 
@@ -177,3 +192,15 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         track_files=args.track_files
     )
+    
+    # Launch streamlit viewer if requested
+    if args.streamlit:
+        for instance in load_dataset(args.dataset, split=args.split).select(range(args.num_examples)):
+            instance_id = instance['instance_id']
+            threads_dir = os.path.join(args.output_dir, f'{instance_id}_files/tmp/agentpress/threads')
+            if os.path.exists(threads_dir):
+                print(f"\nLaunching streamlit thread viewer for instance {instance_id}...")
+                subprocess.run([
+                    'streamlit', 'run', 
+                    'agent/agentpress/thread_viewer_ui.py', threads_dir
+                ])
