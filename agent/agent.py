@@ -3,11 +3,13 @@ import json
 import asyncio
 import argparse
 import subprocess
+from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
+@observe()
 async def run_agent(thread_id: str, max_iterations: int = 5):
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
     state_manager = StateManager(store_file="/tmp/agentpress/state.json")

@@ -78,7 +78,8 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
             # Build the Docker run command
             print("Track files:", track_files)
             cmd = [
-                'docker', 'run', '--rm',
+                'docker', 'run', 
+                # '--rm', # disble now for debugging
                 '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
                 '-v', f'{os.path.abspath(agent_dir)}:/agent',  # Mount agent code
                 '-e', f'SWE_INSTANCE_ID={instance_id}',
@@ -92,7 +93,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 docker_image,
                 '/bin/bash', '-c',
                 (
-                    'pip install -r /agent/requirements.txt && '
+                    'pip install --quiet -r /agent/requirements.txt && '
                     'python /agent/agent.py '
                     f'--repo-path . '
                     f'--problem-file /workspace/data/problem.json && '

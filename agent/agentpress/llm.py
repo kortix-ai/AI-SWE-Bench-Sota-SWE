@@ -14,8 +14,8 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
 
-LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY')
-LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY')
+LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY', '')
+LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY', '')
 LANGFUSE_HOST = os.environ.get('LANGFUSE_HOST', 'https://cloud.langfuse.com')
 
 os.environ['LANGFUSE_PUBLIC_KEY'] = LANGFUSE_PUBLIC_KEY
@@ -55,6 +55,12 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
         raise Exception("Failed to make API call after multiple attempts.")
 
     async def api_call():
+        # Retrieve the current Langfuse trace ID
+        trace_id = langfuse_context.get_current_trace_id()
+        metadata = {}
+        if trace_id:
+            metadata["trace_id"] = trace_id
+
         api_call_params = {
             "model": model_name,
             "messages": messages,
@@ -62,6 +68,7 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             "response_format": response_format,
             "top_p": top_p,
             "stream": stream,
+            "metadata": metadata,  # Include metadata with trace_id
         }
 
         # Add api_key and api_base if provided
