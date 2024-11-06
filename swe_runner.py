@@ -16,7 +16,7 @@ def get_swebench_workspace_dir_name(instance: dict) -> str:
     """Get the properly formatted workspace directory name."""
     return f"{instance['repo']}__{instance['version']}".replace('/', '__')
 
-def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs"):
+def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None):
     """
     Load and test the first N instances from the dataset using Docker.
 
@@ -133,6 +133,18 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
 
             print(f"Saved output for instance {instance_id} to {output_file}")
             print(f"Saved logs for instance {instance_id} to {log_file}")
+            
+            # Copy tracked files if specified
+            if track_files:
+                for file in track_files:
+                    src_file = os.path.join(temp_dir, file)
+                    if os.path.exists(src_file):
+                        dst_file = os.path.join(output_dir, f"{instance_id}__{file}")
+                        with open(src_file, 'r') as f_src:
+                            content = f_src.read()
+                        with open(dst_file, 'w') as f_dst:
+                            f_dst.write(content)
+                        print(f"Copied tracked file {file} to {dst_file}")
 
 if __name__ == "__main__":
     import argparse
@@ -147,6 +159,8 @@ if __name__ == "__main__":
                         help="Path to your agent directory")
     parser.add_argument("--output-dir", default="./outputs",
                         help="Directory to save outputs (default: ./outputs)")
+    parser.add_argument("--track-files", nargs="+",
+                        help="List of files to track and copy to outputs directory")
 
     args = parser.parse_args()
 
@@ -155,5 +169,6 @@ if __name__ == "__main__":
         dataset_name=args.dataset,
         split=args.split,
         agent_dir=args.agent_dir,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        track_files=args.track_files
     )
