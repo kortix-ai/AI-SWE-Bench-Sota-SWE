@@ -1,3 +1,5 @@
 openai
 asyncio
 litellm
+pytest
+langfuse

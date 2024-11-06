@@ -6,12 +6,24 @@ import openai
 from openai import OpenAIError
 import asyncio
 import logging
+from langfuse.decorators import langfuse_context, observe
 # import agentops
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
+
+LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY')
+LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY')
+LANGFUSE_HOST = os.environ.get('LANGFUSE_HOST', 'https://cloud.langfuse.com')
+
+os.environ['LANGFUSE_PUBLIC_KEY'] = LANGFUSE_PUBLIC_KEY
+os.environ['LANGFUSE_SECRET_KEY'] = LANGFUSE_SECRET_KEY
+os.environ['LANGFUSE_HOST'] = LANGFUSE_HOST
+
+litellm.success_callback = ["langfuse"]
+litellm.failure_callback = ["langfuse"]
 
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY

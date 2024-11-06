@@ -11,3 +11,5 @@ swe_bench_openhands
 **/*.swp
 
 agent/workspace/
+
+log/*

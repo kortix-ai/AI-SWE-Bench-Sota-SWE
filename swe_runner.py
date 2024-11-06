@@ -86,24 +86,21 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
                 '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
                 '-e', f'GROQ_API_KEY={os.environ.get("GROQ_API_KEY", "")}',
+                '-e', f'LANGFUSE_PUBLIC_KEY={os.environ.get("LANGFUSE_PUBLIC_KEY", "")}',
+                '-e', f'LANGFUSE_SECRET_KEY={os.environ.get("LANGFUSE_SECRET_KEY", "")}',
                 '-e', f'TRACK_FILES={" ".join(track_files) if track_files else ""}',
                 docker_image,
                 '/bin/bash', '-c',
                 (
-                    # Run the agent
-                    # 'pip install --no-cache-dir -r /agent/requirements.txt && '
                     'pip install -r /agent/requirements.txt && '
                     'python /agent/agent.py '
                     f'--repo-path . '
                     f'--problem-file /workspace/data/problem.json && '
-                    # Ensure that any changes made by the agent are added and committed
                     'git config --global user.email "agent@example.com" && '
                     'git config --global user.name "Agent" && '
                     'git add -A && '
                     'git commit -m "Agent modifications" || true && '
-                    # Get the git diff between base_commit and HEAD
                     f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
-                    # Copy tracked files if specified
                     f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi'
                 )
             ]
