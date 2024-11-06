@@ -63,6 +63,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 json.dump([instance], f)
 
             # Build the Docker run command
+            print("Track files:", track_files)
             cmd = [
                 'docker', 'run', '--rm',
                 '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
@@ -72,23 +73,25 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
                 '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
                 '-e', f'GROQ_API_KEY={os.environ.get("GROQ_API_KEY", "")}',
+                '-e', f'TRACK_FILES={" ".join(track_files) if track_files else ""}',
                 docker_image,
                 '/bin/bash', '-c',
                 (
                     # Run the agent
-                    'pip install --no-cache-dir -r /agent/requirements.txt && '
+                    # 'pip install --no-cache-dir -r /agent/requirements.txt && '
+                    'pip install -r /agent/requirements.txt && '
                     'python /agent/agent.py '
-                    f'--repo-path /workspace/{workspace_dir} '
+                    f'--repo-path . '
                     f'--problem-file /workspace/data/problem.json && '
-                    # After the agent has run, perform git operations
-                    # f'cd /workspace/{workspace_dir} && '
                     # Ensure that any changes made by the agent are added and committed
                     'git config --global user.email "agent@example.com" && '
                     'git config --global user.name "Agent" && '
                     'git add -A && '
                     'git commit -m "Agent modifications" || true && '
                     # Get the git diff between base_commit and HEAD
-                    f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff'
+                    f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
+                    # Copy tracked files if specified
+                    f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz "$TRACK_FILES" 2>/dev/null || true; fi'
                 )
             ]
 
@@ -131,20 +134,18 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                     "return_code": result.returncode
                 }, f, indent=2)
 
+            # Extract tracked files if they exist
+            tracked_files_archive = os.path.join(temp_dir, 'tracked_files.tar.gz')
+            if track_files and os.path.exists(tracked_files_archive):
+                tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
+                os.makedirs(tracked_files_dir, exist_ok=True)
+                subprocess.run(['tar', 'xzf', tracked_files_archive, '-C', tracked_files_dir], check=True)
+                print(f"Saved tracked files for instance {instance_id} to {tracked_files_dir}")
+
             print(f"Saved output for instance {instance_id} to {output_file}")
             print(f"Saved logs for instance {instance_id} to {log_file}")
             
-            # Copy tracked files if specified
-            if track_files:
-                for file in track_files:
-                    src_file = os.path.join(temp_dir, file)
-                    if os.path.exists(src_file):
-                        dst_file = os.path.join(output_dir, f"{instance_id}__{file}")
-                        with open(src_file, 'r') as f_src:
-                            content = f_src.read()
-                        with open(dst_file, 'w') as f_dst:
-                            f_dst.write(content)
-                        print(f"Copied tracked file {file} to {dst_file}")
+
 
 if __name__ == "__main__":
     import argparse
