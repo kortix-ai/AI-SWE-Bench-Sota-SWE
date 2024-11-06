@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import argparse
+import subprocess
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
@@ -31,27 +32,17 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
-    await thread_manager.add_message(thread_id, {
-        "role": "user",
-        "content": problem_statement
-    })
 
-    iteration = 0
-    last_response = None
-
-    while iteration < max_iterations:
-        iteration += 1
-
-        system_message = {
+    system_message = {
             "role": "system",
             "content": """
 You are a highly skilled software engineer tasked with fixing a bug in a large codebase. Follow these instructions:
 
 1. Read the problem statement carefully.
-2. Analyze the existing code in the workspace.
+2. Analyze the existing code in the workspace by executing command (like ls, cat, ... ).
 3. Apply necessary changes to fix the issue.
-4. Ensure your changes adhere to best coding practices.
-5. Output the diff of your changes in unified diff format.
+4. Run test to check if the bug is fixed, if all tests pass, output only "FINISHED".
+5. You do not have to write any test code as I will cover that.
 
 <available_tools>
 [create_file(file_path, file_contents)] - Create new files
@@ -60,24 +51,32 @@ You are a highly skilled software engineer tasked with fixing a bug in a large c
 [execute_command(command)] - Execute terminal commands
 </available_tools>
 
-Do not include any explanations or comments in your output. 
+ALWAYS RESPOND WITH MULTIPLE SIMULTANEOUS ACTIONS:
+<thoughts>
+[Provide a concise overview of your planned changes and implementations]
+</thoughts>
+
+<actions>
+[Include multiple tool calls]
+</actions>
 
 Think deeply and step by step.
             """
         }
 
-        state = await state_manager.export_store()
-
-        state_message = {
+    await thread_manager.add_message(thread_id, {
             "role": "user",
             "content": f"""
 Problem Statement:
 {problem_statement}
 
-Current Codebase State:
-You can use terminal commands like `ls` to list directories and `cat <file_path>` to view file contents as needed.
             """
-        }
+    })
+
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
 
         model_name = "anthropic/claude-3-5-sonnet-latest"
 
@@ -88,7 +87,7 @@ You can use terminal commands like `ls` to list directories and `cat <file_path>
             temperature=0.1,
             max_tokens=4096,
             tool_choice="auto",
-            additional_message=state_message,
+            # additional_message=state_message,
             execute_tools_async=True,
             use_tools=True,
             execute_model_tool_calls=True
@@ -97,16 +96,9 @@ You can use terminal commands like `ls` to list directories and `cat <file_path>
         print(f"Iteration {iteration}/{max_iterations}:")
         print(response)
 
-        if response == last_response:
-            print("Agent response unchanged from previous iteration, stopping...")
+        if response == "FINISHED":
+            print("Bug fixed, stopping...")
             break
-
-        last_response = response
-
-        await thread_manager.add_message(thread_id, {
-            "role": "user",
-            "content": "Run test to check if the bug is fixed."
-        })
 
     print(f"Agent completed after {iteration} iterations")
 
