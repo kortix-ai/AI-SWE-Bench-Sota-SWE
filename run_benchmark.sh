@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Run the inference script
-python swe_runner.py --num-examples 1 --agent-dir ./agent \
-    --track-files state.json
+python swe_runner.py --num-examples 1 --agent-dir ./agent --track-files state.json /agent/
 
 # Combine outputs into a single JSONL file
 # mkdir -p outputs
