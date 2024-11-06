@@ -91,7 +91,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                     # Get the git diff between base_commit and HEAD
                     f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
                     # Copy tracked files if specified
-                    f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz "$TRACK_FILES" 2>/dev/null || true; fi'
+                    f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi'
                 )
             ]
 
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="./outputs",
                         help="Directory to save outputs (default: ./outputs)")
     parser.add_argument("--track-files", nargs="+",
-                        help="List of files to track and copy to outputs directory")
+                        help="List of files and/or folders to track and copy to outputs directory")
 
     args = parser.parse_args()
 
