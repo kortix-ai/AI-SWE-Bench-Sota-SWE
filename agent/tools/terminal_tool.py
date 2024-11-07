@@ -5,11 +5,17 @@ from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 
 class TerminalTool(Tool):
-    def __init__(self):
+    def __init__(self, repo_path: str):
         super().__init__()
-        self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
+        self.state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+        self.repo_path = repo_path
+        self.workspace = self.repo_path
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager("state.json")
+        asyncio.create_task(self._init_workspace())
+        
+    async def _init_workspace(self):
+        """Initialize workspace state"""
+        await self.state_manager.set("workspace_path", self.workspace)
         
     async def _update_command_history(self, command: str, output: str, success: bool):
         """Update command history in state"""
@@ -40,6 +46,7 @@ class TerminalTool(Tool):
             os.chdir(self.workspace)
             
             # Execute command
+            print(f"Executing command: {command} at {self.workspace}")
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,

@@ -43,13 +43,18 @@ class FilesTool(Tool):
         ".sql"
     }
 
-    def __init__(self):
+    def __init__(self, repo_path: str):
         super().__init__()
-        self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
-        os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager("state.json")
+        self.state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+        self.repo_path = repo_path
+        self.workspace = self.repo_path
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
-        asyncio.create_task(self._init_workspace_state())
+        os.makedirs(self.workspace, exist_ok=True)
+        asyncio.create_task(self._init_workspace())
+
+    async def _init_workspace(self):
+        """Initialize workspace path from provided repo_path"""
+        await self._init_workspace_state()
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
@@ -197,7 +202,7 @@ class FilesTool(Tool):
 
 if __name__ == "__main__":
     async def test_files_tool():
-        files_tool = FilesTool()
+        files_tool = FilesTool("/tmp/test_workspace")
         test_file_path = "test_file.txt"
         test_content = "This is a test file."
         updated_content = "This is an updated test file."

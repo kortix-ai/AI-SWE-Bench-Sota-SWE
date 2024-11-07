@@ -90,10 +90,30 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             api_call_params["tools"] = tools
             api_call_params["tool_choice"] = tool_choice
 
+        def add_cache_control_to_content(content):
+            if isinstance(content, list):
+                return [
+                    item if isinstance(item, dict) and "cache_control" in item 
+                    else {"type": "text", "text": item, "cache_control": {"type": "ephemeral"}} 
+                    for item in content
+                ]
+            elif isinstance(content, dict):
+                if "cache_control" not in content:
+                    content["cache_control"] = {"type": "ephemeral"}
+                return content
+            return content
+
         if "claude" in model_name.lower() or "anthropic" in model_name.lower():
             api_call_params["extra_headers"] = {
                 "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
             }
+            # Add cache control to messages for Anthropic models
+            processed_messages = []
+            for msg in messages:
+                processed_msg = msg.copy()
+                processed_msg["content"] = add_cache_control_to_content(msg["content"])
+                processed_messages.append(processed_msg)
+            api_call_params["messages"] = processed_messages
         
         # Log the API request
         logger.info(f"Sending API request: {json.dumps(api_call_params, indent=2)}")
