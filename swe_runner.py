@@ -2,6 +2,7 @@ import os
 import json
 import tempfile
 import subprocess
+import pandas as pd
 from datasets import load_dataset
 from typing import Any
 
@@ -93,6 +94,10 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 docker_image,
                 '/bin/bash', '-c',
                 (
+                    # pre-setup conda env of handopens
+                    '. /opt/miniconda3/etc/profile.d/conda.sh &&'
+                    'conda activate testbed && '
+                    # install agent reqs
                     'pip install -q -r /agent/requirements.txt && '
                     'python /agent/agent.py '
                     f'--repo-path . '
@@ -160,7 +165,26 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
 
             print(f"Saved output for instance {instance_id} to {output_file}")
             print(f"Saved logs for instance {instance_id} to {log_file}")
+
+
+def convert_outputs_to_jsonl(output_dir: str):
+    """Convert json outputs to SWE-bench jsonl format"""
+    for filename in os.listdir(output_dir):
+        if filename.endswith('.json') and not filename.endswith('__log.json'):
+            input_file = os.path.join(output_dir, filename)
+            output_file = os.path.join(output_dir, filename.replace('.json', '.swebench.jsonl'))
             
+            # Read input file
+            with open(input_file) as f:
+                data = json.load(f)
+                # Ensure data is a list
+                if not isinstance(data, list):
+                    data = [data]
+                df = pd.DataFrame(data)
+            
+            # Save to jsonl format
+            df.to_json(output_file, orient='records', lines=True)
+            print(f'Converted {input_file} to {output_file}')
 
 
 if __name__ == "__main__":
@@ -193,6 +217,9 @@ if __name__ == "__main__":
     )
     
     # Launch streamlit viewer if requested
+    # Convert json outputs to jsonl format
+    convert_outputs_to_jsonl(args.output_dir)
+
     if args.streamlit:
         for instance in load_dataset(args.dataset, split=args.split).select(range(args.num_examples)):
             instance_id = instance['instance_id']
