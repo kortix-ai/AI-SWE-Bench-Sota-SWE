@@ -92,7 +92,7 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 docker_image,
                 '/bin/bash', '-c',
                 (
-                    'pip install -r /agent/requirements.txt && '
+                    'pip install -q -r /agent/requirements.txt && '
                     'python /agent/agent.py '
                     f'--repo-path . '
                     f'--problem-file /workspace/data/problem.json && '
@@ -100,7 +100,6 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                     'git config --global user.name "Agent" && '
                     'git add -A && '
                     'git commit -m "Agent modifications" || true && '
-                    "echo 'LS' && ls -la && "
                     "pwd && "
                     f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
                     f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi'

@@ -8,7 +8,7 @@ from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
-async def run_agent(thread_id: str, max_iterations: int = 15):
+async def run_agent(thread_id: str, max_iterations: int = 7):
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
     state_manager = StateManager(store_file="/tmp/agentpress/state.json")
 
