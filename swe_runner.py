@@ -177,7 +177,10 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
 
 
 def convert_outputs_to_jsonl(output_dir: str):
-    """Convert json outputs to SWE-bench jsonl format"""
+    """Convert json outputs to SWE-bench jsonl format and combine them"""
+    all_data = []
+    
+    # First convert individual files
     for filename in os.listdir(output_dir):
         if filename.endswith('.json') and not filename.endswith('__log.json'):
             input_file = os.path.join(output_dir, filename)
@@ -190,10 +193,18 @@ def convert_outputs_to_jsonl(output_dir: str):
                 if not isinstance(data, list):
                     data = [data]
                 df = pd.DataFrame(data)
+                all_data.extend(data)
             
-            # Save to jsonl format
+            # Save individual jsonl format
             df.to_json(output_file, orient='records', lines=True)
             print(f'Converted {input_file} to {output_file}')
+    
+    # Create combined output file
+    if all_data:
+        combined_df = pd.DataFrame(all_data)
+        combined_output = os.path.join(output_dir, f'__combined_agentpress_output_{len(all_data)}.jsonl')
+        combined_df.to_json(combined_output, orient='records', lines=True)
+        print(f'\nCreated combined output file: {combined_output}')
 
 
 if __name__ == "__main__":
