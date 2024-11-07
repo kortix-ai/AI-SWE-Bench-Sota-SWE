@@ -17,7 +17,7 @@ def get_swebench_workspace_dir_name(instance: dict) -> str:
     """Get the properly formatted workspace directory name."""
     return f"{instance['repo']}__{instance['version']}".replace('/', '__')
 
-def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None):
+def load_and_test_instances(num_examples: int = 1, test_index: int = None, start_index: int = None, end_index: int = None, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None):
     """
     Load and test the first N instances from the dataset using Docker.
 
@@ -32,8 +32,17 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
     print(f"Loading dataset {dataset_name} ({split})...")
     dataset = load_dataset(dataset_name, split=split)
 
-    # Get the first N instances
-    instances = dataset.select(range(min(num_examples, len(dataset))))
+    # Select instances based on various selection criteria
+    if test_index is not None:
+        if test_index < 1 or test_index > len(dataset):
+            raise ValueError(f"Test index must be between 1 and {len(dataset)}")
+        instances = dataset.select([test_index - 1])  # Convert to 0-based index
+    elif start_index is not None and end_index is not None:
+        if start_index < 1 or end_index > len(dataset) or start_index > end_index:
+            raise ValueError(f"Start index must be >= 1 and end index must be <= {len(dataset)} and start must be <= end")
+        instances = dataset.select(range(start_index - 1, end_index))  # Convert to 0-based index
+    else:
+        instances = dataset.select(range(min(num_examples, len(dataset))))
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -190,8 +199,13 @@ def convert_outputs_to_jsonl(output_dir: str):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num-examples", type=int, default=1,
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--num-examples", type=int, default=1,
                         help="Number of examples to test (default: 1)")
+    group.add_argument("--test-index", type=int,
+                        help="Run a specific test by index (starting from 1)")
+    group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
+                        help="Run tests from START to END index (inclusive)")
     parser.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                         help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
     parser.add_argument("--split", default="test",
@@ -209,6 +223,9 @@ if __name__ == "__main__":
 
     load_and_test_instances(
         num_examples=args.num_examples,
+        test_index=args.test_index,
+        start_index=args.range[0] if args.range else None,
+        end_index=args.range[1] if args.range else None,
         dataset_name=args.dataset,
         split=args.split,
         agent_dir=args.agent_dir,
