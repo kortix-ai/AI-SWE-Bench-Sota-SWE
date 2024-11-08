@@ -1,7 +1,17 @@
 #!/bin/bash
 
 # Run the inference script
-python swe_runner.py --num-examples 1 --agent-dir ./agent --track-files /tmp/agentpress/ /agent/ --streamlit
+# --num-examples
+python swe_runner.py \
+    --test-index 6 
+    # --track-files /testbed/
+    # --streamlit
+
+# python swe_runner.py \
+#     --range 3 6 \
+#     --agent-dir ./agent \
+#     --track-files /tmp/agentpress/ \
+    # --streamlit
 
 # Combine outputs into a single JSONL file
 # mkdir -p outputs

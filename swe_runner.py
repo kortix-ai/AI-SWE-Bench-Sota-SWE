@@ -1,10 +1,11 @@
 import os
+import sys
 import json
 import tempfile
 import subprocess
-import pandas as pd
 from datasets import load_dataset
-from typing import Any
+import argparse
+import pandas as pd 
 
 def get_instance_docker_image(instance_id: str) -> str:
     """Get the docker image name for a specific instance."""
@@ -13,40 +14,189 @@ def get_instance_docker_image(instance_id: str) -> str:
     image_name = image_name.replace('__', '_s_')  # To comply with Docker naming conventions
     return (DOCKER_IMAGE_PREFIX.rstrip('/') + '/' + image_name).lower()
 
-def get_swebench_workspace_dir_name(instance: dict) -> str:
-    """Get the properly formatted workspace directory name."""
-    return f"{instance['repo']}__{instance['version']}".replace('/', '__')
-
-def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None):
+def start_docker_container(instance, track_files):
     """
-    Load and test the first N instances from the dataset using Docker.
-
-    Args:
-        num_examples: Number of examples to test (default: 1)
-        dataset_name: Name of the dataset to load from
-        split: Dataset split to use
-        agent_dir: Path to your agent directory
-        output_dir: Directory to save outputs
+    Start the Docker container and keep it running.
+    Returns the container name.
     """
-    # Load dataset
-    print(f"Loading dataset {dataset_name} ({split})...")
-    dataset = load_dataset(dataset_name, split=split)
+    instance_id = instance['instance_id']
+    container_name = f'swe_runner_{instance_id}'
 
-    # Get the first N instances
-    instances = dataset.select(range(min(num_examples, len(dataset))))
+    try:
+        subprocess.run(['docker', 'rm', '-f', container_name], check=True)
+        print(f"\nRemoved existing container '{container_name}'")
+    except subprocess.CalledProcessError:
+        pass
 
+    docker_image = get_instance_docker_image(instance_id)
+    print(f"Using Docker image: {docker_image}")
+
+    print("\nPulling Docker image...")
+    subprocess.run(['docker', 'pull', docker_image], check=True)
+
+    cmd = [
+        'docker', 'run', 
+        '--name', container_name,
+        '-d',  # Detached mode
+        '-e', f'SWE_INSTANCE_ID={instance_id}',
+        '-e', f'TRACK_FILES={" ".join(track_files) if track_files else ""}',
+        docker_image,
+        '/bin/bash', '-c',
+        (
+            '. /opt/miniconda3/etc/profile.d/conda.sh && '
+            'conda activate testbed && '
+            'tail -f /dev/null'
+        )
+    ]
+
+    print("\nStarting Docker container...")
+    subprocess.run(cmd, check=True)
+
+    print(f"Docker container '{container_name}' started and is running.")
+    return container_name
+
+def stop_docker_container(container_name):
+    """
+    Stop and remove the Docker container.
+    """
+    print(f"\nStopping and removing Docker container '{container_name}'...")
+    try:
+        subprocess.run(['docker', 'stop', container_name], check=True)
+        subprocess.run(['docker', 'rm', container_name], check=True)
+        print(f"Docker container '{container_name}' stopped and removed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error stopping/removing container: {e}", file=sys.stderr)
+
+def execute_command_in_container(container_name, command):
+    """
+    Execute a command inside the running Docker container and return the output.
+    """
+    full_command = f'. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {command}'
+    cmd = ['docker', 'exec', container_name, 'bash', '-c', full_command]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result
+
+def extract_tracked_files(container_name, track_files, output_dir):
+    """
+    Extract tracked files directly from container to output directory.
+    """
+    if not track_files:
+        return
+        
     os.makedirs(output_dir, exist_ok=True)
+    for file_path in track_files:
+        # Remove leading slash and create target directory
+        rel_path = file_path.lstrip('/')
+        target_dir = os.path.join(output_dir, os.path.dirname(rel_path))
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # Copy file from container to output directory
+        try:
+            subprocess.run(
+                ['docker', 'cp', f'{container_name}:{file_path}', os.path.join(output_dir, rel_path)], 
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            print(f"Warning: Failed to copy {file_path} from container", file=sys.stderr)
+
+def convert_outputs_to_jsonl(output_dir: str):
+    """Convert json outputs to SWE-bench jsonl format and combine them, skipping files > 1MB"""
+    all_data = []
+    MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB in bytes
+
+    print(f"\nSearching for JSON files in {output_dir}...")
+
+    for instance_dir in os.listdir(output_dir):
+        instance_path = os.path.join(output_dir, instance_dir)
+        print(instance_dir)
+        instance = instance_dir.split('_', 1)[1] if '_' in instance_dir else instance_dir
+
+        if not os.path.isdir(instance_path):
+            continue
+
+        json_file = os.path.join(instance_path, f'{instance}.json')
+
+        if os.path.exists(json_file):
+            # Check file size before processing
+            file_size = os.path.getsize(json_file)
+            if file_size > MAX_FILE_SIZE:
+                print(f"Skipping {json_file} - file size {file_size/1024/1024:.2f}MB exceeds 1MB limit")
+                continue
+                
+            # Read input file
+            with open(json_file) as f:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = [data]
+                all_data.extend(data)
+
+    if all_data:
+        combined_output = os.path.join(output_dir, f'__combined_agentpress_output_{len(all_data)}.jsonl')
+        with open(combined_output, 'w') as f:
+            for item in all_data:
+                f.write(json.dumps(item) + '\n')
+        print(f'Created combined output file: {combined_output}')
+    else:
+        print("\nNo data found to combine")
+
+def main():
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--num-examples", type=int, default=1,
+                        help="Number of examples to test (default: 1)")
+    group.add_argument("--test-index", type=int,
+                        help="Run a specific test by index (starting from 1)")
+    group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
+                        help="Run tests from START to END index (inclusive)")
+    parser.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
+                        help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
+    parser.add_argument("--split", default="test",
+                        help="Dataset split to use (default: test)")
+    parser.add_argument("--track-files", nargs="+",
+                        help="List of files and/or folders to track")
+    parser.add_argument("--output-dir", default="./outputs",
+                        help="Directory to save outputs (default: ./outputs)")
+    parser.add_argument("--join-only", action="store_true",
+                        help="Only join existing JSON files to JSONL, skip running tests")
+    args = parser.parse_args()
+
+    if args.join_only:
+        print("Join-only mode: combining existing JSON files...")
+        convert_outputs_to_jsonl(args.output_dir)
+        return
+
+    # Load dataset
+    print(f"Loading dataset {args.dataset} ({args.split})...")
+    dataset = load_dataset(args.dataset, split=args.split)
+
+    # Select instances based on arguments
+    if args.test_index is not None:
+        if args.test_index < 1 or args.test_index > len(dataset):
+            raise ValueError(f"Test index must be between 1 and {len(dataset)}")
+        instances = dataset.select([args.test_index - 1])  # Convert to 0-based index
+    elif args.range is not None:
+        start_index, end_index = args.range
+        if start_index < 1 or end_index > len(dataset) or start_index > end_index:
+            raise ValueError(f"Start index must be >= 1 and end index must be <= {len(dataset)} and start must be <= end")
+        instances = dataset.select(range(start_index - 1, end_index))  # Convert to 0-based index
+    else:
+        instances = dataset.select(range(min(args.num_examples, len(dataset))))
+
+    os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"\nWill test {len(instances)} instances:")
     for idx, instance in enumerate(instances, 1):
         instance_id = instance['instance_id']
-        workspace_dir = get_swebench_workspace_dir_name(instance)
 
-        # Clean up existing output files for this instance
-        output_file = os.path.join(output_dir, f'{instance_id}.json')
-        log_file = os.path.join(output_dir, f'{instance_id}__log.txt')
-        tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
-        
+        # Create instance-specific output directory with index prefix
+        instance_output_dir = os.path.join(args.output_dir, f"{idx}_{instance_id}")
+        os.makedirs(instance_output_dir, exist_ok=True)
+
+        # Update output file paths to use instance-specific directory but keep original names
+        output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
+        log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
+        tracked_files_dir = os.path.join(instance_output_dir, 'files')
+
         # Remove existing files if they exist
         if os.path.exists(output_file):
             os.remove(output_file)
@@ -55,73 +205,47 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
         if os.path.exists(tracked_files_dir):
             subprocess.run(['rm', '-rf', tracked_files_dir], check=True)
 
-        print(f"\n{'='*50}")
-        print(f"Testing instance {idx}/{len(instances)}: {instance_id}")
-        print(f"Problem statement: {instance['problem_statement']}")
-        print(f"Workspace directory: {workspace_dir}")
-        print(f"{'='*50}\n")
+        container_name = start_docker_container(instance, args.track_files or [])
 
-        # Get Docker image for this instance
-        docker_image = get_instance_docker_image(instance_id)
-        print(f"Using Docker image: {docker_image}")
-
-        # Pull the Docker image
-        print("\nPulling Docker image...")
-        subprocess.run(['docker', 'pull', docker_image], check=True)
-
-        # Create temporary directory for test files
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Save instance data
-            problem_file = os.path.join(temp_dir, 'problem.json')
-            with open(problem_file, 'w') as f:
+        try:
+            with tempfile.NamedTemporaryFile('w', delete=False) as f:
+                problem_file = f.name
                 json.dump([instance], f)
 
-            # Build the Docker run command
-            print("Track files:", track_files)
             cmd = [
-                'docker', 'run', 
-                # '--rm', # disble now for debugging
-                '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
-                '-v', f'{os.path.abspath(agent_dir)}:/agent',  # Mount agent code
-                '-e', f'SWE_INSTANCE_ID={instance_id}',
-                '-e', 'PIP_CACHE_DIR=/root/.cache/pip',
-                '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
-                '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
-                '-e', f'GROQ_API_KEY={os.environ.get("GROQ_API_KEY", "")}',
-                '-e', f'LANGFUSE_PUBLIC_KEY={os.environ.get("LANGFUSE_PUBLIC_KEY", "")}',
-                '-e', f'LANGFUSE_SECRET_KEY={os.environ.get("LANGFUSE_SECRET_KEY", "")}',
-                '-e', f'TRACK_FILES={" ".join(track_files) if track_files else ""}',
-                docker_image,
-                '/bin/bash', '-c',
-                (
-                    # pre-setup conda env of handopens
-                    '. /opt/miniconda3/etc/profile.d/conda.sh &&'
-                    'conda activate testbed && '
-                    # install agent reqs
-                    'pip install -q -r /agent/requirements.txt && '
-                    'python /agent/agent.py '
-                    f'--repo-path . '
-                    f'--problem-file /workspace/data/problem.json && '
-                    'git config --global user.email "agent@example.com" && '
-                    'git config --global user.name "Agent" && '
-                    'git add -A && '
-                    'git commit -m "Agent modifications" || true && '
-                    "pwd && "
-                    f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
-                    f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi'
-                )
+                'python', 'agent/agent.py',
+                '--problem-file', problem_file,
+                '--container-name', container_name
             ]
-
-            print("\nRunning test in Docker container...")
+            print("Running agent...")
             result = subprocess.run(cmd, capture_output=True, text=True)
+
+            with open(log_file, 'w') as f:
+                f.write(result.stdout)
+                f.write(result.stderr)
+
             if result.returncode != 0:
                 print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
                 continue
-            else:
-                print(f"Agent output for instance {instance_id}:\n{result.stdout}")
 
-            # Read the git patch from the temporary directory
-            git_patch_file = os.path.join(temp_dir, 'git_patch.diff')
+            if args.track_files:
+                extract_tracked_files(container_name, args.track_files, os.path.join(instance_output_dir, 'files'))
+
+            git_commands = f"""
+mkdir -p /workspace/data &&
+git config --global user.email "agent@example.com" && 
+git config --global user.name "Agent" && 
+git add -A && 
+git commit -m "Agent modifications" || true && 
+pwd && 
+git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff
+"""
+            result_git = execute_command_in_container(container_name, git_commands)
+
+            subprocess.run(['docker', 'cp', f'{container_name}:/workspace/data/git_patch.diff', os.path.join(instance_output_dir, f'{instance_id}.diff')], check=True)
+
+            # Read the git_patch.diff
+            git_patch_file = os.path.join(instance_output_dir, f'{instance_id}.diff')
             if os.path.exists(git_patch_file):
                 with open(git_patch_file, 'r') as f:
                     git_patch = f.read()
@@ -135,98 +259,17 @@ def load_and_test_instances(num_examples: int = 1, dataset_name: str = "princeto
                 "model_name_or_path": "YourModelName"  # Replace with actual model name if available
             }
 
-            # Save the output to JSON files
-            output_file = os.path.join(output_dir, f'{instance_id}.json')
-            log_file = os.path.join(output_dir, f'{instance_id}__log.txt')
-            
-            # Save the patch output
+            # Save the output to JSON file
             with open(output_file, 'w') as f:
                 json.dump(output, f, indent=2)
-                
-            # Save the stdout/stderr log in a readable format
-            with open(log_file, 'w') as f:
-                f.write("=" * 50 + "\n")
-                f.write(f"RETURN CODE: {result.returncode}\n")
-                f.write("=" * 50 + "\n\n")
-                f.write("STDOUT:\n")
-                f.write("=" * 50 + "\n")
-                f.write(result.stdout)
-                f.write("\n\nSTDERR:\n")
-                f.write("=" * 50 + "\n")
-                f.write(result.stderr)
-
-            # Extract tracked files if they exist
-            tracked_files_archive = os.path.join(temp_dir, 'tracked_files.tar.gz')
-            if track_files and os.path.exists(tracked_files_archive):
-                tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
-                os.makedirs(tracked_files_dir, exist_ok=True)
-                subprocess.run(['tar', 'xzf', tracked_files_archive, '-C', tracked_files_dir], check=True)
-                print(f"Saved tracked files for instance {instance_id} to {tracked_files_dir}")
 
             print(f"Saved output for instance {instance_id} to {output_file}")
             print(f"Saved logs for instance {instance_id} to {log_file}")
 
+        finally:
+            stop_docker_container(container_name)
 
-def convert_outputs_to_jsonl(output_dir: str):
-    """Convert json outputs to SWE-bench jsonl format"""
-    for filename in os.listdir(output_dir):
-        if filename.endswith('.json') and not filename.endswith('__log.json'):
-            input_file = os.path.join(output_dir, filename)
-            output_file = os.path.join(output_dir, filename.replace('.json', '.swebench.jsonl'))
-            
-            # Read input file
-            with open(input_file) as f:
-                data = json.load(f)
-                # Ensure data is a list
-                if not isinstance(data, list):
-                    data = [data]
-                df = pd.DataFrame(data)
-            
-            # Save to jsonl format
-            df.to_json(output_file, orient='records', lines=True)
-            print(f'Converted {input_file} to {output_file}')
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--num-examples", type=int, default=1,
-                        help="Number of examples to test (default: 1)")
-    parser.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
-                        help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
-    parser.add_argument("--split", default="test",
-                        help="Dataset split to use (default: test)")
-    parser.add_argument("--agent-dir", required=True,
-                        help="Path to your agent directory")
-    parser.add_argument("--output-dir", default="./outputs",
-                        help="Directory to save outputs (default: ./outputs)")
-    parser.add_argument("--track-files", nargs="+",
-                        help="List of files and/or folders to track and copy to outputs directory")
-    parser.add_argument("--streamlit", action="store_true",
-                        help="Launch streamlit thread viewer after execution")
-
-    args = parser.parse_args()
-
-    load_and_test_instances(
-        num_examples=args.num_examples,
-        dataset_name=args.dataset,
-        split=args.split,
-        agent_dir=args.agent_dir,
-        output_dir=args.output_dir,
-        track_files=args.track_files
-    )
-    
-    # Launch streamlit viewer if requested
-    # Convert json outputs to jsonl format
     convert_outputs_to_jsonl(args.output_dir)
 
-    if args.streamlit:
-        for instance in load_dataset(args.dataset, split=args.split).select(range(args.num_examples)):
-            instance_id = instance['instance_id']
-            threads_dir = os.path.join(args.output_dir, f'{instance_id}_files/tmp/agentpress/threads')
-            if os.path.exists(threads_dir):
-                print(f"\nLaunching streamlit thread viewer for instance {instance_id}...")
-                subprocess.run([
-                    'streamlit', 'run', 
-                    'agent/agentpress/thread_viewer_ui.py', threads_dir
-                ])
+if __name__ == "__main__":
+    main()
