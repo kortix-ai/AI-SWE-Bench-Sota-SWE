@@ -6,6 +6,8 @@ import subprocess
 import pandas as pd
 from datasets import load_dataset
 from typing import Any
+import signal
+import shlex
 
 def get_instance_docker_image(instance_id: str) -> str:
     """Get the docker image name for a specific instance."""
@@ -18,7 +20,176 @@ def get_swebench_workspace_dir_name(instance: dict) -> str:
     """Get the properly formatted workspace directory name."""
     return f"{instance['repo']}__{instance['version']}".replace('/', '__')
 
-def load_and_test_instances(num_examples: int = 1, test_index: int = None, start_index: int = None, end_index: int = None, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None, no_stream: bool = False):
+def start_docker_container(instance, agent_dir, track_files):
+    """
+    Start the Docker container and keep it running.
+    
+    Returns the container ID and temporary directory path.
+    """
+    instance_id = instance['instance_id']
+    workspace_dir = get_swebench_workspace_dir_name(instance)
+
+    # Get Docker image for this instance
+    docker_image = get_instance_docker_image(instance_id)
+    print(f"Using Docker image: {docker_image}")
+
+    # Pull the Docker image
+    print("\nPulling Docker image...")
+    subprocess.run(['docker', 'pull', docker_image], check=True)
+
+    # Create temporary directory for test files
+    temp_dir = tempfile.mkdtemp()
+
+    # Save instance data
+    problem_file = os.path.join(temp_dir, 'problem.json')
+    with open(problem_file, 'w') as f:
+        json.dump([instance], f)
+
+    # Build the Docker run command
+    cmd = [
+        'docker', 'run', 
+        '--name', f'swe_runner_{instance_id}',  # Unique container name per instance
+        '-d',  # Detached mode
+        '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
+        '-v', f'{os.path.abspath(agent_dir)}:/agent',  # Mount agent code
+        '-e', f'SWE_INSTANCE_ID={instance_id}',
+        '-e', 'PIP_CACHE_DIR=/root/.cache/pip',
+        '-e', f'OPENAI_API_KEY={os.environ.get("OPENAI_API_KEY", "")}',
+        '-e', f'ANTHROPIC_API_KEY={os.environ.get("ANTHROPIC_API_KEY", "")}',
+        '-e', f'GROQ_API_KEY={os.environ.get("GROQ_API_KEY", "")}',
+        '-e', f'LANGFUSE_PUBLIC_KEY={os.environ.get("LANGFUSE_PUBLIC_KEY", "")}',
+        '-e', f'LANGFUSE_SECRET_KEY={os.environ.get("LANGFUSE_SECRET_KEY", "")}',
+        '-e', f'TRACK_FILES={" ".join(track_files) if track_files else ""}',
+        docker_image,
+        '/bin/bash', '-c',
+        (
+            # Initialize Conda environment and keep the container running
+            '. /opt/miniconda3/etc/profile.d/conda.sh && '
+            'conda activate testbed && '
+            # Install agent requirements
+            # 'pip install -r /agent/requirements.txt || true && '
+            # 'python /agent/agent.py '
+            # f'--repo-path . '
+            # f'--problem-file /workspace/data/problem.json && '
+            # 'git config --global user.email "agent@example.com" && '
+            # 'git config --global user.name "Agent" && '
+            # 'git add -A && '
+            # 'git commit -m "Agent modifications" || true && '
+            # "pwd && "
+            # f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
+            # f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi && '
+            # Keep the container running with activated Conda environment
+            'tail -f /dev/null'
+        )
+    ]
+
+    print("\nStarting Docker container...")
+    subprocess.run(cmd, check=True)
+
+    print(f"Docker container 'swe_runner_{instance_id}' started and is running.")
+    return f'swe_runner_{instance_id}', temp_dir
+
+def stop_docker_container(container_name, temp_dir):
+    """
+    Stop and remove the Docker container.
+    """
+    print(f"\nStopping and removing Docker container '{container_name}'...")
+    try:
+        subprocess.run(['docker', 'stop', container_name], check=True)
+        subprocess.run(['docker', 'rm', container_name], check=True)
+        print(f"Docker container '{container_name}' stopped and removed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error stopping/removing container: {e}", file=sys.stderr)
+    finally:
+        # Clean up temporary directory
+        subprocess.run(['rm', '-rf', temp_dir])
+
+def execute_command_in_container(container_name, command):
+    """
+    Execute a command inside the running Docker container and stream outputs.
+    Automatically activates Conda environment before running the command.
+    """
+    # Wrap the user command with Conda activation
+    full_command = f'. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {command}'
+    
+    # Use shlex to safely split the command
+    cmd = ['docker', 'exec', container_name, 'bash', '-c', full_command]
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+
+        # Stream stdout and stderr
+        def stream_output(stream, is_stderr=False):
+            for line in iter(stream.readline, ''):
+                if is_stderr:
+                    print(line, file=sys.stderr, end='')
+                else:
+                    print(line, end='')
+            stream.close()
+
+        import threading
+
+        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, False))
+        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, True))
+        stdout_thread.start()
+        stderr_thread.start()
+        stdout_thread.join()
+        stderr_thread.join()
+
+        return_code = process.wait()
+        if return_code != 0:
+            print(f"Command exited with return code {return_code}", file=sys.stderr)
+
+    except Exception as e:
+        print(f"Error executing command: {e}", file=sys.stderr)
+
+def interactive_mode(instance, agent_dir, track_files):
+    """
+    Interactive mode to send commands to the Docker container.
+    Commands are executed within the activated Conda environment.
+    """
+    container_name, temp_dir = start_docker_container(instance, agent_dir, track_files)
+
+    # Define a shutdown handler
+    def shutdown(signum, frame):
+        stop_docker_container(container_name, temp_dir)
+        sys.exit(0)
+
+    # Register signal handlers for graceful termination
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    print("\nInteractive Docker Runner")
+    print("Type your commands below. Type 'exit' or 'quit' to terminate.\n")
+
+    while True:
+        try:
+            # Prompt user for input
+            user_input = input(">> ")
+
+            if user_input.strip().lower() in ['exit', 'quit']:
+                shutdown(None, None)
+
+            if user_input.strip() == "":
+                continue  # Skip empty commands
+
+            # Execute the command inside the Docker container with Conda environment activated
+            execute_command_in_container(container_name, user_input)
+
+        except EOFError:
+            # Handle Ctrl+D
+            shutdown(None, None)
+        except Exception as e:
+            print(f"An error occurred: {e}", file=sys.stderr)
+
+def load_and_test_instances(num_examples: int = 1, test_index: int = None, start_index: int = None, end_index: int = None, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None, no_stream: bool = False, interactive: bool = False):
     """
     Load and test the first N instances from the dataset using Docker.
 
@@ -28,6 +199,9 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
         split: Dataset split to use
         agent_dir: Path to your agent directory
         output_dir: Directory to save outputs
+        track_files: List of files and/or folders to track and copy to outputs directory
+        no_stream: Disable real-time output streaming
+        interactive: Enable interactive mode
     """
     # Load dataset
     print(f"Loading dataset {dataset_name} ({split})...")
@@ -75,6 +249,12 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
         print(f"Workspace directory: {workspace_dir}")
         print(f"{'='*50}\n")
 
+        if interactive:
+            # Enter interactive mode for this instance
+            interactive_mode(instance, agent_dir, track_files)
+            # After interactive mode, continue to next instance or terminate
+            continue
+
         # Get Docker image for this instance
         docker_image = get_instance_docker_image(instance_id)
         print(f"Using Docker image: {docker_image}")
@@ -94,7 +274,7 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
             print("Track files:", track_files)
             cmd = [
                 'docker', 'run', 
-                # '--rm', # disble now for debugging
+                # '--rm', # disable now for debugging
                 '-v', f'{temp_dir}:/workspace/data',  # Mount instance data
                 '-v', f'{os.path.abspath(agent_dir)}:/agent',  # Mount agent code
                 '-e', f'SWE_INSTANCE_ID={instance_id}',
@@ -108,19 +288,14 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
                 docker_image,
                 '/bin/bash', '-c',
                 (
-                    # pre-setup conda env of handopens
-                    '. /opt/miniconda3/etc/profile.d/conda.sh &&'
+                    # Initialize Conda environment and keep the container running
+                    '. /opt/miniconda3/etc/profile.d/conda.sh && '
                     'conda activate testbed && '
-                    # install agent reqs
-                    'pip install -r /agent/requirements.txt || true && '
-                    'python /agent/agent.py '
-                    f'--repo-path . '
-                    f'--problem-file /workspace/data/problem.json && '
+                    # Install agent requirements
                     'git config --global user.email "agent@example.com" && '
                     'git config --global user.name "Agent" && '
                     'git add -A && '
                     'git commit -m "Agent modifications" || true && '
-                    "pwd && "
                     f'git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && '
                     f'if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi'
                 )
@@ -161,13 +336,13 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
                         stderr_line = process.stderr.readline()
                         
                         if stdout_line:
-                            # print(stdout_line.rstrip())
+                            print(stdout_line, end='')  # Print to console
                             f.write(stdout_line)
                             f.flush()
                             stdout_output.append(stdout_line)
                         
                         if stderr_line:
-                            # print(stderr_line.rstrip(), file=sys.stderr)
+                            print(stderr_line, end='', file=sys.stderr)  # Print to stderr
                             f.write(stderr_line)
                             f.flush()
                             stderr_output.append(stderr_line)
@@ -182,7 +357,7 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
                 })
 
             if result.returncode != 0:
-                print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
+                print(f"Error running agent for instance {instance_id}:\n{result.stderr}", file=sys.stderr)
                 continue
 
             # Read the git patch from the temporary directory
@@ -281,7 +456,9 @@ if __name__ == "__main__":
                         help="Launch streamlit thread viewer after execution")
     parser.add_argument("--no-stream", action="store_true",
                         help="Disable real-time output streaming")
-
+    parser.add_argument("--interactive", action="store_true",
+                        help="Enable interactive mode to send commands to Docker container")
+    
     args = parser.parse_args()
 
     load_and_test_instances(
@@ -294,11 +471,11 @@ if __name__ == "__main__":
         agent_dir=args.agent_dir,
         output_dir=args.output_dir,
         track_files=args.track_files,
-        no_stream=args.no_stream
+        no_stream=args.no_stream,
+        interactive=args.interactive
     )
     
-    # Launch streamlit viewer if requested
-    # Convert json outputs to jsonl format
+    # Convert json outputs to jsonl format and combine them
     convert_outputs_to_jsonl(args.output_dir)
 
     if args.streamlit:

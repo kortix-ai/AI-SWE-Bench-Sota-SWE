@@ -13,3 +13,4 @@ swe_bench_openhands
 agent/workspace/
 
 log/*
+combine_jsonl.py
