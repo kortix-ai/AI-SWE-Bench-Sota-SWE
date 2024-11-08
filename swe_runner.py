@@ -100,8 +100,9 @@ def extract_tracked_files(container_name, track_files, output_dir):
             print(f"Warning: Failed to copy {file_path} from container", file=sys.stderr)
 
 def convert_outputs_to_jsonl(output_dir: str):
-    """Convert json outputs to SWE-bench jsonl format and combine them"""
+    """Convert json outputs to SWE-bench jsonl format and combine them, skipping files > 1MB"""
     all_data = []
+    MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB in bytes
 
     print(f"\nSearching for JSON files in {output_dir}...")
 
@@ -116,6 +117,12 @@ def convert_outputs_to_jsonl(output_dir: str):
         json_file = os.path.join(instance_path, f'{instance}.json')
 
         if os.path.exists(json_file):
+            # Check file size before processing
+            file_size = os.path.getsize(json_file)
+            if file_size > MAX_FILE_SIZE:
+                print(f"Skipping {json_file} - file size {file_size/1024/1024:.2f}MB exceeds 1MB limit")
+                continue
+                
             # Read input file
             with open(json_file) as f:
                 data = json.load(f)
@@ -149,7 +156,14 @@ def main():
                         help="List of files and/or folders to track")
     parser.add_argument("--output-dir", default="./outputs",
                         help="Directory to save outputs (default: ./outputs)")
+    parser.add_argument("--join-only", action="store_true",
+                        help="Only join existing JSON files to JSONL, skip running tests")
     args = parser.parse_args()
+
+    if args.join_only:
+        print("Join-only mode: combining existing JSON files...")
+        convert_outputs_to_jsonl(args.output_dir)
+        return
 
     # Load dataset
     print(f"Loading dataset {args.dataset} ({args.split})...")
