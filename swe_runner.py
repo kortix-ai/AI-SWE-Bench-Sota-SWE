@@ -18,7 +18,7 @@ def get_swebench_workspace_dir_name(instance: dict) -> str:
     """Get the properly formatted workspace directory name."""
     return f"{instance['repo']}__{instance['version']}".replace('/', '__')
 
-def load_and_test_instances(num_examples: int = 1, test_index: int = None, start_index: int = None, end_index: int = None, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None):
+def load_and_test_instances(num_examples: int = 1, test_index: int = None, start_index: int = None, end_index: int = None, dataset_name: str = "princeton-nlp/SWE-bench_Lite", split: str = "test", agent_dir: str = "./agent", output_dir: str = "./outputs", track_files: list = None, no_stream: bool = False):
     """
     Load and test the first N instances from the dataset using Docker.
 
@@ -127,56 +127,59 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
             ]
 
             print("\nRunning test in Docker container...")
-            # Replace the subprocess.run with Popen to get real-time output
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,  # Line buffered
-                universal_newlines=True
-            )
+            if no_stream:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True
+                )
+                with open(log_file, 'w') as f:
+                    f.write("=" * 50 + "\n")
+                    f.write("OUTPUT:\n")
+                    f.write("=" * 50 + "\n\n")
+                    f.write(result.stdout)
+                    f.write(result.stderr)
+            else:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                stdout_output = []
+                stderr_output = []
 
-            # Initialize output collectors
-            stdout_output = []
-            stderr_output = []
+                with open(log_file, 'w') as f:
+                    f.write("=" * 50 + "\n")
+                    f.write("REAL-TIME OUTPUT:\n")
+                    f.write("=" * 50 + "\n\n")
+                    
+                    while True:
+                        stdout_line = process.stdout.readline()
+                        stderr_line = process.stderr.readline()
+                        
+                        if stdout_line:
+                            print(stdout_line.rstrip())
+                            f.write(stdout_line)
+                            f.flush()
+                            stdout_output.append(stdout_line)
+                        
+                        if stderr_line:
+                            print(stderr_line.rstrip(), file=sys.stderr)
+                            f.write(stderr_line)
+                            f.flush()
+                            stderr_output.append(stderr_line)
+                        
+                        if process.poll() is not None and not stdout_line and not stderr_line:
+                            break
 
-            # Create and open the log file for real-time writing
-            with open(log_file, 'w') as f:
-                f.write("=" * 50 + "\n")
-                f.write("REAL-TIME OUTPUT:\n")
-                f.write("=" * 50 + "\n\n")
-                
-                # Read output in real-time
-                while True:
-                    stdout_line = process.stdout.readline()
-                    stderr_line = process.stderr.readline()
-                    
-                    if stdout_line:
-                        print(stdout_line.rstrip())  # Print to console
-                        f.write(stdout_line)  # Write to log file
-                        f.flush()  # Force write to disk
-                        stdout_output.append(stdout_line)
-                    
-                    if stderr_line:
-                        print(stderr_line.rstrip(), file=sys.stderr)  # Print to console
-                        f.write(stderr_line)  # Write to log file
-                        f.flush()  # Force write to disk
-                        stderr_output.append(stderr_line)
-                    
-                    # Check if process has finished
-                    if process.poll() is not None and not stdout_line and not stderr_line:
-                        break
-
-            # Get return code after process completion
-            return_code = process.returncode
-            
-            # Combine collected output
-            result = type('Result', (), {
-                'returncode': return_code,
-                'stdout': ''.join(stdout_output),
-                'stderr': ''.join(stderr_output)
-            })
+                result = type('Result', (), {
+                    'returncode': process.returncode,
+                    'stdout': ''.join(stdout_output),
+                    'stderr': ''.join(stderr_output)
+                })
 
             if result.returncode != 0:
                 print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
@@ -276,6 +279,8 @@ if __name__ == "__main__":
                         help="List of files and/or folders to track and copy to outputs directory")
     parser.add_argument("--streamlit", action="store_true",
                         help="Launch streamlit thread viewer after execution")
+    parser.add_argument("--no-stream", action="store_true",
+                        help="Disable real-time output streaming")
 
     args = parser.parse_args()
 
@@ -288,7 +293,8 @@ if __name__ == "__main__":
         split=args.split,
         agent_dir=args.agent_dir,
         output_dir=args.output_dir,
-        track_files=args.track_files
+        track_files=args.track_files,
+        no_stream=args.no_stream
     )
     
     # Launch streamlit viewer if requested
