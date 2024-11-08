@@ -1,8 +1,6 @@
-import os
 import json
 import asyncio
 import argparse
-import subprocess
 from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
@@ -10,35 +8,17 @@ from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
 @observe()
-async def run_agent(thread_id: str, max_iterations: int = 10):
+async def run_agent(thread_id: str, container_name: str, problem_file: str, max_iterations: int = 10):
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
     state_manager = StateManager(store_file="/tmp/agentpress/state.json")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--repo-path", required=True, help="Path to the repository to analyze")
-    parser.add_argument("--problem-file", required=True, help="Path to the problem description JSON file")
-    parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
-    args = parser.parse_args()
-
-    if args.debug:
-        with open("debug.py", "w") as f:
-            f.write("# Debug mode enabled")
-        print("Debug mode enabled, exiting...")
-        return
-
-    repo_path = os.path.abspath(args.repo_path)
-    print(f"Using repository path: {repo_path}")
-    await state_manager.set("workspace_path", repo_path)
-    state = await state_manager.export_store()
-    print(f"Current state: {state}")
-
-    with open(args.problem_file, 'r') as f:
+    with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
-    thread_manager.add_tool(FilesTool, repo_path=repo_path)
-    thread_manager.add_tool(TerminalTool, repo_path=repo_path)
+    thread_manager.add_tool(FilesTool, container_name=container_name)
+    thread_manager.add_tool(TerminalTool, container_name=container_name)
 
     system_message = {
             "role": "system",
@@ -110,8 +90,14 @@ Problem Statement:
 
 if __name__ == "__main__":
     async def main():
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--problem-file", required=True, help="Path to the problem description JSON file")
+        parser.add_argument("--container-name", required=True, help="Docker container name")
+        parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
+        args = parser.parse_args()
+
         thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
         thread_id = await thread_manager.create_thread()
-        await run_agent(thread_id)
+        await run_agent(thread_id, args.container_name, args.problem_file)
 
     asyncio.run(main())
