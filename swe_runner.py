@@ -72,6 +72,29 @@ def execute_command_in_container(container_name, command):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result
 
+def extract_tracked_files(container_name, track_files, output_dir):
+    """
+    Extract tracked files directly from container to output directory.
+    """
+    if not track_files:
+        return
+        
+    os.makedirs(output_dir, exist_ok=True)
+    for file_path in track_files:
+        # Remove leading slash and create target directory
+        rel_path = file_path.lstrip('/')
+        target_dir = os.path.join(output_dir, os.path.dirname(rel_path))
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # Copy file from container to output directory
+        try:
+            subprocess.run(
+                ['docker', 'cp', f'{container_name}:{file_path}', os.path.join(output_dir, rel_path)], 
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            print(f"Warning: Failed to copy {file_path} from container", file=sys.stderr)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-index", type=int, default=1,
@@ -110,24 +133,27 @@ def main():
         print("Running agent...")
         subprocess.run(cmd, check=True)
 
-        # Run git commands inside the container
+        # Extract tracked files directly to outputs directory
+        if args.track_files:
+            extract_tracked_files(container_name, args.track_files, f'outputs/{instance_id}')
+
+        # Run git commands inside the container (removed tar command since we're extracting directly)
         git_commands = f"""
+mkdir -p /workspace/data &&
 git config --global user.email "agent@example.com" && 
 git config --global user.name "Agent" && 
 git add -A && 
 git commit -m "Agent modifications" || true && 
 pwd && 
-git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff && 
-if [ ! -z "$TRACK_FILES" ]; then tar czf /workspace/data/tracked_files.tar.gz -C / $(echo "$TRACK_FILES" | sed "s|^/||") 2>/dev/null || true; fi
+git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff
 """
         result = execute_command_in_container(container_name, git_commands)
         print(result.stdout)
         print(result.stderr)
 
-        # Copy the git_patch.diff and tracked_files.tar.gz from the container
+        # Copy the git_patch.diff from the container
         os.makedirs('outputs', exist_ok=True)
         subprocess.run(['docker', 'cp', f'{container_name}:/workspace/data/git_patch.diff', f'outputs/{instance_id}.diff'], check=True)
-        subprocess.run(['docker', 'cp', f'{container_name}:/workspace/data/tracked_files.tar.gz', f'outputs/{instance_id}_files.tar.gz'], check=True)
 
     finally:
         # Clean up

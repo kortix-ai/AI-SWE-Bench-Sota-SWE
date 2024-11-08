@@ -99,17 +99,20 @@ class FilesTool(Tool):
     })
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:
         try:
-            # Read file content
-            command = f"cat {file_path}"
+            # Read file content using base64 to handle large files
+            command = f"cat {file_path} | base64"
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             if returncode != 0:
                 return self.fail_response(f"Error reading file: {stderr}")
 
-            content = stdout
+            # Decode base64 content
+            content = base64.b64decode(stdout.encode()).decode('utf-8')
+            
             occurrences = content.count(old_str)
             if occurrences == 0:
                 return self.fail_response(f"String '{old_str}' not found in file")
             if occurrences > 1:
+                # Find line numbers using grep
                 command = f"grep -n '{old_str}' {file_path}"
                 stdout, stderr, returncode = await self.execute_command_in_container(command)
                 if returncode != 0:
@@ -120,16 +123,24 @@ class FilesTool(Tool):
             # Replace the string
             new_content = content.replace(old_str, new_str)
 
-            # Encode new content using base64
+            # Write new content using base64 to handle large files
             encoded_contents = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
-            # Use base64 decoding to write the new content
-            command = f"echo '{encoded_contents}' | base64 -d > {file_path}"
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            if returncode != 0:
-                return self.fail_response(f"Error writing file: {stderr}")
+            
+            # Write content in chunks to avoid argument length limits
+            chunk_size = 1024 * 64  # 64KB chunks
+            for i in range(0, len(encoded_contents), chunk_size):
+                chunk = encoded_contents[i:i + chunk_size]
+                if i == 0:
+                    # First chunk - create new file
+                    command = f"echo '{chunk}' | base64 -d > {file_path}"
+                else:
+                    # Append subsequent chunks
+                    command = f"echo '{chunk}' | base64 -d >> {file_path}"
+                _, stderr, returncode = await self.execute_command_in_container(command)
+                if returncode != 0:
+                    return self.fail_response(f"Error writing file chunk: {stderr}")
 
             return self.success_response(f"Replacement successful in '{file_path}'")
 
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
-

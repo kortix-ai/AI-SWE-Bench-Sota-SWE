@@ -3,8 +3,8 @@
 # Run the inference script
 # --num-examples
 python swe_runner.py \
-    --test-index 6 \
-    --track-files /tmp/agentpress/ 
+    --test-index 6 
+    # --track-files /testbed/
     # --streamlit
 
 # python swe_runner.py \

@@ -12,6 +12,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, max_
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
     # state_manager = StateManager(store_file="/tmp/agentpress/state.json")
 
+    async def after_iteration():
+
+        message_content = """ 
+        Run test to check if the bug is fixed, if all tests pass, output "FINISHED" without any other text.
+        """
+        await thread_manager.add_message(thread_id, {
+            "role": "user", 
+            "content": message_content
+        })
+
     with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
     problem_statement = instance_data['problem_statement']
@@ -28,8 +38,6 @@ You are a highly skilled software engineer tasked with fixing a bug in a large c
 1. Read the problem statement carefully.
 2. Analyze the existing code in the workspace by executing command (like ls, cat, ... ).
 3. Apply necessary changes to fix the issue.
-4. Run test to check if the bug is fixed, if all tests pass, output only "FINISHED".
-5. You do not have to write any test code as I will cover that.
 
 <available_tools>
 [create_file(file_path, file_contents)] - Create new files
@@ -84,6 +92,8 @@ Problem Statement:
         if "FINISHED" in response:
             print("Bug fixed, stopping...")
             break
+
+        await after_iteration()
 
     print(f"Agent completed after {iteration} iterations")
 
