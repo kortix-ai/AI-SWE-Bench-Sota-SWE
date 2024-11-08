@@ -4,9 +4,8 @@
 # --num-examples
 python swe_runner.py \
     --test-index 6 \
-    --agent-dir ./agent \
-    --track-files /tmp/agentpress/ /agent/ \
-    --streamlit
+    --track-files /tmp/agentpress/ 
+    # --streamlit
 
 # python swe_runner.py \
 #     --range 3 6 \

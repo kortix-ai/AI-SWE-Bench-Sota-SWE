@@ -10,7 +10,7 @@ from tools.terminal_tool import TerminalTool
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, max_iterations: int = 10):
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
-    state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+    # state_manager = StateManager(store_file="/tmp/agentpress/state.json")
 
     with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
@@ -33,7 +33,6 @@ You are a highly skilled software engineer tasked with fixing a bug in a large c
 
 <available_tools>
 [create_file(file_path, file_contents)] - Create new files
-[delete_file(file_path)] - Delete existing files
 [str_replace(file_path, old_str, new_str)] - Replace specific text in files
 [execute_command(command)] - Execute terminal commands
 </available_tools>
@@ -80,9 +79,9 @@ Problem Statement:
         )
 
         print(f"Iteration {iteration}/{max_iterations}:")
-        print(response)
+        # print(response)
 
-        if response == "FINISHED":
+        if "FINISHED" in response:
             print("Bug fixed, stopping...")
             break
 
