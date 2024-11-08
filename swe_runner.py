@@ -20,17 +20,20 @@ def start_docker_container(instance, track_files):
     Returns the container name.
     """
     instance_id = instance['instance_id']
+    container_name = f'swe_runner_{instance_id}'
 
-    # Get Docker image for this instance
+    try:
+        subprocess.run(['docker', 'rm', '-f', container_name], check=True)
+        print(f"\nRemoved existing container '{container_name}'")
+    except subprocess.CalledProcessError:
+        pass
+
     docker_image = get_instance_docker_image(instance_id)
     print(f"Using Docker image: {docker_image}")
 
-    # Pull the Docker image
     print("\nPulling Docker image...")
     subprocess.run(['docker', 'pull', docker_image], check=True)
 
-    # Build the Docker run command
-    container_name = f'swe_runner_{instance_id}'
     cmd = [
         'docker', 'run', 
         '--name', container_name,
