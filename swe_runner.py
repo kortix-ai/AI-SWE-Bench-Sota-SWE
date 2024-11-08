@@ -52,8 +52,8 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
         instance_id = instance['instance_id']
         workspace_dir = get_swebench_workspace_dir_name(instance)
 
-        # Create instance-specific output directory
-        instance_output_dir = os.path.join(output_dir, instance_id)
+        # Create instance-specific output directory with index prefix
+        instance_output_dir = os.path.join(output_dir, f"{idx}_{instance_id}")
         os.makedirs(instance_output_dir, exist_ok=True)
 
         # Update output file paths to use instance-specific directory but keep original names
