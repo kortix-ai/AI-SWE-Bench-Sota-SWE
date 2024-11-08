@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import tempfile
 import subprocess
@@ -51,10 +52,14 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
         instance_id = instance['instance_id']
         workspace_dir = get_swebench_workspace_dir_name(instance)
 
-        # Clean up existing output files for this instance
-        output_file = os.path.join(output_dir, f'{instance_id}.json')
-        log_file = os.path.join(output_dir, f'{instance_id}__log.txt')
-        tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
+        # Create instance-specific output directory
+        instance_output_dir = os.path.join(output_dir, instance_id)
+        os.makedirs(instance_output_dir, exist_ok=True)
+
+        # Update output file paths to use instance-specific directory but keep original names
+        output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
+        log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
+        tracked_files_dir = os.path.join(instance_output_dir, 'files')
         
         # Remove existing files if they exist
         if os.path.exists(output_file):
@@ -122,12 +127,60 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
             ]
 
             print("\nRunning test in Docker container...")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Replace the subprocess.run with Popen to get real-time output
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,  # Line buffered
+                universal_newlines=True
+            )
+
+            # Initialize output collectors
+            stdout_output = []
+            stderr_output = []
+
+            # Create and open the log file for real-time writing
+            with open(log_file, 'w') as f:
+                f.write("=" * 50 + "\n")
+                f.write("REAL-TIME OUTPUT:\n")
+                f.write("=" * 50 + "\n\n")
+                
+                # Read output in real-time
+                while True:
+                    stdout_line = process.stdout.readline()
+                    stderr_line = process.stderr.readline()
+                    
+                    if stdout_line:
+                        print(stdout_line.rstrip())  # Print to console
+                        f.write(stdout_line)  # Write to log file
+                        f.flush()  # Force write to disk
+                        stdout_output.append(stdout_line)
+                    
+                    if stderr_line:
+                        print(stderr_line.rstrip(), file=sys.stderr)  # Print to console
+                        f.write(stderr_line)  # Write to log file
+                        f.flush()  # Force write to disk
+                        stderr_output.append(stderr_line)
+                    
+                    # Check if process has finished
+                    if process.poll() is not None and not stdout_line and not stderr_line:
+                        break
+
+            # Get return code after process completion
+            return_code = process.returncode
+            
+            # Combine collected output
+            result = type('Result', (), {
+                'returncode': return_code,
+                'stdout': ''.join(stdout_output),
+                'stderr': ''.join(stderr_output)
+            })
+
             if result.returncode != 0:
                 print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
                 continue
-            else:
-                print(f"Agent output for instance {instance_id}:\n{result.stdout}")
 
             # Read the git patch from the temporary directory
             git_patch_file = os.path.join(temp_dir, 'git_patch.diff')
@@ -167,7 +220,7 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
             # Extract tracked files if they exist
             tracked_files_archive = os.path.join(temp_dir, 'tracked_files.tar.gz')
             if track_files and os.path.exists(tracked_files_archive):
-                tracked_files_dir = os.path.join(output_dir, f'{instance_id}_files')
+                tracked_files_dir = os.path.join(instance_output_dir, 'files')
                 os.makedirs(tracked_files_dir, exist_ok=True)
                 subprocess.run(['tar', 'xzf', tracked_files_archive, '-C', tracked_files_dir], check=True)
                 print(f"Saved tracked files for instance {instance_id} to {tracked_files_dir}")
@@ -175,29 +228,24 @@ def load_and_test_instances(num_examples: int = 1, test_index: int = None, start
             print(f"Saved output for instance {instance_id} to {output_file}")
             print(f"Saved logs for instance {instance_id} to {log_file}")
 
-
 def convert_outputs_to_jsonl(output_dir: str):
     """Convert json outputs to SWE-bench jsonl format and combine them"""
     all_data = []
     
-    # First convert individual files
-    for filename in os.listdir(output_dir):
-        if filename.endswith('.json') and not filename.endswith('__log.json'):
-            input_file = os.path.join(output_dir, filename)
-            output_file = os.path.join(output_dir, filename.replace('.json', '.swebench.jsonl'))
+    # Iterate through instance directories
+    for instance_dir in os.listdir(output_dir):
+        instance_path = os.path.join(output_dir, instance_dir)
+        if not os.path.isdir(instance_path):
+            continue
             
+        json_file = os.path.join(instance_path, f'{instance_dir}.json')
+        if os.path.exists(json_file):
             # Read input file
-            with open(input_file) as f:
+            with open(json_file) as f:
                 data = json.load(f)
-                # Ensure data is a list
                 if not isinstance(data, list):
                     data = [data]
-                df = pd.DataFrame(data)
                 all_data.extend(data)
-            
-            # Save individual jsonl format
-            df.to_json(output_file, orient='records', lines=True)
-            print(f'Converted {input_file} to {output_file}')
     
     # Create combined output file
     if all_data:
@@ -205,7 +253,6 @@ def convert_outputs_to_jsonl(output_dir: str):
         combined_output = os.path.join(output_dir, f'__combined_agentpress_output_{len(all_data)}.jsonl')
         combined_df.to_json(combined_output, orient='records', lines=True)
         print(f'\nCreated combined output file: {combined_output}')
-
 
 if __name__ == "__main__":
     import argparse
