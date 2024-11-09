@@ -17,9 +17,9 @@ def load_runs(output_dir: str) -> List[str]:
             runs.append(item)
     return runs
 
-def load_run_data(run_dir: str, run_name: str) -> tuple[List[Dict], str, str]:
-    """Load all data files for a given run."""
-    # Load thread data
+@st.cache_data
+def load_thread_data(run_dir: str) -> List[Dict]:
+    """Load thread data for a given run."""
     threads_dir = os.path.join(run_dir, 'threads')
     thread_data = []
     if os.path.exists(threads_dir):
@@ -30,22 +30,25 @@ def load_run_data(run_dir: str, run_name: str) -> tuple[List[Dict], str, str]:
                         thread_data.append(json.load(f))
                 except json.JSONDecodeError:
                     st.warning(f"Failed to decode JSON from {file}")
-    
-    # Load diff file
-    diff_content = ""
+    return thread_data
+
+@st.cache_data
+def load_diff_file(run_dir: str, run_name: str) -> str:
+    """Load diff file content."""
     diff_file = os.path.join(run_dir, f"{run_name}.diff")
     if os.path.exists(diff_file):
         with open(diff_file, 'r') as f:
-            diff_content = f.read()
-    
-    # Load log file
-    log_content = ""
+            return f.read()
+    return ""
+
+@st.cache_data
+def load_log_file(run_dir: str, run_name: str) -> str:
+    """Load log file content."""
     log_file = os.path.join(run_dir, f"{run_name}.log")
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:
-            log_content = f.read()
-            
-    return thread_data, diff_content, log_content
+            return f.read()
+    return ""
 
 def format_message_content(content):
     """Format the message content for display."""
@@ -141,23 +144,27 @@ def main():
     # Display run details if a run is selected
     if selected_run:
         run_dir = os.path.join(output_dir, selected_run)
-        run_data, diff_content, log_content = load_run_data(run_dir, selected_run)
         
         st.header(f"📁 Run Details: {selected_run}")
         
         # Create tabs
-        chat_tab, diff_tab, log_tab = st.tabs(["💬 Chat", "📝 Code Diff", "📋 Log"])
+        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log"]
+        current_tab = st.tabs(tab_names)
         
-        with chat_tab:
+        # Load data based on active tab
+        with current_tab[0]:  # Chat tab
+            run_data = load_thread_data(run_dir)
             display_run_details(run_data)
             
-        with diff_tab:
+        with current_tab[1]:  # Diff tab
+            diff_content = load_diff_file(run_dir, selected_run)
             if diff_content:
                 st.code(diff_content, language="diff")
             else:
                 st.info("No diff file available")
                 
-        with log_tab:
+        with current_tab[2]:  # Log tab
+            log_content = load_log_file(run_dir, selected_run)
             if log_content:
                 st.code(log_content)
             else:
