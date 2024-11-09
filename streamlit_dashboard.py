@@ -3,10 +3,10 @@ import os
 import json
 from pathlib import Path
 from typing import List, Dict
-from streamlit_autorefresh import st_autorefresh
+# from streamlit_autorefresh import st_autorefresh
 
 # Constants
-DEFAULT_REFRESH_INTERVAL_MS = 10000  # 10 seconds
+# DEFAULT_REFRESH_INTERVAL_MS = 2000  # 2 seconds
 
 def load_runs(output_dir: str) -> List[str]:
     """Load all run directories from the output directory."""
@@ -83,10 +83,10 @@ def display_run_details(run_data: List[Dict]):
 
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
-    st.title("📊 SWE Bench Real-Time Visualization")
+    st.title("📊 SWE Bench Dashboard")
 
     # Auto-refresh setup
-    count = st_autorefresh(interval=DEFAULT_REFRESH_INTERVAL_MS, limit=None, key="autorefresh")
+    # count = st_autorefresh(interval=DEFAULT_REFRESH_INTERVAL_MS, limit=None, key="autorefresh")
 
     # Input for output directory
     output_dir = st.text_input(
@@ -100,7 +100,7 @@ def main():
         st.error(f"🚫 Output directory '{output_dir}' does not exist.")
         st.stop()
 
-    # Sidebar for selecting runs
+    # Sidebar for runs
     st.sidebar.header("📂 Available Runs")
     runs = load_runs(output_dir)
 
@@ -108,31 +108,23 @@ def main():
         st.sidebar.warning("No runs found in the specified directory.")
         st.stop()
 
-    selected_run = st.sidebar.selectbox("📝 Select a Run", runs)
-    run_dir = os.path.join(output_dir, selected_run)
+    # Create buttons for each run
+    selected_run = None
+    for run in runs:
+        if st.sidebar.button(f"📝 {run}", key=f"run_{run}"):
+            selected_run = run
 
     st.sidebar.markdown("---")
-    refresh_interval = st.sidebar.slider(
-        "🔄 Refresh Interval (seconds)",
-        min_value=5,
-        max_value=60,
-        value=10,
-        help="Set the interval for refreshing the run data."
-    )
 
-    # Update the autorefresh interval if changed
-    if refresh_interval * 1000 != DEFAULT_REFRESH_INTERVAL_MS:
-        st_autorefresh(interval=refresh_interval * 1000, limit=None, key="autorefresh")
-
-    # Placeholder for run details
-    run_details_placeholder = st.empty()
-
-    # Load and display run data
-    run_data = load_run_data(run_dir)
-
-    with run_details_placeholder.container():
+    # Display run details if a run is selected
+    if selected_run:
+        run_dir = os.path.join(output_dir, selected_run)
+        run_data = load_run_data(run_dir)
+        
         st.header(f"📁 Run Details: {selected_run}")
         display_run_details(run_data)
+    else:
+        st.info("👈 Please select a run from the sidebar")
 
 if __name__ == "__main__":
     main()
