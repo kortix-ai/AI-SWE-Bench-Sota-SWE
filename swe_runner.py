@@ -162,11 +162,12 @@ def main():
                         help="Only join existing JSON files to JSONL, skip running tests")
     args = parser.parse_args()
 
+    # Initialize StreamlitRunner if needed
+    streamlit_process = None
     if args.streamlit:
-        streamlit_cmd = [
-            'streamlit', 'run', 'streamlit_dashboard.py', '--', args.output_dir
-        ]
-        subprocess.Popen(streamlit_cmd)
+        from streamlit_runner import StreamlitRunner
+        streamlit_process = StreamlitRunner()
+        streamlit_process.run(args.output_dir)
         print("Streamlit app started for real-time visualization.")
 
     if args.join_only:
@@ -280,6 +281,11 @@ git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.d
             stop_docker_container(container_name)
 
     convert_outputs_to_jsonl(args.output_dir)
+
+    # Stop Streamlit if it was started
+    if streamlit_process:
+        streamlit_process.stop()
+        print("Streamlit app stopped.")
 
 if __name__ == "__main__":
     main()
