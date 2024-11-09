@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import List, Dict
 
-DEFAULT_REFRESH_INTERVAL_MS = 2000  # 2 seconds
 
 def load_runs(output_dir: str) -> List[str]:
     """Load all run directories from the output directory."""
@@ -15,7 +14,6 @@ def load_runs(output_dir: str) -> List[str]:
             runs.append(item)
     return runs
 
-@st.cache_data
 def load_thread_data(run_dir: str) -> List[Dict]:
     """Load thread data for a given run."""
     threads_dir = os.path.join(run_dir, 'threads')
@@ -30,7 +28,6 @@ def load_thread_data(run_dir: str) -> List[Dict]:
                     st.warning(f"Failed to decode JSON from {file}")
     return thread_data
 
-@st.cache_data
 def load_diff_file(run_dir: str, run_name: str) -> str:
     """Load diff file content."""
     run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
@@ -40,7 +37,6 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
             return f.read()
     return ""
 
-@st.cache_data
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
     run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
