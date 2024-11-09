@@ -53,8 +53,8 @@ def display_run_details(run_data: List[Dict]):
         return
 
     for thread in run_data:
-        thread_id = thread.get('thread_id', 'Unknown Thread')
-        st.markdown(f"### Thread ID: {thread_id}")
+        # thread_id = thread.get('thread_id', 'Unknown Thread')
+        # st.markdown(f"### Thread ID: {thread_id}")
         
         messages = thread.get('messages', [])
         for message in messages:
@@ -94,20 +94,21 @@ def main():
     # Auto-refresh setup
     # count = st_autorefresh(interval=DEFAULT_REFRESH_INTERVAL_MS, limit=None, key="autorefresh")
 
-    # Input for output directory
-    output_dir = st.text_input(
-        "🔍 Enter Output Directory",
-        value="./outputs",
-        placeholder="/path/to/outputs",
-        help="Specify the directory where SWE Bench outputs are stored."
-    )
+    # Sidebar for output directory and runs
+    with st.sidebar:
+        st.header("🔍 Output Directory")
+        output_dir = st.text_input(
+            "Enter path",
+            value="./outputs",
+            placeholder="/path/to/outputs",
+            help="Specify the directory where SWE Bench outputs are stored."
+        )
 
-    if not os.path.exists(output_dir):
-        st.error(f"🚫 Output directory '{output_dir}' does not exist.")
-        st.stop()
+        if not os.path.exists(output_dir):
+            st.error(f"🚫 Directory '{output_dir}' does not exist.")
+            st.stop()
 
-    # Sidebar for runs
-    st.sidebar.header("📂 Available Runs")
+        st.header("📂 Available Runs")
     runs = load_runs(output_dir)
 
     if not runs:
