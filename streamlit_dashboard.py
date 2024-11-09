@@ -12,12 +12,12 @@ def parse_tool_result(content):
     success (bool), output (str), error (str), exit_code (int)
     """
     # Regex to extract success and output fields
-    pattern = r'ToolResult\(success=(True|False), output=\'(.*?)\'\)'
-    match = re.match(pattern, content, re.DOTALL)
-    if match:
-        success = match.group(1) == 'True'
-        output_str = match.group(2)
-        try:
+    try:
+        pattern = r'ToolResult\(success=(True|False), output=\'(.*?)\'\)'
+        match = re.match(pattern, content, re.DOTALL)
+        if match:
+            success = match.group(1) == 'True'
+            output_str = match.group(2)
             # Unescape the escaped characters
             output_unescaped = bytes(output_str, "utf-8").decode("unicode_escape")
             # Parse the JSON content
@@ -28,19 +28,13 @@ def parse_tool_result(content):
                 "error": output_json.get("error", ""),
                 "exit_code": output_json.get("exit_code", -1)
             }
-        except json.JSONDecodeError:
-            return {
-                "success": False,
-                "output": "Invalid JSON in ToolResult output.",
-                "error": "JSON parsing failed.",
-                "exit_code": -1
-            }
-    else:
+    except:
+        # If any parsing fails, just return the raw content
         return {
-            "success": False,
-            "output": "Invalid ToolResult format.",
-            "error": "Parsing failed.",
-            "exit_code": -1
+            "success": True,
+            "output": content,
+            "error": "",
+            "exit_code": 0
         }
 
 def load_runs(output_dir: str) -> List[str]:
