@@ -284,6 +284,7 @@ git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.d
 
     # Stop Streamlit if it was started
     if streamlit_process:
+        input("Type any key to stop streamlit !")
         streamlit_process.stop()
         print("Streamlit app stopped.")
 
