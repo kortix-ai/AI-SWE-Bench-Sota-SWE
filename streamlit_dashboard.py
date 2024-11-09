@@ -17,20 +17,35 @@ def load_runs(output_dir: str) -> List[str]:
             runs.append(item)
     return runs
 
-def load_run_data(run_dir: str) -> List[Dict]:
-    """Load all thread JSON files for a given run."""
+def load_run_data(run_dir: str, run_name: str) -> tuple[List[Dict], str, str]:
+    """Load all data files for a given run."""
+    # Load thread data
     threads_dir = os.path.join(run_dir, 'threads')
-    data = []
+    thread_data = []
     if os.path.exists(threads_dir):
         for file in sorted(os.listdir(threads_dir)):
             if file.endswith('.json'):
                 try:
                     with open(os.path.join(threads_dir, file), 'r') as f:
-                        thread_data = json.load(f)
-                        data.append(thread_data)
+                        thread_data.append(json.load(f))
                 except json.JSONDecodeError:
                     st.warning(f"Failed to decode JSON from {file}")
-    return data
+    
+    # Load diff file
+    diff_content = ""
+    diff_file = os.path.join(run_dir, f"{run_name}.diff")
+    if os.path.exists(diff_file):
+        with open(diff_file, 'r') as f:
+            diff_content = f.read()
+    
+    # Load log file
+    log_content = ""
+    log_file = os.path.join(run_dir, f"{run_name}.log")
+    if os.path.exists(log_file):
+        with open(log_file, 'r') as f:
+            log_content = f.read()
+            
+    return thread_data, diff_content, log_content
 
 def format_message_content(content):
     """Format the message content for display."""
@@ -126,10 +141,27 @@ def main():
     # Display run details if a run is selected
     if selected_run:
         run_dir = os.path.join(output_dir, selected_run)
-        run_data = load_run_data(run_dir)
+        run_data, diff_content, log_content = load_run_data(run_dir, selected_run)
         
         st.header(f"📁 Run Details: {selected_run}")
-        display_run_details(run_data)
+        
+        # Create tabs
+        chat_tab, diff_tab, log_tab = st.tabs(["💬 Chat", "📝 Code Diff", "📋 Log"])
+        
+        with chat_tab:
+            display_run_details(run_data)
+            
+        with diff_tab:
+            if diff_content:
+                st.code(diff_content, language="diff")
+            else:
+                st.info("No diff file available")
+                
+        with log_tab:
+            if log_content:
+                st.code(log_content)
+            else:
+                st.info("No log file available")
     else:
         st.info("👈 Please select a run from the sidebar")
 
