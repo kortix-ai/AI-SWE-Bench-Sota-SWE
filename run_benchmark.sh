@@ -3,9 +3,9 @@
 # Run the inference script
 # --num-examples
 python swe_runner.py \
-    --test-index 1 
+    --test-index 1  \
+    --streamlit
     # --track-files /testbed/
-    # --streamlit
 
 # python swe_runner.py \
     # --range 1 5 

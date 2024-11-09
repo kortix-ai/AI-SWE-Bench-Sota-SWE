@@ -1,10 +1,10 @@
+import argparse
+import subprocess
 import os
 import sys
 import json
 import tempfile
-import subprocess
 from datasets import load_dataset
-import argparse
 import pandas as pd 
 
 def get_instance_docker_image(instance_id: str) -> str:
@@ -152,6 +152,8 @@ def main():
                         help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
+    parser.add_argument("--streamlit", action="store_true",
+                        help="Start the Streamlit app for real-time visualization")
     parser.add_argument("--track-files", nargs="+",
                         help="List of files and/or folders to track")
     parser.add_argument("--output-dir", default="./outputs",
@@ -159,6 +161,13 @@ def main():
     parser.add_argument("--join-only", action="store_true",
                         help="Only join existing JSON files to JSONL, skip running tests")
     args = parser.parse_args()
+
+    if args.streamlit:
+        streamlit_cmd = [
+            'streamlit', 'run', 'streamlit_dashboard.py', '--', args.output_dir
+        ]
+        subprocess.Popen(streamlit_cmd)
+        print("Streamlit app started for real-time visualization.")
 
     if args.join_only:
         print("Join-only mode: combining existing JSON files...")

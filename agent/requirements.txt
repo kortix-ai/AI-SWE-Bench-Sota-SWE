@@ -3,4 +3,5 @@ asyncio
 litellm
 pytest
 python-dotenv
-# langfuse==2.53.9 
+langfuse
+streamlit-autorefresh
