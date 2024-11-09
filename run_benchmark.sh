@@ -3,12 +3,12 @@
 # Run the inference script
 # --num-examples
 python swe_runner.py \
-    --test-index 6 
+    --test-index 1 
     # --track-files /testbed/
     # --streamlit
 
 # python swe_runner.py \
-#     --range 3 6 \
+    # --range 1 5 
 #     --agent-dir ./agent \
 #     --track-files /tmp/agentpress/ \
     # --streamlit

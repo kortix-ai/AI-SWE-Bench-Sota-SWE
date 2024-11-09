@@ -5,7 +5,7 @@ from agentpress.state_manager import StateManager
 class TerminalTool(Tool):
     def __init__(self, container_name: str):
         super().__init__()
-        self.state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+        self.state_manager = StateManager(store_file="state.json")
         self.container_name = container_name
 
     async def execute_command_in_container(self, command: str):

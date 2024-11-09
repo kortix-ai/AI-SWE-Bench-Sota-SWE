@@ -215,7 +215,8 @@ def main():
             cmd = [
                 'python', 'agent/agent.py',
                 '--problem-file', problem_file,
-                '--container-name', container_name
+                '--container-name', container_name,
+                '--threads-dir', os.path.join(instance_output_dir, 'threads')
             ]
             print("Running agent...")
             result = subprocess.run(cmd, capture_output=True, text=True)
