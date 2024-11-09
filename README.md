@@ -91,3 +91,13 @@ Contributions are welcome! Feel free to open issues or submit pull requests for 
 ## License
 
 [MIT License](LICENSE)
+
+
+## Evaluation:
+
+### Install SWE bench
+```
+git clone https://github.com/princeton-nlp/SWE-bench.git
+cd SWE-bench
+pip install -e .
+```

@@ -19,3 +19,7 @@ state.json
 run_benchmark.sh
 
 archives/
+
+SWE-bench
+eval_outputs/
+openhands_setup/
