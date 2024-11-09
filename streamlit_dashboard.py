@@ -138,7 +138,7 @@ def main():
         st.header(f"📁 Run Details: {selected_run}")
         
         # Create tabs
-        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log"]
+        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log", "🔍 Threads"]
         current_tab = st.tabs(tab_names)
         
         # Load data based on active tab
@@ -159,6 +159,13 @@ def main():
                 st.code(log_content)
             else:
                 st.info("No log file available")
+                
+        with current_tab[3]:  # Threads tab
+            run_data = load_thread_data(run_dir)
+            if run_data:
+                st.json(run_data)
+            else:
+                st.info("No thread data available")
     else:
         st.info("👈 Please select a run from the sidebar")
 
