@@ -22,12 +22,13 @@ def parse_tool_result(content):
                 "exit_code": output_json.get("exit_code", -1)
             }
     except:
-        return {
-            "success": True,
-            "output": content,
-            "error": "",
-            "exit_code": 0
-        }
+        pass
+    return {
+        "success": True,
+        "output": content,
+        "error": "",
+        "exit_code": 0
+    }
 
 def load_runs(output_dir: str) -> List[str]:
     """Load all run directories from the output directory."""
@@ -122,7 +123,7 @@ def display_run_details(run_data: List[Dict]):
                     icon = "✅" if success else "❌"
                     label = f"{name} {icon}"
                     
-                    with st.expander(label=label):
+                    with st.expander(label=label, expanded=True):
                         st.code(output, language='python')
                         if error:
                             st.error(f"Error: {error}")

@@ -72,8 +72,8 @@ Problem Statement:
     while iteration < max_iterations:
         iteration += 1
 
-        # model_name = "anthropic/claude-3-5-sonnet-latest"
-        model_name = "anthropic/claude-3-5-haiku-latest"
+        model_name = "anthropic/claude-3-5-sonnet-latest"
+        # model_name = "anthropic/claude-3-5-haiku-latest"
 
         response = await thread_manager.run_thread(
             thread_id=thread_id,
