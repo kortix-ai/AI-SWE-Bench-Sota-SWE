@@ -108,13 +108,11 @@ def convert_outputs_to_jsonl(output_dir: str):
 
     for instance_dir in os.listdir(output_dir):
         instance_path = os.path.join(output_dir, instance_dir)
-        print(instance_dir)
-        instance = instance_dir.split('_', 1)[1] if '_' in instance_dir else instance_dir
 
         if not os.path.isdir(instance_path):
             continue
 
-        json_file = os.path.join(instance_path, f'{instance}.json')
+        json_file = os.path.join(instance_path, f'{instance_dir}.json')
 
         if os.path.exists(json_file):
             # Check file size before processing
@@ -199,7 +197,7 @@ def main():
         instance_id = instance['instance_id']
 
         # Create instance-specific output directory with index prefix
-        instance_output_dir = os.path.join(args.output_dir, f"{idx}_{instance_id}")
+        instance_output_dir = os.path.join(args.output_dir, f"{instance_id}")
         os.makedirs(instance_output_dir, exist_ok=True)
 
         # Update output file paths to use instance-specific directory but keep original names

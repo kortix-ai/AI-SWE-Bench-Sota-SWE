@@ -55,7 +55,6 @@ def load_thread_data(run_dir: str) -> List[Dict]:
 
 def load_diff_file(run_dir: str, run_name: str) -> str:
     """Load diff file content."""
-    run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
     diff_file = os.path.join(run_dir, f"{run_name}.diff")
     if os.path.exists(diff_file):
         with open(diff_file, 'r') as f:
@@ -64,7 +63,6 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
 
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
-    run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
     log_file = os.path.join(run_dir, f"{run_name}.log")
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:

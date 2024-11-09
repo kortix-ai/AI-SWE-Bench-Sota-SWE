@@ -95,7 +95,7 @@ def main():
         eval_script = instance.get('eval_script', None)
 
         # Create instance-specific output directory
-        instance_output_dir = os.path.join(args.output_dir, f"{idx}_{instance_id}")
+        instance_output_dir = os.path.join(args.output_dir, f"{instance_id}")
         os.makedirs(instance_output_dir, exist_ok=True)
 
         # Start docker container
@@ -111,7 +111,7 @@ def main():
 
             # Apply the patch
             apply_patch_cmd = (
-                'cd /workspace && '
+                'cd /testbed && '
                 '(git apply -v /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
                 '(echo "Failed to apply patch with git apply, trying with patch command..." && '
                 '(patch -p1 -i /tmp/patch.diff && echo "APPLY_PATCH_PASS" || echo "APPLY_PATCH_FAIL")))'
