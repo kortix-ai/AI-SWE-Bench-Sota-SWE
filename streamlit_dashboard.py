@@ -3,7 +3,45 @@ import os
 import json
 from pathlib import Path
 from typing import List, Dict
+import re
 
+
+def parse_tool_result(content):
+    """
+    Parses the ToolResult string and returns a dictionary with keys:
+    success (bool), output (str), error (str), exit_code (int)
+    """
+    # Regex to extract success and output fields
+    pattern = r'ToolResult\(success=(True|False), output=\'(.*?)\'\)'
+    match = re.match(pattern, content, re.DOTALL)
+    if match:
+        success = match.group(1) == 'True'
+        output_str = match.group(2)
+        try:
+            # Unescape the escaped characters
+            output_unescaped = bytes(output_str, "utf-8").decode("unicode_escape")
+            # Parse the JSON content
+            output_json = json.loads(output_unescaped)
+            return {
+                "success": success,
+                "output": output_json.get("output", ""),
+                "error": output_json.get("error", ""),
+                "exit_code": output_json.get("exit_code", -1)
+            }
+        except json.JSONDecodeError:
+            return {
+                "success": False,
+                "output": "Invalid JSON in ToolResult output.",
+                "error": "JSON parsing failed.",
+                "exit_code": -1
+            }
+    else:
+        return {
+            "success": False,
+            "output": "Invalid ToolResult format.",
+            "error": "Parsing failed.",
+            "exit_code": -1
+        }
 
 def load_runs(output_dir: str) -> List[str]:
     """Load all run directories from the output directory."""
@@ -86,7 +124,24 @@ def display_run_details(run_data: List[Dict]):
             
             with st.chat_message(role, avatar=avatar):
                 formatted_content = format_message_content(content)
-                st.markdown(formatted_content)
+                if role == "tool":
+                    name = message.get("name", "")
+                    tool_result = parse_tool_result(content)
+                    success = tool_result["success"]
+                    output = tool_result["output"]
+                    error = tool_result["error"]
+                    exit_code = tool_result["exit_code"]
+                    
+                    icon = "✅" if success else "❌"
+                    label = f"{name} {icon}"
+                    
+                    with st.expander(label=label):
+                        st.code(output, language='python')
+                        if error:
+                            st.error(f"Error: {error}")
+                        st.info(f"Exit Code: {exit_code}")
+                else:
+                    st.markdown(formatted_content)
                 
                 # Display tool calls if present
                 if "tool_calls" in message:
