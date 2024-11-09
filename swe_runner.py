@@ -207,13 +207,10 @@ def main():
         log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
         tracked_files_dir = os.path.join(instance_output_dir, 'files')
 
-        # Remove existing files if they exist
-        if os.path.exists(output_file):
-            os.remove(output_file)
-        if os.path.exists(log_file):
-            os.remove(log_file)
-        if os.path.exists(tracked_files_dir):
-            subprocess.run(['rm', '-rf', tracked_files_dir], check=True)
+        # Remove instance directory if it exists
+        if os.path.exists(instance_output_dir):
+            subprocess.run(['rm', '-rf', instance_output_dir], check=True)
+            os.makedirs(instance_output_dir)
 
         container_name = start_docker_container(instance, args.track_files or [])
 
