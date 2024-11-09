@@ -3,10 +3,8 @@ import os
 import json
 from pathlib import Path
 from typing import List, Dict
-# from streamlit_autorefresh import st_autorefresh
 
-# Constants
-# DEFAULT_REFRESH_INTERVAL_MS = 2000  # 2 seconds
+DEFAULT_REFRESH_INTERVAL_MS = 2000  # 2 seconds
 
 def load_runs(output_dir: str) -> List[str]:
     """Load all run directories from the output directory."""
@@ -35,6 +33,7 @@ def load_thread_data(run_dir: str) -> List[Dict]:
 @st.cache_data
 def load_diff_file(run_dir: str, run_name: str) -> str:
     """Load diff file content."""
+    run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
     diff_file = os.path.join(run_dir, f"{run_name}.diff")
     if os.path.exists(diff_file):
         with open(diff_file, 'r') as f:
@@ -44,6 +43,7 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
 @st.cache_data
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
+    run_name = run_dir.split('_', 1)[1] if '_' in run_name else run_name
     log_file = os.path.join(run_dir, f"{run_name}.log")
     if os.path.exists(log_file):
         with open(log_file, 'r') as f:
@@ -71,9 +71,6 @@ def display_run_details(run_data: List[Dict]):
         return
 
     for thread in run_data:
-        # thread_id = thread.get('thread_id', 'Unknown Thread')
-        # st.markdown(f"### Thread ID: {thread_id}")
-        
         messages = thread.get('messages', [])
         for message in messages:
             role = message.get("role", "unknown")
@@ -108,9 +105,6 @@ def display_run_details(run_data: List[Dict]):
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
     st.title("📊 SWE Bench Dashboard")
-
-    # Auto-refresh setup
-    # count = st_autorefresh(interval=DEFAULT_REFRESH_INTERVAL_MS, limit=None, key="autorefresh")
 
     # Sidebar for output directory and runs
     with st.sidebar:
