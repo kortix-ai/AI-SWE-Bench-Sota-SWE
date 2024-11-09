@@ -7,20 +7,13 @@ import re
 
 
 def parse_tool_result(content):
-    """
-    Parses the ToolResult string and returns a dictionary with keys:
-    success (bool), output (str), error (str), exit_code (int)
-    """
-    # Regex to extract success and output fields
     try:
         pattern = r'ToolResult\(success=(True|False), output=\'(.*?)\'\)'
         match = re.match(pattern, content, re.DOTALL)
         if match:
             success = match.group(1) == 'True'
             output_str = match.group(2)
-            # Unescape the escaped characters
             output_unescaped = bytes(output_str, "utf-8").decode("unicode_escape")
-            # Parse the JSON content
             output_json = json.loads(output_unescaped)
             return {
                 "success": success,
@@ -29,7 +22,6 @@ def parse_tool_result(content):
                 "exit_code": output_json.get("exit_code", -1)
             }
     except:
-        # If any parsing fails, just return the raw content
         return {
             "success": True,
             "output": content,
@@ -121,6 +113,7 @@ def display_run_details(run_data: List[Dict]):
                 if role == "tool":
                     name = message.get("name", "")
                     tool_result = parse_tool_result(content)
+                    print(tool_result)
                     success = tool_result["success"]
                     output = tool_result["output"]
                     error = tool_result["error"]
