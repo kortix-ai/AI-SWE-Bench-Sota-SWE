@@ -3,6 +3,7 @@ import subprocess
 import os
 import time
 import psutil
+import argparse
 
 class StreamlitRunner:
     def __init__(self):
@@ -38,3 +39,29 @@ class StreamlitRunner:
                 pass
             finally:
                 self.process = None
+
+def main():
+    parser = argparse.ArgumentParser(description='Run Streamlit dashboard for SWE Bench visualization')
+    parser.add_argument('--output-dir', default='./outputs', 
+                      help='Directory containing the output files (default: ./outputs)')
+    args = parser.parse_args()
+
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Start the Streamlit dashboard
+    runner = StreamlitRunner()
+    runner.run(args.output_dir)
+    
+    try:
+        print(f"Streamlit dashboard started. Monitoring directory: {args.output_dir}")
+        print("Press Ctrl+C to stop...")
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopping Streamlit dashboard...")
+        runner.stop()
+        print("Streamlit dashboard stopped.")
+
+if __name__ == "__main__":
+    main()
