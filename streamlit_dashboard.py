@@ -54,32 +54,38 @@ def display_run_details(run_data: List[Dict]):
 
     for thread in run_data:
         thread_id = thread.get('thread_id', 'Unknown Thread')
-        with st.expander(f"🔄 Thread ID: {thread_id}", expanded=True):
-            messages = thread.get('messages', [])
-            for message in messages:
-                role = message.get("role", "unknown")
-                content = message.get("content", "")
+        st.markdown(f"### Thread ID: {thread_id}")
+        
+        messages = thread.get('messages', [])
+        for message in messages:
+            role = message.get("role", "unknown")
+            content = message.get("content", "")
+            
+            # Assign avatar based on role
+            if role == "assistant":
+                avatar = "🤖"
+            elif role == "user":
+                avatar = "👤"
+            elif role == "system":
+                avatar = "⚙️"
+            elif role == "tool":
+                avatar = "🔧"
+            else:
+                avatar = "❓"
+            
+            with st.chat_message(role, avatar=avatar):
                 formatted_content = format_message_content(content)
-
-                # Assign an emoji based on the role
-                if role == "assistant":
-                    avatar = "🤖 Assistant"
-                elif role == "user":
-                    avatar = "👤 User"
-                elif role == "system":
-                    avatar = "⚙️ System"
-                elif role == "tool":
-                    avatar = "🛠️ Tool"
-                else:
-                    avatar = f"❓ {role.capitalize()}"
-
-                st.markdown(f"**{avatar}:** {formatted_content}")
-
+                st.markdown(formatted_content)
+                
                 # Display tool calls if present
                 if "tool_calls" in message:
-                    st.markdown("**🔧 Tool Calls:**")
+                    st.markdown("**Tool Calls:**")
                     for tool_call in message["tool_calls"]:
-                        st.code(json.dumps(tool_call, indent=2), language="json")
+                        st.code(
+                            f"Function: {tool_call['function']['name']}\n"
+                            f"Arguments: {tool_call['function']['arguments']}",
+                            language="json"
+                        )
 
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
