@@ -60,7 +60,12 @@ def load_runs(output_dir: str) -> List[Dict]:
                 report = eval_result.get('test_result', {}).get('report', {})
                 resolved = report.get('resolved', False)
                 all_tests_passed = resolved
-            run_info['all_tests_passed'] = all_tests_passed
+                run_info['all_tests_passed'] = all_tests_passed
+                run_info['status'] = 'completed'
+            else:
+                # Evaluation is running
+                run_info['all_tests_passed'] = None
+                run_info['status'] = 'running'
             runs.append(run_info)
     return runs
 
@@ -204,7 +209,13 @@ def main():
     selected_run = None
     for run in runs:
         run_name = run['name']
-        icon = '✅' if run['all_tests_passed'] else '❌'
+        # Modify icon based on status
+        if run.get('status') == 'running':
+            icon = '⏳'
+        elif run.get('all_tests_passed') == True:
+            icon = '✅'
+        else:
+            icon = '❌'
         if st.sidebar.button(f"{icon} {run_name}", key=f"run_{run_name}"):
             selected_run = run_name
             run_dir = run['path']
