@@ -8,6 +8,7 @@ import pandas as pd
 from datasets import load_dataset
 from swebench.harness.utils import load_swebench_dataset
 from swebench.harness.test_spec import make_test_spec
+from swebench.harness.grading import get_eval_report  
 
 def get_instance_docker_image(instance_id: str) -> str:
     """Get the docker image name for a specific instance."""
@@ -71,7 +72,7 @@ def run_evaluation(
     def update_progress(result):
         pbar.update(1)
         pbar.set_description(f'Instance {result["instance_id"]}')
-        pbar.set_postfix_str(f'Test Result: {str(result["test_result"])[:100]}...')
+        pbar.set_postfix_str(f'Test Result: {str(result["test_result"]["report"])[:100]}...')
         output_fp.write(json.dumps(result) + '\n')
         output_fp.flush()
 
@@ -117,25 +118,18 @@ def process_instance(instance, output_dir):
     instance_id = instance['instance_id']
     model_patch = process_git_patch(instance['model_patch'])
     test_spec = instance['test_spec']
-
+    
     # Create instance-specific output directory and log file
     instance_output_dir = os.path.join(output_dir, f"{instance_id}")
     os.makedirs(instance_output_dir, exist_ok=True)
-    # Updated log file name to avoid overwriting existing log
     log_file = os.path.join(instance_output_dir, f'{instance_id}_eval.log')
     
     print(f'Starting evaluation for instance {instance_id}')
     
     test_result = {
-        'report': {
-            'empty_generation': False,
-            'resolved': False,
-            'failed_apply_patch': False,
-            'error_eval': False,
-            'test_timeout': False,
-        },
         'apply_patch_output': '',
         'test_output': '',
+        'report': {},
     }
 
     if not model_patch.strip():
@@ -227,8 +221,28 @@ def process_instance(instance, output_dir):
                     f.write("=== Test Output ===\n")
                     f.write(test_output + "\n\n")
 
-                test_result['report']['resolved'] = 'Tests passed' in test_output
-                
+                # Generate report using get_eval_report
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    # Create a directory structure that matches the expected format
+                    log_dir = os.path.join(temp_dir, 'logs', instance_id.lower())
+                    os.makedirs(log_dir, exist_ok=True)
+                    test_output_path = os.path.join(log_dir, 'test_output.txt')
+                    with open(test_output_path, 'w') as f:
+                        f.write(test_output)
+
+                    _report = get_eval_report(
+                        test_spec=test_spec,
+                        prediction={
+                            'model_patch': model_patch,
+                            'instance_id': instance_id,
+                        },
+                        log_path=test_output_path,
+                        include_tests_status=True,
+                    )
+                    report = _report[instance_id]
+                    test_result['report'] = report
+                    print(f"Report for instance {instance_id}: {report}")
+
             except subprocess.TimeoutExpired:
                 print(f"Evaluation timed out after 1800 seconds for instance {instance_id}")
                 test_result['report']['test_timeout'] = True
@@ -282,7 +296,7 @@ def main():
     )
     parser.add_argument(
         '--output-dir',
-        default='./outputs',  # Updated to use the same output directory as swe_runner.py
+        default='./outputs',
         help='Directory to save evaluation outputs',
     )
     parser.add_argument(
