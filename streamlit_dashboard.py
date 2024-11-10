@@ -30,13 +30,38 @@ def parse_tool_result(content):
         "exit_code": 0
     }
 
-def load_runs(output_dir: str) -> List[str]:
-    """Load all run directories from the output directory."""
+def load_evaluation_result(run_dir: str) -> Dict:
+    """Load evaluation result JSON for a given run."""
+    for file in os.listdir(run_dir):
+        if file.endswith('_evaluation_result.json'):
+            with open(os.path.join(run_dir, file), 'r') as f:
+                return json.load(f)
+    return {}
+
+def load_eval_log(run_dir: str) -> str:
+    """Load eval log content."""
+    for file in os.listdir(run_dir):
+        if file.endswith('_eval.log'):
+            with open(os.path.join(run_dir, file), 'r') as f:
+                return f.read()
+    return ""
+
+def load_runs(output_dir: str) -> List[Dict]:
+    """Load all runs and their statuses from the output directory."""
     runs = []
     for item in sorted(os.listdir(output_dir)):
         item_path = os.path.join(output_dir, item)
         if os.path.isdir(item_path):
-            runs.append(item)
+            run_info = {'name': item, 'path': item_path}
+            eval_result = load_evaluation_result(item_path)
+            # Determine status
+            all_tests_passed = False
+            if eval_result:
+                report = eval_result.get('test_result', {}).get('report', {})
+                resolved = report.get('resolved', False)
+                all_tests_passed = resolved
+            run_info['all_tests_passed'] = all_tests_passed
+            runs.append(run_info)
     return runs
 
 def load_thread_data(run_dir: str) -> List[Dict]:
@@ -112,7 +137,6 @@ def display_run_details(run_data: List[Dict]):
                 if role == "tool":
                     name = message.get("name", "")
                     tool_result = parse_tool_result(content)
-                    print(tool_result)
                     success = tool_result["success"]
                     output = tool_result["output"]
                     error = tool_result["error"]
@@ -164,22 +188,34 @@ def main():
         st.sidebar.warning("No runs found in the specified directory.")
         st.stop()
 
-    # Create buttons for each run
-    selected_run = None
+    # Create a list of options with icons
+    run_options = []
+    run_name_to_info = {}
     for run in runs:
-        if st.sidebar.button(f"📝 {run}", key=f"run_{run}"):
-            selected_run = run
+        run_name = run['name']
+        icon = '✅' if run['all_tests_passed'] else '❌'
+        run_label = f"{icon} {run_name}"
+        run_options.append(run_label)
+        run_name_to_info[run_label] = run
+
+    selected_run_label = st.sidebar.selectbox("Select a run", run_options)
+
+    selected_run_info = run_name_to_info.get(selected_run_label, None)
+
+    if selected_run_info:
+        selected_run = selected_run_info['name']
+        run_dir = selected_run_info['path']
+    else:
+        selected_run = None
 
     st.sidebar.markdown("---")
 
     # Display run details if a run is selected
     if selected_run:
-        run_dir = os.path.join(output_dir, selected_run)
-        
         st.header(f"📁 Run Details: {selected_run}")
         
         # Create tabs
-        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log", "🔍 Threads"]
+        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs"]
         current_tab = st.tabs(tab_names)
         
         # Load data based on active tab
@@ -207,6 +243,35 @@ def main():
                 st.json(run_data)
             else:
                 st.info("No thread data available")
+        
+        with current_tab[4]:  # Passing Tests tab
+            eval_result = load_evaluation_result(run_dir)
+            if eval_result:
+                report = eval_result.get('test_result', {}).get('report', {})
+                tests_status = report.get('tests_status', {})
+                if tests_status:
+                    for status_category, tests in tests_status.items():
+                        success_tests = tests.get('success', [])
+                        failure_tests = tests.get('failure', [])
+                        if success_tests:
+                            st.subheader(f"{status_category} - Passed Tests")
+                            for test in success_tests:
+                                st.markdown(f"✅ {test}")
+                        if failure_tests:
+                            st.subheader(f"{status_category} - Failed Tests")
+                            for test in failure_tests:
+                                st.markdown(f"❌ {test}")
+                else:
+                    st.info("No test status available")
+            else:
+                st.info("No evaluation result available")
+        
+        with current_tab[5]:  # Eval Logs tab
+            eval_log_content = load_eval_log(run_dir)
+            if eval_log_content:
+                st.code(eval_log_content)
+            else:
+                st.info("No eval log available")
     else:
         st.info("👈 Please select a run from the sidebar")
 
