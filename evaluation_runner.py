@@ -208,21 +208,14 @@ def process_instance(instance):
             subprocess.run(['docker', 'cp', eval_script_file, f'{container_name}:/tmp/eval.sh'], check=True)
             execute_command_in_container(container_name, 'chmod +x /tmp/eval.sh')
 
-            # Create named pipe for real-time logging
-            execute_command_in_container(container_name, 'mkfifo /tmp/eval_pipe')
-            
-            # Start background process to continuously read from pipe
-            tail_cmd = 'tail -f /tmp/eval_pipe &'
-            execute_command_in_container(container_name, tail_cmd)
-            
-            # Run eval script and redirect to both pipe and log file
+            # Run eval script directly with output redirection
             log_file = '/tmp/eval_output.log'
-            run_eval_cmd = f'/tmp/eval.sh 2>&1 | tee /tmp/eval_pipe {log_file} & echo $!'
-            result = execute_command_in_container(container_name, run_eval_cmd, timeout=60)
+            run_eval_cmd = f'/tmp/eval.sh > {log_file} 2>&1 & echo $!'
+            result = execute_command_in_container(container_name, run_eval_cmd, timeout=None)
             pid = result.stdout.strip()
             print(f"Evaluation process started with PID: {pid}")
 
-            # Monitor process completion while streaming logs
+            # Monitor process completion
             start_time = time.time()
             timeout = 1800  # 30 minutes
             accumulated_output = []
@@ -237,29 +230,32 @@ def process_instance(instance):
                 # Check if process is still running
                 check_cmd = f'ps -p {pid} > /dev/null; echo $?'
                 try:
-                    check_result = execute_command_in_container(container_name, check_cmd, timeout=60)
+                    check_result = execute_command_in_container(container_name, check_cmd, timeout=None)
                     
-                    # Read any new output
-                    read_cmd = f'cat /tmp/eval_pipe'
-                    try:
-                        read_result = execute_command_in_container(container_name, read_cmd, timeout=5)
-                        if read_result.stdout:
-                            print(f"[{instance_id}] {read_result.stdout}", flush=True)
-                            accumulated_output.append(read_result.stdout)
-                    except subprocess.TimeoutExpired:
-                        pass
+                    # Read from log file periodically
+                    cat_cmd = f'cat {log_file} 2>/dev/null || true'
+                    read_result = execute_command_in_container(container_name, cat_cmd, timeout=None)
+                    if read_result.stdout:
+                        new_output = read_result.stdout
+                        if new_output not in accumulated_output:
+                            print(f"[{instance_id}] {new_output}", flush=True)
+                            accumulated_output.append(new_output)
                     
                     if check_result.stdout.strip() == '1':
                         print(f"Evaluation process completed after {seconds_elapsed} seconds")
                         break
                         
-                    time.sleep(5)  # Short sleep to prevent too frequent checking
+                    time.sleep(5)
                     
-                except subprocess.TimeoutExpired:
+                except Exception as e:
+                    print(f"Error in monitoring loop: {e}")
+                    time.sleep(5)
                     continue
 
-            # Combine all output
-            test_output = ''.join(accumulated_output)
+            # Get final output from log file
+            cat_cmd = f'cat {log_file}'
+            read_result = execute_command_in_container(container_name, cat_cmd, timeout=None)
+            test_output = read_result.stdout
             test_result['test_output'] = test_output
 
             # Check for test success
