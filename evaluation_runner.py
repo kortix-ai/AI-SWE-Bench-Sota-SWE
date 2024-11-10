@@ -220,7 +220,7 @@ def process_instance(instance, output_dir):
                     'cd /testbed && timeout 1800 /tmp/eval.sh',
                     timeout=1800
                 )
-                test_output = result.stdout + result.stderr
+                test_output = result.stderr + result.stdout 
                 test_result['test_output'] = test_output
                 
                 with open(log_file, 'a') as f:
