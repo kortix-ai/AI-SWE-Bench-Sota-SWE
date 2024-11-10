@@ -114,12 +114,18 @@ def process_git_patch(patch: str) -> str:
             
     return patch.rstrip() + '\n'
 
-def process_instance(instance):
+def process_instance(instance, output_dir):
     instance_id = instance['instance_id']
     model_patch = process_git_patch(instance['model_patch'])
     test_spec = instance['test_spec']
 
-    print(f'Starting evaluation for instance {instance_id}.')
+    # Create instance-specific output directory and log file
+    instance_output_dir = os.path.join(output_dir, f"{instance_id}")
+    os.makedirs(instance_output_dir, exist_ok=True)
+    log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
+    
+    print(f'Starting evaluation for instance {instance_id}')
+    
     test_result = {
         'report': {
             'empty_generation': False,
@@ -143,27 +149,21 @@ def process_instance(instance):
     # Remove existing container if any
     subprocess.run(['docker', 'rm', '-f', container_name], stdout=subprocess.DEVNULL)
 
-    # Pull Docker image
+    # Pull and start container
     subprocess.run(['docker', 'pull', docker_image], check=True)
-
-    # Start container
     cmd = [
-        'docker',
-        'run',
-        '--name',
-        container_name,
+        'docker', 'run',
+        '--name', container_name,
         '-d',
-        '-e',
-        f'SWE_INSTANCE_ID={instance_id}',
+        '-e', f'SWE_INSTANCE_ID={instance_id}',
         docker_image,
-        '/bin/bash',
-        '-c',
-        'tail -f /dev/null',
+        '/bin/bash', '-c',
+        'tail -f /dev/null'
     ]
     subprocess.run(cmd, check=True)
 
     try:
-        # Configure git first
+        # Configure git
         git_config_cmd = (
             'cd /testbed && '
             'git config --global user.email "agent@example.com" && '
@@ -176,10 +176,9 @@ def process_instance(instance):
             f.write(model_patch)
             patch_file = f.name
 
-        # Copy patch file into container
         subprocess.run(['docker', 'cp', patch_file, f'{container_name}:/tmp/patch.diff'], check=True)
 
-        # Apply the patch using more robust approach from OpenHands
+        # Apply patch with robust approach
         apply_patch_cmd = (
             'cd /testbed && '
             '(git apply -v /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
@@ -192,6 +191,12 @@ def process_instance(instance):
         apply_patch_output = result.stdout + result.stderr
         test_result['apply_patch_output'] = apply_patch_output
 
+        # Log patch application results
+        with open(log_file, 'w') as f:
+            f.write(f"=== Evaluation for Instance {instance_id} ===\n\n")
+            f.write("=== Patch Application Output ===\n")
+            f.write(apply_patch_output + "\n\n")
+
         if 'APPLY_PATCH_FAIL' in apply_patch_output:
             print(f"Failed to apply patch for instance {instance_id}")
             test_result['report']['failed_apply_patch'] = True
@@ -200,7 +205,7 @@ def process_instance(instance):
         elif 'APPLY_PATCH_PASS' in apply_patch_output:
             print(f"Patch applied successfully for instance {instance_id}")
             
-            # Copy and run evaluation script with proper output redirection
+            # Copy eval script to container
             with tempfile.NamedTemporaryFile('w', delete=False) as f:
                 f.write(test_spec.eval_script)
                 eval_script_file = f.name
@@ -208,75 +213,62 @@ def process_instance(instance):
             subprocess.run(['docker', 'cp', eval_script_file, f'{container_name}:/tmp/eval.sh'], check=True)
             execute_command_in_container(container_name, 'chmod +x /tmp/eval.sh')
 
-            # Run eval script directly with output redirection
-            log_file = '/tmp/eval_output.log'
-            run_eval_cmd = f'/tmp/eval.sh > {log_file} 2>&1 & echo $!'
-            result = execute_command_in_container(container_name, run_eval_cmd, timeout=None)
-            pid = result.stdout.strip()
-            print(f"Evaluation process started with PID: {pid}")
-
-            # Monitor process completion
-            start_time = time.time()
-            timeout = 1800  # 30 minutes
-            accumulated_output = []
-            
-            while True:
-                seconds_elapsed = time.time() - start_time
-                if seconds_elapsed > timeout:
-                    print(f"Evaluation timed out after {timeout} seconds")
-                    test_result['report']['test_timeout'] = True
-                    break
+            # Run evaluation with timeout
+            try:
+                result = execute_command_in_container(
+                    container_name,
+                    'cd /testbed && timeout 1800 /tmp/eval.sh',
+                    timeout=1800
+                )
+                test_output = result.stdout + result.stderr
+                test_result['test_output'] = test_output
                 
-                # Check if process is still running
-                check_cmd = f'ps -p {pid} > /dev/null; echo $?'
-                try:
-                    check_result = execute_command_in_container(container_name, check_cmd, timeout=None)
-                    
-                    # Read from log file periodically
-                    cat_cmd = f'cat {log_file} 2>/dev/null || true'
-                    read_result = execute_command_in_container(container_name, cat_cmd, timeout=None)
-                    if read_result.stdout:
-                        new_output = read_result.stdout
-                        if new_output not in accumulated_output:
-                            print(f"[{instance_id}] {new_output}", flush=True)
-                            accumulated_output.append(new_output)
-                    
-                    if check_result.stdout.strip() == '1':
-                        print(f"Evaluation process completed after {seconds_elapsed} seconds")
-                        break
-                        
-                    time.sleep(5)
-                    
-                except Exception as e:
-                    print(f"Error in monitoring loop: {e}")
-                    time.sleep(5)
-                    continue
+                with open(log_file, 'a') as f:
+                    f.write("\n=== Test Output ===\n")
+                    f.write(test_output)
 
-            # Get final output from log file
-            cat_cmd = f'cat {log_file}'
-            read_result = execute_command_in_container(container_name, cat_cmd, timeout=None)
-            test_output = read_result.stdout
-            test_result['test_output'] = test_output
+                test_result['report']['resolved'] = 'Tests passed' in test_output
+                
+            except subprocess.TimeoutExpired:
+                print(f"Evaluation timed out after 1800 seconds for instance {instance_id}")
+                test_result['report']['test_timeout'] = True
+                with open(log_file, 'a') as f:
+                    f.write("\n=== Evaluation Timeout ===\n")
+                    f.write("Process timed out after 1800 seconds\n")
+            except Exception as e:
+                print(f"Error during evaluation for instance {instance_id}: {e}")
+                test_result['report']['error_eval'] = True
+                with open(log_file, 'a') as f:
+                    f.write("\n=== Evaluation Error ===\n")
+                    f.write(f"Error: {str(e)}\n")
 
-            # Check for test success
-            if 'Tests passed' in test_output:
-                test_result['report']['resolved'] = True
-            else:
-                test_result['report']['resolved'] = False
+            # Save git diff for reference
+            try:
+                git_diff_cmd = f'cd /testbed && git diff --no-color {instance["base_commit"]} HEAD'
+                result = execute_command_in_container(container_name, git_diff_cmd, timeout=60)
+                with open(os.path.join(instance_output_dir, f'{instance_id}.diff'), 'w') as f:
+                    f.write(result.stdout)
+            except Exception as e:
+                print(f"Error saving git diff for instance {instance_id}: {e}")
 
-            return {'instance_id': instance_id, 'test_result': test_result}
-            
         else:
-            print(f"Unexpected output when applying patch:\n{apply_patch_output}")
+            print(f"Unexpected output when applying patch for {instance_id}")
             test_result['report']['error_eval'] = True
-            return {'instance_id': instance_id, 'test_result': test_result}
+            with open(log_file, 'a') as f:
+                f.write("\n=== Unexpected Patch Application Output ===\n")
+                f.write(apply_patch_output)
+
+        return {'instance_id': instance_id, 'test_result': test_result}
 
     except Exception as e:
         print(f"Error evaluating instance {instance_id}: {e}")
         test_result['report']['error_eval'] = True
+        with open(log_file, 'a') as f:
+            f.write("\n=== Fatal Error ===\n")
+            f.write(f"Error: {str(e)}\n")
         return {'instance_id': instance_id, 'test_result': test_result}
     finally:
-        # Stop and remove Docker container
+        # Cleanup
         subprocess.run(['docker', 'stop', container_name], stdout=subprocess.DEVNULL)
         subprocess.run(['docker', 'rm', container_name], stdout=subprocess.DEVNULL)
 
@@ -351,13 +343,16 @@ def main():
     # Prepare dataset
     instances = prepare_dataset(df_predictions, output_file)
 
+    def process_instance_wrapper(instance):
+        return process_instance(instance, args.output_dir)
+
     # Run evaluation
     run_evaluation(
         dataset=instances,
         output_file=output_file,
         output_dir=args.output_dir,
         num_workers=args.num_workers,
-        process_instance_func=process_instance,
+        process_instance_func=process_instance_wrapper,
     )
 
     print("\nEvaluation completed.")
