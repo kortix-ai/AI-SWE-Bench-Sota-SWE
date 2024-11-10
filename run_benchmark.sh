@@ -8,8 +8,8 @@
     # --track-files /testbed/
 
 python swe_runner.py \
-    --range 1 2  \
-    --streamlit
+    --range 1 5  \
+    --max-iterations 7 
 #     --agent-dir ./agent \
 #     --track-files /tmp/agentpress/ \
 
