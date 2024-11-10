@@ -165,13 +165,26 @@ def display_run_details(run_data: List[Dict]):
 
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
-    st.title("📊 SWE Bench Dashboard")
+
+    # Custom style to reduce top margin
+    st.markdown(
+        """
+        <style>
+        .appview-container .main .block-container{
+            padding-top: 2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Sidebar for output directory and runs
     with st.sidebar:
-        st.header("🔍 Output Directory")
+        st.title("📊 SWE Bench")
+# Dashboard
+        # st.header("🔍 🔍 Output Directory")
         output_dir = st.text_input(
-            "Enter path",
+            "🔍 Output Directory",
             value="./outputs",
             placeholder="/path/to/outputs",
             help="Specify the directory where SWE Bench outputs are stored."
@@ -188,25 +201,13 @@ def main():
         st.sidebar.warning("No runs found in the specified directory.")
         st.stop()
 
-    # Create a list of options with icons
-    run_options = []
-    run_name_to_info = {}
+    selected_run = None
     for run in runs:
         run_name = run['name']
         icon = '✅' if run['all_tests_passed'] else '❌'
-        run_label = f"{icon} {run_name}"
-        run_options.append(run_label)
-        run_name_to_info[run_label] = run
-
-    selected_run_label = st.sidebar.selectbox("Select a run", run_options)
-
-    selected_run_info = run_name_to_info.get(selected_run_label, None)
-
-    if selected_run_info:
-        selected_run = selected_run_info['name']
-        run_dir = selected_run_info['path']
-    else:
-        selected_run = None
+        if st.sidebar.button(f"{icon} {run_name}", key=f"run_{run_name}"):
+            selected_run = run_name
+            run_dir = run['path']
 
     st.sidebar.markdown("---")
 
@@ -273,6 +274,9 @@ def main():
             else:
                 st.info("No eval log available")
     else:
+        # add space here
+        st.markdown("---")
+
         st.info("👈 Please select a run from the sidebar")
 
 if __name__ == "__main__":
