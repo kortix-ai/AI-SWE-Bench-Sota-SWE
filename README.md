@@ -27,45 +27,60 @@ SWE Runner is a tool for running and evaluating AI agents on the [SWE-Bench](htt
    You can customize the number of examples, dataset, agent directory, and more by directly running `swe_runner.py` with arguments.
 
    ```bash
-   python swe_runner.py --num-examples 5 --agent-dir ./agent --track-files /tmp/agentpress/ --streamlit
+   python swe_runner.py --range 1 5 --max-iterations 7 --streamlit
    ```
 
    - `--num-examples`: Number of examples to test.
+   - `--test-index`: Run a specific test by index.
+   - `--range`: Run tests from START to END index (inclusive).
    - `--dataset`: Dataset to use (default: `princeton-nlp/SWE-bench_Lite`).
    - `--split`: Dataset split to use (default: `test`).
    - `--agent-dir`: Path to your agent directory.
    - `--output-dir`: Directory to save outputs (default: `./outputs`).
    - `--track-files`: List of files and/or folders to track and copy to outputs directory.
    - `--streamlit`: Launch Streamlit thread viewer after execution.
+   - `--max-iterations`: Maximum number of iterations.
+   - `--disable-streamlit`: Disable the Streamlit app.
 
-4. **View Results**:
+4. **Run Evaluation**:
 
-   After running the benchmark, outputs will be saved in the `outputs/` directory.
+   After benchmarking, run the `evaluation.py` script to evaluate the results.
+
+   ```bash
+   python evaluation.py --input-file ./outputs/__combined_agentpress_output_*.jsonl --output-dir ./outputs --dataset princeton-nlp/SWE-bench_Lite --split test --num-workers 4
+   ```
+
+   - `--input-file`: Path to the combined output file.
+   - `--output-dir`: Directory to save evaluation outputs.
+   - `--dataset`: Dataset name to use.
+   - `--split`: Dataset split to use.
+   - `--timeout`: Timeout for evaluation in seconds (default: 1800).
+   - `--num-workers`: Number of parallel workers.
+
+5. **View Results**:
+
+   After running the benchmark and evaluation, outputs will be saved in the `outputs/` directory.
 
    - **Patch Files**: Git diffs of the changes made by the agent for each instance.
    - **Logs**: Execution logs for each instance.
    - **Tracked Files**: If specified, the files and directories tracked during execution.
+   - **Evaluation Results**: JSONL files containing evaluation reports.
 
-5. **Visualize Agent Interactions**:
+6. **Visualize Agent Interactions**:
 
    If you included the `--streamlit` flag, a Streamlit application will launch, allowing you to visualize the agent's conversation threads.
 
 ## File Overview
 
 - **run_benchmark.sh**: Shell script to run the benchmarking process with default settings.
-
 - **swe_runner.py**: Main script that handles loading the dataset, running each instance in a Docker container, and collecting outputs.
-
+- **evaluation.py**: Script to evaluate the results from the benchmarking process.
 - **agent/agent.py**: Your agent implementation. Contains the logic for how the agent interacts with the problem instances.
-
 - **agentpress**: Directory containing AgentPress utilities for building AI agents, including:
-
   - **thread_manager.py**: Manages conversations between the agent and the LLM.
   - **state_manager.py**: Manages the agent's state across iterations.
   - **tools**: Directory for agent tools like `FilesTool` and `TerminalTool`.
-
-- **outputs/**: Directory where outputs from the benchmarking process are saved.
-
+- **outputs/**: Directory where outputs from the benchmarking and evaluation processes are saved.
 - **agentpress_README.md**: Readme for AgentPress, providing detailed information about its components.
 
 ## Customization

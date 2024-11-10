@@ -16,7 +16,6 @@ log/*
 combine_jsonl.py
 
 state.json
-run_benchmark.sh
 
 archives/
 
