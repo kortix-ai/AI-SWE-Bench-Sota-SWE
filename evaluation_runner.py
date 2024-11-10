@@ -17,6 +17,20 @@ def get_instance_docker_image(instance_id: str) -> str:
     image_name = image_name.replace('__', '_s_')  # To comply with Docker naming conventions
     return (DOCKER_IMAGE_PREFIX.rstrip('/') + '/' + image_name).lower()
 
+def execute_command_in_container(container_name, command, timeout=None):
+    """
+    Execute a command inside the running Docker container and return the output.
+    Maintains proper environment setup from old system.
+    """
+    full_command = f'. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {command}'
+    cmd = ['docker', 'exec', container_name, 'bash', '-c', full_command]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return result
+    except subprocess.TimeoutExpired as e:
+        print(f"Command timed out after {timeout} seconds: {command}")
+        raise e
+
 def prepare_dataset(dataset: pd.DataFrame, output_file: str, eval_n_limit: int = None):
     id_column = 'instance_id'
     print(f'Writing evaluation output to {output_file}')
@@ -44,6 +58,7 @@ def prepare_dataset(dataset: pd.DataFrame, output_file: str, eval_n_limit: int =
 def run_evaluation(
     dataset: pd.DataFrame,
     output_file: str,
+    output_dir: str,
     num_workers: int,
     process_instance_func,
 ):
@@ -60,6 +75,15 @@ def run_evaluation(
         pbar.set_postfix_str(f'Test Result: {str(result["test_result"])[:100]}...')
         output_fp.write(json.dumps(result) + '\n')
         output_fp.flush()
+
+        # Save per-instance evaluation result
+        instance_id = result['instance_id']
+        instance_output_dir = os.path.join(output_dir, f"{instance_id}")
+        os.makedirs(instance_output_dir, exist_ok=True)
+        eval_result_path = os.path.join(instance_output_dir, f"{instance_id}_evaluation_result.json")
+        with open(eval_result_path, "w") as f:
+            json.dump(result, f, indent=2)
+        print(f"Saved evaluation result for instance {instance_id}")
 
     if num_workers > 1:
         with Pool(num_workers) as pool:
@@ -123,7 +147,7 @@ def process_instance(instance):
     subprocess.run(cmd, check=True)
 
     try:
-        # Apply model patch
+        # Apply model patch - Using old system's reliable approach
         with tempfile.NamedTemporaryFile('w', delete=False) as f:
             f.write(model_patch)
             patch_file = f.name
@@ -131,19 +155,16 @@ def process_instance(instance):
         # Copy patch file into container
         subprocess.run(['docker', 'cp', patch_file, f'{container_name}:/tmp/patch.diff'], check=True)
 
-        # Apply the patch inside the container
+        # Apply the patch using old system's proven approach
         apply_patch_cmd = (
             'cd /testbed && '
-            "(git apply -v /tmp/patch.diff && echo 'APPLY_PATCH_PASS' || "
-            "(echo 'Failed to apply patch with git apply, trying with patch command...' && "
-            "(patch --batch --fuzz=5 -p1 -i /tmp/patch.diff && echo 'APPLY_PATCH_PASS' || "
-            "echo 'APPLY_PATCH_FAIL')))"
+            '(git apply -v /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
+            '(echo "Failed to apply patch with git apply, trying with patch command..." && '
+            '(patch -p1 -i /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
+            'echo "APPLY_PATCH_FAIL")))'
         )
-        result = subprocess.run(
-            ['docker', 'exec', container_name, 'bash', '-c', apply_patch_cmd],
-            capture_output=True, text=True, timeout=600,
-        )
-
+        
+        result = execute_command_in_container(container_name, apply_patch_cmd, timeout=600)
         apply_patch_output = result.stdout + result.stderr
         test_result['apply_patch_output'] = apply_patch_output
 
@@ -154,7 +175,8 @@ def process_instance(instance):
 
         elif 'APPLY_PATCH_PASS' in apply_patch_output:
             print(f"Patch applied successfully for instance {instance_id}")
-            # Run evaluation script
+            
+            # Copy and run evaluation script
             with tempfile.NamedTemporaryFile('w', delete=False) as f:
                 f.write(test_spec.eval_script)
                 eval_script_file = f.name
@@ -163,15 +185,12 @@ def process_instance(instance):
             subprocess.run(['docker', 'cp', eval_script_file, f'{container_name}:/tmp/eval.sh'], check=True)
 
             # Make the script executable
-            subprocess.run(['docker', 'exec', container_name, 'chmod', '+x', '/tmp/eval.sh'], check=True)
+            execute_command_in_container(container_name, 'chmod +x /tmp/eval.sh')
 
-            # Run the eval script inside the container in background
+            # Run the eval script in background and capture output
             log_file = '/tmp/eval_output.log'
             run_eval_cmd = f'/tmp/eval.sh > {log_file} 2>&1 & echo $!'
-            result = subprocess.run(
-                ['docker', 'exec', container_name, 'bash', '-c', run_eval_cmd],
-                capture_output=True, text=True, timeout=60,
-            )
+            result = execute_command_in_container(container_name, run_eval_cmd, timeout=60)
             pid = result.stdout.strip()
             print(f"Evaluation process started with PID: {pid}")
 
@@ -184,34 +203,35 @@ def process_instance(instance):
                     print(f"Evaluation timed out after {timeout} seconds")
                     test_result['report']['test_timeout'] = True
                     break
+                
                 check_cmd = f'ps -p {pid} > /dev/null; echo $?'
-                check_result = subprocess.run(
-                    ['docker', 'exec', container_name, 'bash', '-c', check_cmd],
-                    capture_output=True, text=True, timeout=60,
-                )
-                if check_result.stdout.strip() == '1':
-                    print(f"Evaluation process completed after {seconds_elapsed} seconds")
-                    break
-                print(f"[{instance_id}] [{seconds_elapsed:.0f}s] Evaluation still running, waiting...")
-                time.sleep(30)
+                try:
+                    check_result = execute_command_in_container(container_name, check_cmd, timeout=60)
+                    if check_result.stdout.strip() == '1':
+                        print(f"Evaluation process completed after {seconds_elapsed} seconds")
+                        break
+                    print(f"[{instance_id}] [{seconds_elapsed:.0f}s] Evaluation still running, waiting...")
+                    time.sleep(30)
+                except subprocess.TimeoutExpired:
+                    continue
 
             # Read the log file
-            cat_result = subprocess.run(
-                ['docker', 'exec', container_name, 'bash', '-c', f'cat {log_file}'],
-                capture_output=True, text=True, timeout=300,
-            )
-            test_output = cat_result.stdout + cat_result.stderr
-            test_result['test_output'] = test_output
+            cat_cmd = f'cat {log_file}'
+            try:
+                cat_result = execute_command_in_container(container_name, cat_cmd, timeout=300)
+                test_output = cat_result.stdout + cat_result.stderr
+                test_result['test_output'] = test_output
 
-            # Grade answer (Implement your own logic to determine if resolved)
-            # For example, check if 'Tests passed' is in test_output
-            if 'Tests passed' in test_output:
-                test_result['report']['resolved'] = True
-            else:
-                test_result['report']['resolved'] = False
+                # Simple pass/fail check - can be enhanced based on requirements
+                if 'Tests passed' in test_output:
+                    test_result['report']['resolved'] = True
+                else:
+                    test_result['report']['resolved'] = False
+            except Exception as e:
+                print(f"Error reading test output: {e}")
+                test_result['report']['error_eval'] = True
 
             return {'instance_id': instance_id, 'test_result': test_result}
-
         else:
             print(f"Unexpected output when applying patch:\n{apply_patch_output}")
             test_result['report']['error_eval'] = True
@@ -301,6 +321,7 @@ def main():
     run_evaluation(
         dataset=instances,
         output_file=output_file,
+        output_dir=args.output_dir,
         num_workers=args.num_workers,
         process_instance_func=process_instance,
     )
