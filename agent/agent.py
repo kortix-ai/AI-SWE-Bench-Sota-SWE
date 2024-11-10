@@ -105,10 +105,17 @@ if __name__ == "__main__":
         parser.add_argument("--container-name", required=True, help="Docker container name")
         parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
+        parser.add_argument("--max-iterations", type=int, default=7, help="Maximum number of iterations")
         args = parser.parse_args()
 
         thread_manager = ThreadManager(threads_dir=args.threads_dir)
         thread_id = await thread_manager.create_thread()
-        await run_agent(thread_id, args.container_name, args.problem_file, args.threads_dir)
+        await run_agent(
+            thread_id,
+            args.container_name,
+            args.problem_file,
+            args.threads_dir,
+            max_iterations=args.max_iterations
+        )
 
     asyncio.run(main())

@@ -156,6 +156,8 @@ def main():
                         help="Directory to save outputs (default: ./outputs)")
     parser.add_argument("--join-only", action="store_true",
                         help="Only join existing JSON files to JSONL, skip running tests")
+    parser.add_argument("--max-iterations", type=int, default=7,
+                        help="Maximum number of iterations")
     args = parser.parse_args()
 
     if args.join_only:
@@ -211,7 +213,8 @@ def main():
                 sys.executable, 'agent/agent.py',
                 '--problem-file', problem_file,
                 '--container-name', container_name,
-                '--threads-dir', os.path.join(instance_output_dir, 'threads')
+                '--threads-dir', os.path.join(instance_output_dir, 'threads'),
+                '--max-iterations', str(args.max_iterations)
             ]
             print("Running agent...")
             result = subprocess.run(cmd, capture_output=True, text=True)

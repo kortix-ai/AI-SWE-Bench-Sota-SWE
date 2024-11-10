@@ -26,6 +26,8 @@ def main():
                         help='Timeout for evaluation in seconds')
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of parallel workers')
+    parser.add_argument("--max-iterations", type=int, default=7,
+                        help="Maximum number of iterations")
     args = parser.parse_args()
 
     # Start the Streamlit app
@@ -50,6 +52,7 @@ def main():
             inference_cmd += ["--track-files"] + args.track_files
         if args.join_only:
             inference_cmd += ["--join-only"]
+        inference_cmd += ["--max-iterations", str(args.max_iterations)]
         subprocess.run(inference_cmd, check=True)
 
         # Run evaluation.py
