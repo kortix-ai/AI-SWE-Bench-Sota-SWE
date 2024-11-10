@@ -98,9 +98,25 @@ def run_evaluation(
     output_fp.close()
     print('\nEvaluation finished.\n')
 
+def process_git_patch(patch: str) -> str:
+    """Clean and normalize patch content."""
+    if not isinstance(patch, str) or not patch.strip():
+        return ''
+        
+    patch = patch.replace('\r\n', '\n')
+    
+    # Find first diff line - handle cases where there might be unexpected content before patch
+    lines = patch.split('\n')
+    for i, line in enumerate(lines):
+        if line.startswith('diff --git'):
+            patch = '\n'.join(lines[i:])
+            break
+            
+    return patch.rstrip() + '\n'
+
 def process_instance(instance):
     instance_id = instance['instance_id']
-    model_patch = instance['model_patch']
+    model_patch = process_git_patch(instance['model_patch'])
     test_spec = instance['test_spec']
 
     print(f'Starting evaluation for instance {instance_id}.')
@@ -147,7 +163,15 @@ def process_instance(instance):
     subprocess.run(cmd, check=True)
 
     try:
-        # Apply model patch - Using old system's reliable approach
+        # Configure git first
+        git_config_cmd = (
+            'cd /testbed && '
+            'git config --global user.email "agent@example.com" && '
+            'git config --global user.name "Agent"'
+        )
+        execute_command_in_container(container_name, git_config_cmd, timeout=60)
+
+        # Apply model patch
         with tempfile.NamedTemporaryFile('w', delete=False) as f:
             f.write(model_patch)
             patch_file = f.name
@@ -155,12 +179,12 @@ def process_instance(instance):
         # Copy patch file into container
         subprocess.run(['docker', 'cp', patch_file, f'{container_name}:/tmp/patch.diff'], check=True)
 
-        # Apply the patch using old system's proven approach
+        # Apply the patch using more robust approach from OpenHands
         apply_patch_cmd = (
             'cd /testbed && '
             '(git apply -v /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
             '(echo "Failed to apply patch with git apply, trying with patch command..." && '
-            '(patch -p1 -i /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
+            '(patch --batch --fuzz=5 -p1 -i /tmp/patch.diff && echo "APPLY_PATCH_PASS" || '
             'echo "APPLY_PATCH_FAIL")))'
         )
         
@@ -176,7 +200,7 @@ def process_instance(instance):
         elif 'APPLY_PATCH_PASS' in apply_patch_output:
             print(f"Patch applied successfully for instance {instance_id}")
             
-            # Copy and run evaluation script
+            # Copy and run evaluation script with proper output redirection
             with tempfile.NamedTemporaryFile('w', delete=False) as f:
                 f.write(test_spec.eval_script)
                 eval_script_file = f.name
@@ -187,14 +211,14 @@ def process_instance(instance):
             # Make the script executable
             execute_command_in_container(container_name, 'chmod +x /tmp/eval.sh')
 
-            # Run the eval script in background and capture output
+            # Run eval script in background with proper output redirection
             log_file = '/tmp/eval_output.log'
             run_eval_cmd = f'/tmp/eval.sh > {log_file} 2>&1 & echo $!'
             result = execute_command_in_container(container_name, run_eval_cmd, timeout=60)
             pid = result.stdout.strip()
             print(f"Evaluation process started with PID: {pid}")
 
-            # Poll for completion
+            # Monitor process completion
             start_time = time.time()
             timeout = 1800  # 30 minutes
             while True:
@@ -222,7 +246,7 @@ def process_instance(instance):
                 test_output = cat_result.stdout + cat_result.stderr
                 test_result['test_output'] = test_output
 
-                # Simple pass/fail check - can be enhanced based on requirements
+                # Simple pass/fail check
                 if 'Tests passed' in test_output:
                     test_result['report']['resolved'] = True
                 else:
