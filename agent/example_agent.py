@@ -7,7 +7,7 @@ from tools.terminal_tool import TerminalTool
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
     thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
-    state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+    state_manager = StateManager(store_file="state.json")
     
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)

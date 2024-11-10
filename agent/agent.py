@@ -8,9 +8,9 @@ from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
 @observe()
-async def run_agent(thread_id: str, container_name: str, problem_file: str, max_iterations: int = 10):
-    thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
-    # state_manager = StateManager(store_file="/tmp/agentpress/state.json")
+async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 7):
+    thread_manager = ThreadManager(threads_dir=threads_dir)
+    state_manager = StateManager(store_file="state.json")
 
     async def after_iteration():
 
@@ -73,6 +73,7 @@ Problem Statement:
         iteration += 1
 
         model_name = "anthropic/claude-3-5-sonnet-latest"
+        # model_name = "anthropic/claude-3-5-haiku-latest"
 
         response = await thread_manager.run_thread(
             thread_id=thread_id,
@@ -102,11 +103,19 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("--problem-file", required=True, help="Path to the problem description JSON file")
         parser.add_argument("--container-name", required=True, help="Docker container name")
+        parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
+        parser.add_argument("--max-iterations", type=int, default=7, help="Maximum number of iterations")
         args = parser.parse_args()
 
-        thread_manager = ThreadManager(threads_dir="/tmp/agentpress/threads")
+        thread_manager = ThreadManager(threads_dir=args.threads_dir)
         thread_id = await thread_manager.create_thread()
-        await run_agent(thread_id, args.container_name, args.problem_file)
+        await run_agent(
+            thread_id,
+            args.container_name,
+            args.problem_file,
+            args.threads_dir,
+            max_iterations=args.max_iterations
+        )
 
     asyncio.run(main())

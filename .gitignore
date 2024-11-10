@@ -14,3 +14,11 @@ agent/workspace/
 
 log/*
 combine_jsonl.py
+
+state.json
+
+archives/
+
+SWE-bench
+eval_outputs/
+openhands_setup/
