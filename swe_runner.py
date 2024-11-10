@@ -28,62 +28,61 @@ def main():
                         help='Number of parallel workers')
     parser.add_argument("--max-iterations", type=int, default=7,
                         help="Maximum number of iterations")
+    parser.add_argument("--disable-streamlit", action="store_true",
+                        help="Disable the Streamlit app")
     args = parser.parse_args()
 
-    # Start the Streamlit app
-    print("Starting Streamlit app...")
-    streamlit_cmd = ["streamlit", "run", "streamlit_runner.py", "--", "--output-dir", args.output_dir]
-    streamlit_process = subprocess.Popen(streamlit_cmd)
+    streamlit_process = None
+    if not args.disable_streamlit:
+        from streamlit_runner import StreamlitRunner
+        streamlit_process = StreamlitRunner()
+        streamlit_process.run(args.output_dir)
+        print("Streamlit app started for real-time visualization.")
 
-    try:
-        # Run inference.py
-        print("Running inference...")
-        inference_cmd = [sys.executable, "inference.py"]
-        if args.test_index:
-            inference_cmd += ["--test-index", str(args.test_index)]
-        elif args.range:
-            inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
-        else:
-            inference_cmd += ["--num-examples", str(args.num_examples)]
-        inference_cmd += ["--dataset", args.dataset]
-        inference_cmd += ["--split", args.split]
-        inference_cmd += ["--output-dir", args.output_dir]
-        if args.track_files:
-            inference_cmd += ["--track-files"] + args.track_files
-        if args.join_only:
-            inference_cmd += ["--join-only"]
-        inference_cmd += ["--max-iterations", str(args.max_iterations)]
-        subprocess.run(inference_cmd, check=True)
+    # Run inference.py
+    print("Running inference...")
+    inference_cmd = [sys.executable, "inference.py"]
+    if args.test_index:
+        inference_cmd += ["--test-index", str(args.test_index)]
+    elif args.range:
+        inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
+    else:
+        inference_cmd += ["--num-examples", str(args.num_examples)]
+    inference_cmd += ["--dataset", args.dataset]
+    inference_cmd += ["--split", args.split]
+    inference_cmd += ["--output-dir", args.output_dir]
+    if args.track_files:
+        inference_cmd += ["--track-files"] + args.track_files
+    if args.join_only:
+        inference_cmd += ["--join-only"]
+    inference_cmd += ["--max-iterations", str(args.max_iterations)]
+    subprocess.run(inference_cmd, check=True)
 
-        # Run evaluation.py
-        print("Running evaluation...")
-        combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
-        if combined_output_files:
-            input_file = os.path.join(args.output_dir, combined_output_files[0])
-        else:
-            print("No combined output file found.")
-            sys.exit(1)
-        evaluation_cmd = [
-            sys.executable, "evaluation.py",
-            "--input-file", input_file,
-            "--output-dir", args.output_dir,
-            "--dataset", args.dataset,
-            "--split", args.split,
-            "--timeout", str(args.timeout),
-            "--num-workers", str(args.num_workers)
-        ]
-        subprocess.run(evaluation_cmd, check=True)
+    # Run evaluation.py
+    print("Running evaluation...")
+    combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
+    if combined_output_files:
+        input_file = os.path.join(args.output_dir, combined_output_files[0])
+    else:
+        print("No combined output file found.")
+        sys.exit(1)
+    evaluation_cmd = [
+        sys.executable, "evaluation.py",
+        "--input-file", input_file,
+        "--output-dir", args.output_dir,
+        "--dataset", args.dataset,
+        "--split", args.split,
+        "--timeout", str(args.timeout),
+        "--num-workers", str(args.num_workers)
+    ]
+    subprocess.run(evaluation_cmd, check=True)
 
-        # Wait for user to close Streamlit app
-        print("Press Ctrl+C to stop Streamlit app.")
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Stopping Streamlit app...")
-    finally:
-        streamlit_process.terminate()
-        streamlit_process.wait()
-        print("Streamlit app stopped.")
+    if not args.disable_streamlit:
+        if streamlit_process:
+            input("Type any key to stop streamlit !")
+            streamlit_process.stop()
+            print("Streamlit app stopped.")
+
 
 if __name__ == "__main__":
     main()
