@@ -205,22 +205,28 @@ def process_instance(instance):
                 f.write(test_spec.eval_script)
                 eval_script_file = f.name
 
-            # Copy eval script into container
             subprocess.run(['docker', 'cp', eval_script_file, f'{container_name}:/tmp/eval.sh'], check=True)
-
-            # Make the script executable
             execute_command_in_container(container_name, 'chmod +x /tmp/eval.sh')
 
-            # Run eval script in background with proper output redirection
+            # Create named pipe for real-time logging
+            execute_command_in_container(container_name, 'mkfifo /tmp/eval_pipe')
+            
+            # Start background process to continuously read from pipe
+            tail_cmd = 'tail -f /tmp/eval_pipe &'
+            execute_command_in_container(container_name, tail_cmd)
+            
+            # Run eval script and redirect to both pipe and log file
             log_file = '/tmp/eval_output.log'
-            run_eval_cmd = f'/tmp/eval.sh > {log_file} 2>&1 & echo $!'
+            run_eval_cmd = f'/tmp/eval.sh 2>&1 | tee /tmp/eval_pipe {log_file} & echo $!'
             result = execute_command_in_container(container_name, run_eval_cmd, timeout=60)
             pid = result.stdout.strip()
             print(f"Evaluation process started with PID: {pid}")
 
-            # Monitor process completion
+            # Monitor process completion while streaming logs
             start_time = time.time()
             timeout = 1800  # 30 minutes
+            accumulated_output = []
+            
             while True:
                 seconds_elapsed = time.time() - start_time
                 if seconds_elapsed > timeout:
@@ -228,34 +234,42 @@ def process_instance(instance):
                     test_result['report']['test_timeout'] = True
                     break
                 
+                # Check if process is still running
                 check_cmd = f'ps -p {pid} > /dev/null; echo $?'
                 try:
                     check_result = execute_command_in_container(container_name, check_cmd, timeout=60)
+                    
+                    # Read any new output
+                    read_cmd = f'cat /tmp/eval_pipe'
+                    try:
+                        read_result = execute_command_in_container(container_name, read_cmd, timeout=5)
+                        if read_result.stdout:
+                            print(f"[{instance_id}] {read_result.stdout}", flush=True)
+                            accumulated_output.append(read_result.stdout)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    
                     if check_result.stdout.strip() == '1':
                         print(f"Evaluation process completed after {seconds_elapsed} seconds")
                         break
-                    print(f"[{instance_id}] [{seconds_elapsed:.0f}s] Evaluation still running, waiting...")
-                    time.sleep(30)
+                        
+                    time.sleep(5)  # Short sleep to prevent too frequent checking
+                    
                 except subprocess.TimeoutExpired:
                     continue
 
-            # Read the log file
-            cat_cmd = f'cat {log_file}'
-            try:
-                cat_result = execute_command_in_container(container_name, cat_cmd, timeout=300)
-                test_output = cat_result.stdout + cat_result.stderr
-                test_result['test_output'] = test_output
+            # Combine all output
+            test_output = ''.join(accumulated_output)
+            test_result['test_output'] = test_output
 
-                # Simple pass/fail check
-                if 'Tests passed' in test_output:
-                    test_result['report']['resolved'] = True
-                else:
-                    test_result['report']['resolved'] = False
-            except Exception as e:
-                print(f"Error reading test output: {e}")
-                test_result['report']['error_eval'] = True
+            # Check for test success
+            if 'Tests passed' in test_output:
+                test_result['report']['resolved'] = True
+            else:
+                test_result['report']['resolved'] = False
 
             return {'instance_id': instance_id, 'test_result': test_result}
+            
         else:
             print(f"Unexpected output when applying patch:\n{apply_patch_output}")
             test_result['report']['error_eval'] = True
