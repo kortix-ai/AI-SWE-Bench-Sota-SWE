@@ -150,8 +150,6 @@ def main():
                         help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
-    parser.add_argument("--streamlit", action="store_true",
-                        help="Start the Streamlit app for real-time visualization")
     parser.add_argument("--track-files", nargs="+",
                         help="List of files and/or folders to track")
     parser.add_argument("--output-dir", default="./outputs",
@@ -159,14 +157,6 @@ def main():
     parser.add_argument("--join-only", action="store_true",
                         help="Only join existing JSON files to JSONL, skip running tests")
     args = parser.parse_args()
-
-    # Initialize StreamlitRunner if needed
-    streamlit_process = None
-    if args.streamlit:
-        from streamlit_runner import StreamlitRunner
-        streamlit_process = StreamlitRunner()
-        streamlit_process.run(args.output_dir)
-        print("Streamlit app started for real-time visualization.")
 
     if args.join_only:
         print("Join-only mode: combining existing JSON files...")
@@ -218,7 +208,7 @@ def main():
                 json.dump([instance], f)
 
             cmd = [
-                'python', 'agent/agent.py',
+                sys.executable, 'agent/agent.py',
                 '--problem-file', problem_file,
                 '--container-name', container_name,
                 '--threads-dir', os.path.join(instance_output_dir, 'threads')
@@ -276,12 +266,6 @@ git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.d
             stop_docker_container(container_name)
 
     convert_outputs_to_jsonl(args.output_dir)
-
-    # Stop Streamlit if it was started
-    if streamlit_process:
-        input("Type any key to stop streamlit !")
-        streamlit_process.stop()
-        print("Streamlit app stopped.")
 
 if __name__ == "__main__":
     main()
