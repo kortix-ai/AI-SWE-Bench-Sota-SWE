@@ -1,10 +1,9 @@
 import argparse
+import subprocess
 import os
 import sys
 import json
-import subprocess
 import tempfile
-import time
 import pandas as pd
 from datasets import load_dataset
 from swebench.harness.utils import load_swebench_dataset
@@ -122,7 +121,8 @@ def process_instance(instance, output_dir):
     # Create instance-specific output directory and log file
     instance_output_dir = os.path.join(output_dir, f"{instance_id}")
     os.makedirs(instance_output_dir, exist_ok=True)
-    log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
+    # Updated log file name to avoid overwriting existing log
+    log_file = os.path.join(instance_output_dir, f'{instance_id}_eval.log')
     
     print(f'Starting evaluation for instance {instance_id}')
     
@@ -224,8 +224,8 @@ def process_instance(instance, output_dir):
                 test_result['test_output'] = test_output
                 
                 with open(log_file, 'a') as f:
-                    f.write("\n=== Test Output ===\n")
-                    f.write(test_output)
+                    f.write("=== Test Output ===\n")
+                    f.write(test_output + "\n\n")
 
                 test_result['report']['resolved'] = 'Tests passed' in test_output
                 
@@ -233,23 +233,23 @@ def process_instance(instance, output_dir):
                 print(f"Evaluation timed out after 1800 seconds for instance {instance_id}")
                 test_result['report']['test_timeout'] = True
                 with open(log_file, 'a') as f:
-                    f.write("\n=== Evaluation Timeout ===\n")
-                    f.write("Process timed out after 1800 seconds\n")
+                    f.write("=== Test Output ===\n")
+                    f.write(f"Timeout after 1800 seconds\n\n")
             except Exception as e:
                 print(f"Error during evaluation for instance {instance_id}: {e}")
                 test_result['report']['error_eval'] = True
                 with open(log_file, 'a') as f:
-                    f.write("\n=== Evaluation Error ===\n")
-                    f.write(f"Error: {str(e)}\n")
+                    f.write("=== Error ===\n")
+                    f.write(f"Error during evaluation: {str(e)}\n\n")
 
             # Save git diff for reference
             try:
                 git_diff_cmd = f'cd /testbed && git diff --no-color {instance["base_commit"]} HEAD'
                 result = execute_command_in_container(container_name, git_diff_cmd, timeout=60)
-                with open(os.path.join(instance_output_dir, f'{instance_id}.diff'), 'w') as f:
+                with open(os.path.join(instance_output_dir, f'{instance_id}_eval.diff'), 'w') as f:
                     f.write(result.stdout)
             except Exception as e:
-                print(f"Error saving git diff for instance {instance_id}: {e}")
+                print(f"Error generating git diff for instance {instance_id}: {e}")
 
         else:
             print(f"Unexpected output when applying patch for {instance_id}")
@@ -282,7 +282,7 @@ def main():
     )
     parser.add_argument(
         '--output-dir',
-        default='./eval_outputs',
+        default='./outputs',  # Updated to use the same output directory as swe_runner.py
         help='Directory to save evaluation outputs',
     )
     parser.add_argument(
