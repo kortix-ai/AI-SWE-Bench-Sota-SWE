@@ -30,7 +30,22 @@ def main():
                         help="Maximum number of iterations")
     parser.add_argument("--disable-streamlit", action="store_true",
                         help="Disable the Streamlit app")
+    parser.add_argument("--archive", action="store_true", default=True,
+                        help="Archive the current outputs before running")
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o"], default="sonnet",
+                        help="Model name to use (choices: sonnet, haiku, deepseek)")
+    parser.add_argument("--run-eval", action="store_true", default=False,
+                        help="Run evaluation step (default: False)")
     args = parser.parse_args()
+
+    if args.archive:
+        import shutil
+        from datetime import datetime
+        if os.path.exists(args.output_dir):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_dir = os.path.join("archives", f"{timestamp}_outputs")
+            shutil.move(args.output_dir, archive_dir)
+            os.makedirs(args.output_dir)
 
     streamlit_process = None
     if not args.disable_streamlit:
@@ -56,26 +71,28 @@ def main():
     if args.join_only:
         inference_cmd += ["--join-only"]
     inference_cmd += ["--max-iterations", str(args.max_iterations)]
+    inference_cmd += ["--model-name", args.model_name]
     subprocess.run(inference_cmd, check=True)
 
-    # Run evaluation.py
-    print("Running evaluation...")
-    combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
-    if combined_output_files:
-        input_file = os.path.join(args.output_dir, combined_output_files[0])
-    else:
-        print("No combined output file found.")
-        sys.exit(1)
-    evaluation_cmd = [
-        sys.executable, "evaluation.py",
-        "--input-file", input_file,
-        "--output-dir", args.output_dir,
-        "--dataset", args.dataset,
-        "--split", args.split,
-        "--timeout", str(args.timeout),
-        "--num-workers", str(args.num_workers)
-    ]
-    subprocess.run(evaluation_cmd, check=True)
+    if args.run_eval:
+        # Run evaluation.py
+        print("Running evaluation...")
+        combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
+        if combined_output_files:
+            input_file = os.path.join(args.output_dir, combined_output_files[0])
+        else:
+            print("No combined output file found.")
+            sys.exit(1)
+        evaluation_cmd = [
+            sys.executable, "evaluation.py",
+            "--input-file", input_file,
+            "--output-dir", args.output_dir,
+            "--dataset", args.dataset,
+            "--split", args.split,
+            "--timeout", str(args.timeout),
+            "--num-workers", str(args.num_workers)
+        ]
+        subprocess.run(evaluation_cmd, check=True)
 
     if not args.disable_streamlit:
         if streamlit_process:

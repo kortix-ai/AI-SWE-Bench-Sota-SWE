@@ -147,10 +147,22 @@ class ThreadManager:
                 return True
         return False
 
-    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, tool_choice: str = "auto", additional_message: Optional[Dict[str, Any]] = None, execute_tools_async: bool = True, execute_model_tool_calls: bool = True, use_tools: bool = False) -> Dict[str, Any]:
+    async def run_thread(
+        self, 
+        thread_id: str, 
+        system_message: Optional[Dict[str, Any]] = None, 
+        model_name: str = "claude-3-5-sonnet-latest", 
+        temperature: float = 0, 
+        max_tokens: Optional[int] = None, 
+        tool_choice: str = "auto", 
+        additional_message: Optional[Dict[str, Any]] = None, 
+        execute_tools_async: bool = True, 
+        execute_model_tool_calls: bool = True, 
+        use_tools: bool = False
+    ) -> Dict[str, Any]:
         
         messages = await self.list_messages(thread_id)
-        prepared_messages = [system_message] + messages
+        prepared_messages = [system_message] + messages if system_message else messages
         
         if additional_message:
             prepared_messages.append(additional_message)
@@ -353,7 +365,6 @@ if __name__ == "__main__":
         # Test without tools
         response_without_tools = await manager.run_thread(
             thread_id=thread_id,
-            system_message=system_message,
             model_name=model_name,
             temperature=0.7,
             max_tokens=150,

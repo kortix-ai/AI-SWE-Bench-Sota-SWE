@@ -158,6 +158,8 @@ def main():
                         help="Only join existing JSON files to JSONL, skip running tests")
     parser.add_argument("--max-iterations", type=int, default=7,
                         help="Maximum number of iterations")
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o"], default="sonnet",
+                        help="Model name to use (choices: sonnet, haiku, deepseek)")
     args = parser.parse_args()
 
     if args.join_only:
@@ -214,7 +216,8 @@ def main():
                 '--problem-file', problem_file,
                 '--container-name', container_name,
                 '--threads-dir', os.path.join(instance_output_dir, 'threads'),
-                '--max-iterations', str(args.max_iterations)
+                '--max-iterations', str(args.max_iterations),
+                '--model-name', args.model_name,
             ]
             print("Running agent...")
             result = subprocess.run(cmd, capture_output=True, text=True)
