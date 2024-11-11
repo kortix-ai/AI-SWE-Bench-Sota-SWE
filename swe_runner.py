@@ -36,7 +36,12 @@ def main():
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
     parser.add_argument("--run-eval", action="store_true", default=False,
                         help="Run evaluation step (default: False)")
+    parser.add_argument("--only-eval", action="store_true", default=False,
+                        help="Only run evaluation step, skip inference")
     args = parser.parse_args()
+    
+    if args.only_eval:
+        args.run_eval = True
 
     if args.archive:
         import shutil
@@ -54,25 +59,26 @@ def main():
         streamlit_process.run(args.output_dir)
         print("Streamlit app started for real-time visualization.")
 
-    # Run inference.py
-    print("Running inference...")
-    inference_cmd = [sys.executable, "inference.py"]
-    if args.test_index:
-        inference_cmd += ["--test-index", str(args.test_index)]
-    elif args.range:
-        inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
-    else:
-        inference_cmd += ["--num-examples", str(args.num_examples)]
-    inference_cmd += ["--dataset", args.dataset]
-    inference_cmd += ["--split", args.split]
-    inference_cmd += ["--output-dir", args.output_dir]
-    if args.track_files:
-        inference_cmd += ["--track-files"] + args.track_files
-    if args.join_only:
-        inference_cmd += ["--join-only"]
-    inference_cmd += ["--max-iterations", str(args.max_iterations)]
-    inference_cmd += ["--model-name", args.model_name]
-    subprocess.run(inference_cmd, check=True)
+    if not args.only_eval:
+        # Run inference.py
+        print("Running inference...")
+        inference_cmd = [sys.executable, "inference.py"]
+        if args.test_index:
+            inference_cmd += ["--test-index", str(args.test_index)]
+        elif args.range:
+            inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
+        else:
+            inference_cmd += ["--num-examples", str(args.num_examples)]
+        inference_cmd += ["--dataset", args.dataset]
+        inference_cmd += ["--split", args.split]
+        inference_cmd += ["--output-dir", args.output_dir]
+        if args.track_files:
+            inference_cmd += ["--track-files"] + args.track_files
+        if args.join_only:
+            inference_cmd += ["--join-only"]
+        inference_cmd += ["--max-iterations", str(args.max_iterations)]
+        inference_cmd += ["--model-name", args.model_name]
+        subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:
         # Run evaluation.py
