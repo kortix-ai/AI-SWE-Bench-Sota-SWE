@@ -30,6 +30,7 @@ def parse_tool_result(content):
         "exit_code": 0
     }
 
+@st.cache_data
 def load_evaluation_result(run_dir: str) -> Dict:
     """Load evaluation result JSON for a given run."""
     for file in os.listdir(run_dir):
@@ -38,6 +39,7 @@ def load_evaluation_result(run_dir: str) -> Dict:
                 return json.load(f)
     return {}
 
+@st.cache_data
 def load_eval_log(run_dir: str) -> str:
     """Load eval log content."""
     for file in os.listdir(run_dir):
@@ -83,6 +85,7 @@ def load_thread_data(run_dir: str) -> List[Dict]:
                     st.warning(f"Failed to decode JSON from {file}")
     return thread_data
 
+@st.cache_data
 def load_diff_file(run_dir: str, run_name: str) -> str:
     """Load diff file content."""
     diff_file = os.path.join(run_dir, f"{run_name}.diff")
@@ -91,7 +94,6 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
             return f.read()
     return ""
 
-@st.cache_data
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
     log_file = os.path.join(run_dir, f"{run_name}.log")
@@ -191,13 +193,26 @@ def get_eval_log_content(eval_log_content):
     """Return the evaluation log content."""
     return eval_log_content
 
-def get_combined_content(run_data, diff_content, eval_log_content):
-    """Combine Chat, Code Diff, and Eval Logs into a single string."""
-    content = get_chat_content(run_data)
-    content += "\n\n--- Code Diff ---\n\n"
-    content += diff_content
-    content += "\n\n--- Eval Logs ---\n\n"
+def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
+    """Combine Chat, Code Diff, Ground Truth and Eval Logs into a single string."""
+    content = "<agent-reason-execution-process>\n"
+    content += get_chat_content(run_data)
+    content += "</agent-reason-execution-process>\n\n"
+    content += "<eval_logs>\n"
     content += get_eval_log_content(eval_log_content)
+    content += "</eval_logs>"
+    
+    ground_truth = load_ground_truth(run_dir)
+    if ground_truth:
+        content += "<ground_truth>\n"
+        content += "<correct-patch>\n"
+        content += ground_truth.get('patch', '') + "\n"
+        content += "</correct-patch>\n"
+        content += "<new-test-patch>\n"
+        content += ground_truth.get('test_patch', '')
+        content += "</new-test-patch>\n"
+        content += "</ground_truth>\n\n"
+
     return content
 
 def load_ground_truth(run_dir: str) -> Dict:
@@ -370,10 +385,10 @@ def main():
                     return ""
                 return marker + parts[1]
             eval_log_content = get_final_test_log(eval_log_content)
-            combined_content = get_combined_content(run_data, diff_content, eval_log_content)
+            combined_content = get_combined_content(run_data, diff_content, eval_log_content, run_dir)
             
             if combined_content:
-                st.code(combined_content)
+                st.code(combined_content, language="python")
             else:
                 st.info("No combined logs available")
     else:
