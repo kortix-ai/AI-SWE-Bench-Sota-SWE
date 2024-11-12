@@ -227,6 +227,11 @@ def main():
             st.session_state.show_log = True
         else:
             st.session_state.show_log = False
+        
+        if st.checkbox("Show thread"):
+            st.session_state.show_thread = True
+        else:
+            st.session_state.show_thread = False
 
 
     # Display run details if a run is selected
@@ -261,12 +266,20 @@ def main():
                 
                 
         with current_tab[3]:  # Threads tab
-            # if st.button
-            run_data = load_thread_data(run_dir)
-            if run_data:
-                st.json(run_data)
+            if st.session_state.show_thread:
+                thread_data = load_thread_data(run_dir)
+                if thread_data:
+                    st.json(thread_data)
+                else:
+                    st.info("No thread data available")
             else:
-                st.info("No thread data available")
+                st.info("Please check the box to show thread")
+            
+            # run_data = load_thread_data(run_dir)
+            # if run_data:
+            #     st.json(run_data)
+            # else:
+            #     st.info("No thread data available")
         
         with current_tab[4]:  # Passing Tests tab
             eval_result = load_evaluation_result(run_dir)
