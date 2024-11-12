@@ -38,12 +38,13 @@ def main():
                         help="Run evaluation step (default: False)")
     parser.add_argument("--only-eval", action="store_true", default=False,
                         help="Only run evaluation step, skip inference")
+    parser.add_argument("--input-file", help="Path to the input file for evaluation")
     args = parser.parse_args()
     
     if args.only_eval:
         args.run_eval = True
 
-    if args.archive:
+    if args.archive and not args.only_eval:
         import shutil
         from datetime import datetime
         if os.path.exists(args.output_dir):
@@ -83,12 +84,15 @@ def main():
     if args.run_eval:
         # Run evaluation.py
         print("Running evaluation...")
-        combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
-        if combined_output_files:
-            input_file = os.path.join(args.output_dir, combined_output_files[0])
+        if args.input_file:
+            input_file = args.input_file
         else:
-            print("No combined output file found.")
-            sys.exit(1)
+            combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
+            if combined_output_files:
+                input_file = os.path.join(args.output_dir, combined_output_files[0])
+            else:
+                print("No combined output file found.")
+                sys.exit(1)
         evaluation_cmd = [
             sys.executable, "evaluation.py",
             "--input-file", input_file,
