@@ -169,6 +169,45 @@ def display_run_details(run_data: List[Dict]):
                             language="json"
                         )
 
+def get_chat_content(run_data):
+    """Collect the chat content."""
+    content = ""
+    if not run_data:
+        return content
+    for thread in run_data:
+        messages = thread.get('messages', [])
+        for message in messages:
+            role = message.get("role", "unknown")
+            content_msg = message.get("content", "")
+            formatted_content = format_message_content(content_msg)
+            content += f"{role.upper()}:\n{formatted_content}\n\n"
+    return content
+
+def get_log_content(log_content):
+    """Return the log content."""
+    return log_content
+
+def get_eval_log_content(eval_log_content):
+    """Return the evaluation log content."""
+    return eval_log_content
+
+def get_combined_content(run_data, diff_content, eval_log_content):
+    """Combine Chat, Code Diff, and Eval Logs into a single string."""
+    content = get_chat_content(run_data)
+    content += "\n\n--- Code Diff ---\n\n"
+    content += diff_content
+    content += "\n\n--- Eval Logs ---\n\n"
+    content += get_eval_log_content(eval_log_content)
+    return content
+
+def load_ground_truth(run_dir: str) -> Dict:
+    """Load ground truth data from json file."""
+    for file in os.listdir(run_dir):
+        if file.endswith('_ground_truth.json'):
+            with open(os.path.join(run_dir, file), 'r') as f:
+                return json.load(f)
+    return {}
+
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
 
@@ -239,7 +278,7 @@ def main():
         st.header(f"📁 Run Details: {selected_run}")
         
         # Create tabs
-        tab_names = ["💬 Chat", "📝 Code Diff", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs"]
+        tab_names = ["💬Chat", "📝Code Diff", "💡Ground Truth", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs", "🗄 Combined Logs"]
         current_tab = st.tabs(tab_names)
         
         # Load data based on active tab
@@ -254,7 +293,17 @@ def main():
             else:
                 st.info("No diff file available")
                 
-        with current_tab[2]:  # Log tab
+        with current_tab[2]:  # Ground Truth tab
+            ground_truth = load_ground_truth(run_dir)
+            if ground_truth:
+                st.subheader("Patch")
+                st.code(ground_truth.get('patch', ''), language="diff")
+                st.subheader("Test Patch")
+                st.code(ground_truth.get('test_patch', ''), language="diff")
+            else:
+                st.info("No ground truth file available")
+                
+        with current_tab[3]:  # Log tab
             if st.session_state.show_log:
                 log_content = load_log_file(run_dir, selected_run)
                 if log_content:
@@ -265,7 +314,7 @@ def main():
                 st.info("Please check the box to show log")
                 
                 
-        with current_tab[3]:  # Threads tab
+        with current_tab[4]:  # Threads tab
             if st.session_state.show_thread:
                 thread_data = load_thread_data(run_dir)
                 if thread_data:
@@ -275,13 +324,7 @@ def main():
             else:
                 st.info("Please check the box to show thread")
             
-            # run_data = load_thread_data(run_dir)
-            # if run_data:
-            #     st.json(run_data)
-            # else:
-            #     st.info("No thread data available")
-        
-        with current_tab[4]:  # Passing Tests tab
+        with current_tab[5]:  # Passing Tests tab
             eval_result = load_evaluation_result(run_dir)
             if eval_result:
                 report = eval_result.get('test_result', {}).get('report', {})
@@ -309,12 +352,30 @@ def main():
             else:
                 st.info("No evaluation result available")
         
-        with current_tab[5]:  # Eval Logs tab
+        with current_tab[6]:  # Eval Logs tab
             eval_log_content = load_eval_log(run_dir)
             if eval_log_content:
                 st.code(eval_log_content)
             else:
                 st.info("No eval log available")
+
+        with current_tab[7]:  # Combined Logs tab
+            run_data = load_thread_data(run_dir)
+            diff_content = load_diff_file(run_dir, selected_run)
+            eval_log_content = load_eval_log(run_dir)
+            def get_final_test_log(log_text):
+                marker = "============================= test session starts =============================="
+                parts = log_text.split(marker)
+                if len(parts) < 2:
+                    return ""
+                return marker + parts[1]
+            eval_log_content = get_final_test_log(eval_log_content)
+            combined_content = get_combined_content(run_data, diff_content, eval_log_content)
+            
+            if combined_content:
+                st.code(combined_content)
+            else:
+                st.info("No combined logs available")
     else:
         # add space here
         st.markdown("---")
