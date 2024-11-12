@@ -27,8 +27,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
-    thread_manager.add_tool(FilesTool, container_name=container_name)
-    thread_manager.add_tool(TerminalTool, container_name=container_name)
+    # thread_manager.add_tool(FilesTool, container_name=container_name)
+    # thread_manager.add_tool(TerminalTool, container_name=container_name)
+    from tools.repo_tool import RepositoryTools
+    thread_manager.add_tool(RepositoryTools, container_name=container_name)
+
+    system_message = "You are an expert at analyzing and improving code repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while maintaining high code quality. Work systematically: analyze the problem, implement solutions, and verify your changes through testing."
+    await thread_manager.add_message(thread_id, {
+        "role": "system", 
+        "content": system_message,
+    })
 
     await thread_manager.add_message(thread_id, {
             "role": "user",
@@ -52,36 +60,28 @@ Follow these steps to resolve the issue:
 2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error
 3. Edit the sourcecode of the repo to resolve the issue
 4. Rerun your reproduce script and confirm that the error is fixed!
-5. Think about edgecases and make sure your fix handles them as well.
+5. Create a test script, separate from other test scripts, think about edgecases and make sure your fix handles them as well.
 
 Please avoid command that can produce lengthy output. Always use absolute paths.
 
-You're working autonomously from now on. You should start by explore the repo now.
+You're working autonomously from now on. Your thinking should be thorough, do one thing at a time.
             """
     })
-#     await thread_manager.add_message(thread_id, {
-#             "role": "user",
-#             "content": f"""
-# Problem Statement:
-# {problem_statement}
-#             """
-#     })
+    
 
     iteration = 0
 
     while iteration < max_iterations:
         iteration += 1
 
-        if model_name == "sonnet":
-            model_name_full = "anthropic/claude-3-5-sonnet-latest"
-        elif model_name == "haiku":
-            model_name_full = "anthropic/claude-3-5-haiku-latest"
-        elif model_name == "deepseek":
-            model_name_full = "deepseek/deepseek-chat"
-        elif model_name == "gpt-4o":
-            model_name_full = "gpt-4o"
-        else:
-            model_name_full = "anthropic/claude-3-5-sonnet-latest"  # default
+        model_mapping = {
+            "sonnet": "anthropic/claude-3-5-sonnet-latest",
+            "haiku": "anthropic/claude-3-5-haiku-latest",
+            "deepseek": "deepseek/deepseek-chat",
+            "gpt-4o": "gpt-4o",
+            "qwen": "openrouter/qwen/qwen-2.5-coder-32b-instruct",
+        }
+        model_name_full = model_mapping.get(model_name, "anthropic/claude-3-5-sonnet-latest")  # default
 
         response = await thread_manager.run_thread(
             thread_id=thread_id,
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
         parser.add_argument("--max-iterations", type=int, default=7, help="Maximum number of iterations")
-        parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o"], default="sonnet",
+        parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                             help="Model name to use (choices: sonnet, haiku, deepseek)")
         args = parser.parse_args()
 

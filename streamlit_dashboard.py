@@ -243,13 +243,15 @@ def main():
                 st.info("No diff file available")
                 
         with current_tab[2]:  # Log tab
-            log_content = load_log_file(run_dir, selected_run)
-            if log_content:
-                st.code(log_content, wrap_lines=True)
+            if st.button("Load Full Log"):
+                log_content = load_log_file(run_dir, selected_run)
+                if log_content:
+                    st.code(log_content, wrap_lines=True)
             else:
                 st.info("No log file available")
                 
         with current_tab[3]:  # Threads tab
+            # if st.button
             run_data = load_thread_data(run_dir)
             if run_data:
                 st.json(run_data)

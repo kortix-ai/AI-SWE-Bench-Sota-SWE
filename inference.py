@@ -139,15 +139,15 @@ def convert_outputs_to_jsonl(output_dir: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--num-examples", type=int, default=1,
-                        help="Number of examples to test (default: 1)")
-    group.add_argument("--test-index", type=int,
-                        help="Run a specific test by index (starting from 1)")
-    group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
-                        help="Run tests from START to END index (inclusive)")
-    parser.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
-                        help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
+    test_selection_group = parser.add_argument_group('Test Selection')
+    test_selection_group.add_argument("--num-examples", type=int, default=1,
+                                      help="Number of examples to test (default: 1)")
+    test_selection_group.add_argument("--test-index", type=int,
+                                      help="Run a specific test by index (starting from 1)")
+    test_selection_group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
+                                      help="Run tests from START to END index (inclusive)")
+    test_selection_group.add_argument("--instance-id", type=str,
+                                      help="Choose a specific instance by instance_id")
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
     parser.add_argument("--track-files", nargs="+",
@@ -158,9 +158,21 @@ def main():
                         help="Only join existing JSON files to JSONL, skip running tests")
     parser.add_argument("--max-iterations", type=int, default=7,
                         help="Maximum number of iterations")
-    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o"], default="sonnet",
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
+    dataset_group = parser.add_argument_group('Dataset Options')
+    dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
+                               help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
+    dataset_group.add_argument("--dataset-type", choices=["lite", "verified"],
+                               help="Type of dataset to use: 'lite' for SWE-bench_Lite, 'verified' for SWE-bench_Verified")
     args = parser.parse_args()
+
+    if args.dataset_type:
+        dataset_mapping = {
+            "lite": "princeton-nlp/SWE-bench_Lite",
+            "verified": "princeton-nlp/SWE-bench_Verified"
+        }
+        args.dataset = dataset_mapping[args.dataset_type]
 
     if args.join_only:
         print("Join-only mode: combining existing JSON files...")
@@ -172,7 +184,9 @@ def main():
     dataset = load_dataset(args.dataset, split=args.split)
 
     # Select instances based on arguments
-    if args.test_index is not None:
+    if args.instance_id is not None:
+        instances = dataset.filter(lambda x: x['instance_id'] == args.instance_id)
+    elif args.test_index is not None:
         if args.test_index < 1 or args.test_index > len(dataset):
             raise ValueError(f"Test index must be between 1 and {len(dataset)}")
         instances = dataset.select([args.test_index - 1])  # Convert to 0-based index

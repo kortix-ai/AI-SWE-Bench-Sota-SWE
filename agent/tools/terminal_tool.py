@@ -9,7 +9,8 @@ class TerminalTool(Tool):
         self.container_name = container_name
 
     async def execute_command_in_container(self, command: str):
-        full_command = f'. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {command}'
+        # MUST keep this env activation command
+        full_command = f'. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && {command}' 
         cmd = ['docker', 'exec', self.container_name, 'bash', '-c', full_command]
         process = await asyncio.create_subprocess_exec(
             *cmd,
