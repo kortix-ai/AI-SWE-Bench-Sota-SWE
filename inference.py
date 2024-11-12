@@ -214,16 +214,15 @@ def main():
         log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
         tracked_files_dir = os.path.join(instance_output_dir, 'files')
 
-        with open(ground_truth_file, 'w') as f:
-            json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
-
         # Remove instance directory if it exists
         if os.path.exists(instance_output_dir):
             subprocess.run(['rm', '-rf', instance_output_dir], check=True)
             os.makedirs(instance_output_dir)
 
-        container_name = start_docker_container(instance, args.track_files or [])
+        with open(ground_truth_file, 'w') as f:
+            json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
 
+        container_name = start_docker_container(instance, args.track_files or [])
         try:
             with tempfile.NamedTemporaryFile('w', delete=False) as f:
                 problem_file = f.name

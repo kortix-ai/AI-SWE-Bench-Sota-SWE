@@ -2,6 +2,7 @@ import asyncio
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 import os
+from typing import List
 
 class RepositoryTools(Tool):
     def __init__(self, container_name: str):
@@ -39,66 +40,84 @@ class RepositoryTools(Tool):
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "The file or directory path to view."},
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "The file or directory paths to view."
+                },
                 "exclude_patterns": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Patterns of files to exclude from directory listings."
                 },
             },
-            "required": ["path"]
+            "required": ["paths"]
         }
     })
-    async def view(self, path: str, exclude_patterns: list = []) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = []) -> ToolResult:
         """
-        Views the contents of a file or lists the contents of a directory with detailed explanations.
+        Views the contents of files or lists the contents of directories with detailed explanations.
         
         Parameters:
-            path (str): The file or directory path to view.
+            paths (List[str]): The file or directory paths to view.
             exclude_patterns (list): Patterns of files to exclude from directory listings.
         
         Returns:
             ToolResult: The result of the view operation.
         """
         try:
-            # Construct exclusion patterns for find command
-            exclude_flags = ""
-            for pattern in exclude_patterns:
-                exclude_flags += f' ! -name "{pattern}"'
-            
-            # Single bash command to handle both file and directory
-            command = (
-                f'if [ -d "{path}" ]; then '
-                f'echo "Here\'s the files and directories up to 2 levels deep in {path}, excluding hidden items and patterns {exclude_patterns}:"; '
-                f'find "{path}" -maxdepth 2 {exclude_flags} ! -path "*/\\.*" -print; '
-                f'elif [ -f "{path}" ]; then '
-                f'echo "Here\'s the result of running `cat -n` on {path}:"; '
-                f'cat -n "{path}"; '
-                f'else '
-                f'echo "The path \'{path}\' is neither a file nor a directory." >&2; '
-                f'fi'
-            )
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            success = returncode == 0
+            results = []
+            for path in paths:
+                # Construct exclusion patterns for find command
+                exclude_flags = ""
+                for pattern in exclude_patterns:
+                    exclude_flags += f' ! -name "{pattern}"'
+                
+                # Command to handle files and directories with XML tags
+                command = (
+                    f'if [ -d "{path}" ]; then '
+                    f'echo "<directory path=\\"{path}\\">"; '
+                    f'echo "Contents of {path}, excluding patterns {exclude_patterns}:"; '
+                    f'find "{path}" -maxdepth 2 {exclude_flags} ! -path "*/\\.*" -print; '
+                    f'echo "</directory>"; '
+                    f'elif [ -f "{path}" ]; then '
+                    f'echo "<file path=\\"{path}\\">"; '
+                    f'echo "Contents of {path}:"; '
+                    f'cat -n "{path}"; '
+                    f'echo "</file>"; '
+                    f'else '
+                    f'echo "The path \'{path}\' is neither a file nor a directory." >&2; '
+                    f'fi'
+                )
+                stdout, stderr, returncode = await self.execute_command_in_container(command)
+                success = returncode == 0
+                results.append({
+                    "path": path,
+                    "output": stdout.strip(),
+                    "error": stderr.strip(),
+                    "success": success,
+                })
 
             history_key = "view_history"
             history = await self.state_manager.get(history_key) or []
             history.append({
-                "path": path,
+                "paths": paths,
                 "exclude_patterns": exclude_patterns,
-                "output": stdout + stderr,
-                "success": success,
+                "results": results,
             })
             await self.state_manager.set(history_key, history)
 
-            if success and not stderr.strip():
+            aggregated_output = "\n".join([result["output"] for result in results if result["success"]])
+            aggregated_error = "\n".join([result["error"] for result in results if not result["success"]])
+
+            if all(result["success"] for result in results):
                 return self.success_response({
-                    "output": stdout.strip(),
-                    "error": stderr.strip(),
-                    "exit_code": returncode,
+                    "output": aggregated_output,
+                    "error": aggregated_error,
+                    "exit_code": 0,
                 })
             else:
-                return self.fail_response(f"View command failed: {stderr.strip()}")
+                return self.fail_response(f"View command failed: {aggregated_error}")
         
         except Exception as e:
             return self.fail_response(f"Error executing view command: {str(e)}")

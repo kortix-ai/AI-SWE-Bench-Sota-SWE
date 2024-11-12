@@ -35,6 +35,8 @@ def main():
                         help="Disable the Streamlit app")
     parser.add_argument("--archive", action="store_true", default=True,
                         help="Archive the current outputs before running")
+    parser.add_argument("--no-archive", dest='archive', action='store_false',
+                        help="Do not archive the current outputs before running")
     parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
     parser.add_argument("--run-eval", action="store_true", default=False,

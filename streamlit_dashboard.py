@@ -30,7 +30,6 @@ def parse_tool_result(content):
         "exit_code": 0
     }
 
-@st.cache_data
 def load_evaluation_result(run_dir: str) -> Dict:
     """Load evaluation result JSON for a given run."""
     for file in os.listdir(run_dir):
@@ -39,7 +38,6 @@ def load_evaluation_result(run_dir: str) -> Dict:
                 return json.load(f)
     return {}
 
-@st.cache_data
 def load_eval_log(run_dir: str) -> str:
     """Load eval log content."""
     for file in os.listdir(run_dir):
@@ -85,7 +83,6 @@ def load_thread_data(run_dir: str) -> List[Dict]:
                     st.warning(f"Failed to decode JSON from {file}")
     return thread_data
 
-@st.cache_data
 def load_diff_file(run_dir: str, run_name: str) -> str:
     """Load diff file content."""
     diff_file = os.path.join(run_dir, f"{run_name}.diff")
@@ -158,6 +155,9 @@ def display_run_details(run_data: List[Dict]):
                         if error:
                             st.error(f"Error: {error}")
                         st.info(f"Exit Code: {exit_code}")
+                elif role in ["user", "system"]:
+                    with st.expander(label=f"{role.title()} Message", expanded=False):
+                        st.markdown(formatted_content)
                 else:
                     st.markdown(formatted_content)
                 

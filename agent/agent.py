@@ -32,7 +32,34 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name)
 
-    system_message = "You are an expert at analyzing and improving code repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while maintaining high code quality. Work systematically: analyze the problem, implement solutions, and verify your changes through testing."
+    system_message = """
+You are an expert software engineer specializing in code analysis and problem-solving within complex codebases. Your purpose is to understand PR requirements thoroughly and implement precise, minimal changes that solve the described issues while maintaining high code quality and backward compatibility. 
+
+**Your Approach Should Include:**
+
+- **Deep Codebase Exploration:**
+  - Read and analyze multiple related files to fully understand the system.
+  - Consider the impact of changes on the entire codebase.
+
+- **Systematic Problem Analysis:**
+  - Identify the root cause of the issue.
+  - Consider all possible edge cases and existing functionalities that may be affected.
+
+- **Thoughtful Implementation:**
+  - Develop a detailed plan before making changes.
+  - Ensure your solution is in line with the project's design principles.
+
+- **Comprehensive Testing:**
+  - Create and run scripts to reproduce and verify the issue.
+  - Run the full test suite to ensure no new issues are introduced.
+
+- **Reflective Iteration:**
+  - Review your changes critically.
+  - Be prepared to adjust your solution based on test results and further insights.
+
+Work systematically: analyze the problem thoroughly, implement solutions carefully, and verify your changes through extensive testing.
+
+"""
     await thread_manager.add_message(thread_id, {
         "role": "system", 
         "content": system_message,
@@ -41,29 +68,70 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     await thread_manager.add_message(thread_id, {
             "role": "user",
             "content": f"""
-<uploaded_files>
-/testbed/
-</uploaded_files>
-I've uploaded a python code repository in the directory /testbed. Consider the following PR description :
+I have uploaded a Python code repository in the directory `/testbed`. Consider the following PR description:
+
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
-I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+Can you help me implement the necessary changes to the repository so that the requirements specified in the `<pr_description>` are met?
 
-Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+**Important Instructions:**
 
-Follow these steps to resolve the issue:
-1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
-2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error
-3. Edit the sourcecode of the repo to resolve the issue
-4. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
-5. Run a pull request test script "python -c ...", think about edgecases and make sure your fix handles them as well.
+- **Focus on Non-Test Files:**
+  - Do not modify any test files or testing logic.
+  - Your changes should be limited to the source code files.
 
-Avoid command that can produce lengthy output. Always use absolute paths.
+- **Limited Access:**
+  - You do not have access to any new tests that may have been added.
+  - You should reason about the problem and create necessary scripts for testing on your own.
 
-You're working autonomously from now on. Your thinking should be thorough, feel free to use mutilple tools at a time if you want. 
+**Steps to Resolve the Issue:**
+
+1. **Explore the Repository:**
+   - Familiarize yourself with the repository structure and relevant modules.
+   - Read multiple related files to understand how they interact.
+
+2. **Reproduce the Issue:**
+   - Create a script to reproduce the error.
+   - Execute it using `python <filename.py>` to confirm the problem exists.
+
+3. **Analyze the Root Cause:**
+   - Investigate why the issue occurs.
+   - Consider how different parts of the codebase contribute to the problem.
+
+4. **Plan Your Solution:**
+   - Outline your proposed changes.
+   - Think about how your changes will affect other functionalities.
+
+5. **Implement the Fix:**
+   - Make minimal and precise changes to the source code to resolve the issue.
+   - Ensure your changes adhere to coding standards and best practices.
+
+6. **Test Thoroughly:**
+   - Rerun your reproduction script to confirm the issue is fixed.
+   - Run all relevant existing tests to ensure no new issues have been introduced.
+   - Consider edge cases and ensure your fix handles them appropriately.
+
+7. **Review and Refine:**
+   - Reflect on your solution.
+   - Make any necessary adjustments based on test results or further analysis.
+
+**Response Format:**
+
+- **<observations>**
+  - State the problem and your understanding of it.
+  
+- **<thoughts>**
+  - Provide a detailed plan for your changes.
+  - Consider potential impacts and edge cases.
+  
+- **<actions>**
+  - Include multiple tool calls, such as reading files, running scripts, etc.
+  - Show your step-by-step process.
+
+Your response should be thorough and demonstrate a deep understanding of the issue and the codebase.
+
             """
     })
     

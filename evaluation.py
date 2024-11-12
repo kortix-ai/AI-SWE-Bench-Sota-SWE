@@ -258,12 +258,13 @@ def process_instance(instance, output_dir):
 
             # Save git diff for reference
             try:
-                git_diff_cmd = f'cd /testbed && git diff --no-color {instance["base_commit"]} HEAD'
+                base_commit = instance.get('base_commit', instance['instance']['base_commit'])
+                git_diff_cmd = f'cd /testbed && git diff --no-color {base_commit} HEAD'
                 result = execute_command_in_container(container_name, git_diff_cmd, timeout=60)
                 with open(os.path.join(instance_output_dir, f'{instance_id}_eval.diff'), 'w') as f:
                     f.write(result.stdout)
             except Exception as e:
-                print(f"Error generating git diff for instance {instance_id}: {e}")
+                print(f"Error generating git diff for instance {instance_id}: {str(e)}")
 
         else:
             print(f"Unexpected output when applying patch for {instance_id}")
