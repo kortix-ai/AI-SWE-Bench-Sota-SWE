@@ -91,6 +91,7 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
             return f.read()
     return ""
 
+@st.cache_data
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
     log_file = os.path.join(run_dir, f"{run_name}.log")
@@ -186,7 +187,7 @@ def main():
     # Sidebar for output directory and runs
     with st.sidebar:
         st.title("📊 SWE Bench")
-# Dashboard
+    
         # st.header("🔍 🔍 Output Directory")
         output_dir = st.text_input(
             "🔍 Output Directory",
@@ -200,27 +201,33 @@ def main():
             st.stop()
 
         st.header("📂 Available Runs")
-    runs = load_runs(output_dir)
+        runs = load_runs(output_dir)
 
-    if not runs:
-        st.sidebar.warning("No runs found in the specified directory.")
-        st.stop()
+        if not runs:
+            st.warning("No runs found in the specified directory.")
+            st.stop()
 
-    selected_run = None
-    for run in runs:
-        run_name = run['name']
-        # Modify icon based on status
-        if run.get('status') == 'running':
-            icon = '⏳'
-        elif run.get('all_tests_passed') == True:
-            icon = '✅'
+        selected_run = None
+        for run in runs:
+            run_name = run['name']
+            # Modify icon based on status
+            if run.get('status') == 'running':
+                icon = '⏳'
+            elif run.get('all_tests_passed') == True:
+                icon = '✅'
+            else:
+                icon = '❌'
+            if st.button(f"{icon} {run_name}", key=f"run_{run_name}"):
+                selected_run = run_name
+                run_dir = run['path']
+
+        st.markdown("---")
+
+        if st.checkbox("Show Log"):
+            st.session_state.show_log = True
         else:
-            icon = '❌'
-        if st.sidebar.button(f"{icon} {run_name}", key=f"run_{run_name}"):
-            selected_run = run_name
-            run_dir = run['path']
+            st.session_state.show_log = False
 
-    st.sidebar.markdown("---")
 
     # Display run details if a run is selected
     if selected_run:
@@ -243,12 +250,15 @@ def main():
                 st.info("No diff file available")
                 
         with current_tab[2]:  # Log tab
-            if st.button("Load Full Log"):
+            if st.session_state.show_log:
                 log_content = load_log_file(run_dir, selected_run)
                 if log_content:
                     st.code(log_content, wrap_lines=True)
+                else:
+                    st.info("No log file available")
             else:
-                st.info("No log file available")
+                st.info("Please check the box to show log")
+                
                 
         with current_tab[3]:  # Threads tab
             # if st.button
@@ -264,17 +274,23 @@ def main():
                 report = eval_result.get('test_result', {}).get('report', {})
                 tests_status = report.get('tests_status', {})
                 if tests_status:
+                    total_passed = sum(len(tests.get('success', [])) for tests in tests_status.values())
+                    total_failed = sum(len(tests.get('failure', [])) for tests in tests_status.values())
+                    total_tests = total_failed + total_passed
+                    pass_percentage = (total_passed / total_tests) * 100 if total_tests > 0 else 0
+                    color = "green" if pass_percentage == 100 else "red"
+                    st.markdown(f"<span style='color:{color}; font-size: 20px'>{total_passed} / {total_tests} Tests Passed </span>", unsafe_allow_html=True)
                     for status_category, tests in tests_status.items():
-                        success_tests = tests.get('success', [])
                         failure_tests = tests.get('failure', [])
-                        if success_tests:
-                            st.subheader(f"{status_category} - Passed Tests")
-                            for test in success_tests:
-                                st.markdown(f"✅ {test}")
                         if failure_tests:
                             st.subheader(f"{status_category} - Failed Tests")
                             for test in failure_tests:
                                 st.markdown(f"❌ {test}")
+                        success_tests = tests.get('success', [])
+                        if success_tests:
+                            st.subheader(f"{status_category} - Passed Tests")
+                            for test in success_tests:
+                                st.markdown(f"✅ {test}")
                 else:
                     st.info("No test status available")
             else:
