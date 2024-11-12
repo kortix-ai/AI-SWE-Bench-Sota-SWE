@@ -8,7 +8,7 @@ from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
 @observe()
-async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 7, model_name: str = "sonnet"):
+async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_manager = StateManager(store_file="state.json")
 
@@ -44,8 +44,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 <uploaded_files>
 /testbed/
 </uploaded_files>
-I've uploaded a python code repository in the directory /testbed. Consider the following PR description:
-Consider the following PR description:
+I've uploaded a python code repository in the directory /testbed. Consider the following PR description :
 <pr_description>
 {problem_statement}
 </pr_description>
@@ -59,12 +58,12 @@ Follow these steps to resolve the issue:
 1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
 2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error
 3. Edit the sourcecode of the repo to resolve the issue
-4. Rerun your reproduce script and confirm that the error is fixed!
-5. Create a test script, separate from other test scripts, think about edgecases and make sure your fix handles them as well.
+4. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
+5. Run a pull request test script "python -c ...", think about edgecases and make sure your fix handles them as well.
 
-Please avoid command that can produce lengthy output. Always use absolute paths.
+Avoid command that can produce lengthy output. Always use absolute paths.
 
-You're working autonomously from now on. Your thinking should be thorough, do one thing at a time.
+You're working autonomously from now on. Your thinking should be thorough, feel free to use mutilple tools at a time if you want. 
             """
     })
     
@@ -113,7 +112,7 @@ if __name__ == "__main__":
         parser.add_argument("--container-name", required=True, help="Docker container name")
         parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
-        parser.add_argument("--max-iterations", type=int, default=7, help="Maximum number of iterations")
+        parser.add_argument("--max-iterations", type=int, default=10, help="Maximum number of iterations")
         parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                             help="Model name to use (choices: sonnet, haiku, deepseek)")
         args = parser.parse_args()

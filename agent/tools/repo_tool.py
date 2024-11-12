@@ -174,24 +174,67 @@ class RepositoryTools(Tool):
     async def replace_string(self, path: str, old_str: str, new_str: str) -> ToolResult:
         """
         Replaces a specific string in a file with another string.
-        
+
         Parameters:
             path (str): The file path where the replacement should occur.
             old_str (str): The string to be replaced.
             new_str (str): The string to replace with.
-        
+
         Returns:
             ToolResult: The result of the replace string operation.
         """
         try:
-            # Single command to perform in-place replacement with proper escaping
-            escaped_old = old_str.replace('/', '\\/').replace('"', '\\"').replace("'", "\\'")
-            escaped_new = new_str.replace('/', '\\/').replace('"', '\\"').replace("'", "\\'")
-            # Using sed with proper escaping and echo for descriptive output
+            import base64
+
+            # Encode the old and new strings to base64 to handle special characters
+            old_str_base64 = base64.b64encode(old_str.encode('utf-8')).decode('ascii')
+            new_str_base64 = base64.b64encode(new_str.encode('utf-8')).decode('ascii')
+
+            # Define the Python code to execute inside the container
+            python_code = '''
+import sys
+import base64
+
+path = sys.argv[1]
+old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
+new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
+
+with open(path, 'r') as f:
+    content = f.read()
+
+count = content.count(old_str)
+if count == 0:
+    print(f"String '{{old_str}}' not found in file", file=sys.stderr)
+    sys.exit(1)
+elif count > 1:
+    lines = [i+1 for i, line in enumerate(content.split('\\n')) if old_str in line]
+    print(f"Multiple occurrences found in lines {{lines}}. Please ensure string is unique", file=sys.stderr)
+    sys.exit(1)
+else:
+    content = content.replace(old_str, new_str)
+    with open(path, 'w') as f:
+        f.write(content)
+    print(f"Replacement successful in '{{path}}'")
+'''
+
+            # Encode the Python code to base64
+            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
+
+            # Function to safely quote strings in bash
+            def bash_single_quote(s):
+                return "'" + s.replace("'", "'\\''") + "'"
+
+            # Escape the arguments
+            escaped_path = bash_single_quote(path)
+            escaped_old_str_base64 = bash_single_quote(old_str_base64)
+            escaped_new_str_base64 = bash_single_quote(new_str_base64)
+
+            # Build the command to execute inside the container
             command = (
-                f"sed -i 's/{escaped_old}/{escaped_new}/g' \"{path}\" && "
-                f'echo "Replaced \'{old_str}\' with \'{new_str}\' in {path}"'
+                f"echo {bash_single_quote(code_base64)} | base64 -d | "
+                f"python3 - {escaped_path} {escaped_old_str_base64} {escaped_new_str_base64}"
             )
+
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
@@ -213,7 +256,7 @@ class RepositoryTools(Tool):
                 })
             else:
                 return self.fail_response(f"Replace string command failed: {stderr.strip()}")
-        
+
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
 

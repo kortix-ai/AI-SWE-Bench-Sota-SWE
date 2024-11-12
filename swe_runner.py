@@ -29,7 +29,7 @@ def main():
                         help='Timeout for evaluation in seconds')
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of parallel workers')
-    parser.add_argument("--max-iterations", type=int, default=7,
+    parser.add_argument("--max-iterations", type=int, default=10,
                         help="Maximum number of iterations")
     parser.add_argument("--disable-streamlit", action="store_true",
                         help="Disable the Streamlit app")

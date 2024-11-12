@@ -195,12 +195,13 @@ def get_eval_log_content(eval_log_content):
 
 def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
     """Combine Chat, Code Diff, Ground Truth and Eval Logs into a single string."""
-    content = "<agent-reason-execution-process>\n"
+
+    content = "<full-log>\n<agent-reason-execution-process>\n"
     content += get_chat_content(run_data)
     content += "</agent-reason-execution-process>\n\n"
     content += "<eval_logs>\n"
     content += get_eval_log_content(eval_log_content)
-    content += "</eval_logs>"
+    content += "</eval_logs>\n\n"
     
     ground_truth = load_ground_truth(run_dir)
     if ground_truth:
@@ -211,8 +212,9 @@ def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
         content += "<new-test-patch>\n"
         content += ground_truth.get('test_patch', '')
         content += "</new-test-patch>\n"
-        content += "</ground_truth>\n\n"
+        content += "</ground_truth>"
 
+    content += "</full-log>"
     return content
 
 def load_ground_truth(run_dir: str) -> Dict:
@@ -379,11 +381,9 @@ def main():
             diff_content = load_diff_file(run_dir, selected_run)
             eval_log_content = load_eval_log(run_dir)
             def get_final_test_log(log_text):
-                marker = "============================= test session starts =============================="
-                parts = log_text.split(marker)
-                if len(parts) < 2:
-                    return ""
-                return marker + parts[1]
+                if not log_text: return log_text
+                parts = log_text.split("test process starts")
+                return "=================================== test process starts" + parts[-1] if len(parts) > 1 and parts[-1].strip() else log_text
             eval_log_content = get_final_test_log(eval_log_content)
             combined_content = get_combined_content(run_data, diff_content, eval_log_content, run_dir)
             

@@ -156,7 +156,7 @@ def main():
                         help="Directory to save outputs (default: ./outputs)")
     parser.add_argument("--join-only", action="store_true",
                         help="Only join existing JSON files to JSONL, skip running tests")
-    parser.add_argument("--max-iterations", type=int, default=7,
+    parser.add_argument("--max-iterations", type=int, default=10,
                         help="Maximum number of iterations")
     parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
@@ -210,8 +210,12 @@ def main():
 
         # Update output file paths to use instance-specific directory but keep original names
         output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
+        ground_truth_file = os.path.join(instance_output_dir, f'{instance_id}_ground_truth.json')
         log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
         tracked_files_dir = os.path.join(instance_output_dir, 'files')
+
+        with open(ground_truth_file, 'w') as f:
+            json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
 
         # Remove instance directory if it exists
         if os.path.exists(instance_output_dir):
