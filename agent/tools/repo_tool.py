@@ -50,17 +50,23 @@ class RepositoryTools(Tool):
                     "items": {"type": "string"},
                     "description": "Patterns of files to exclude from directory listings."
                 },
+                "depth": {
+                    "type": "integer",
+                    "description": "The maximum directory depth to search for contents.",
+                    "default": 2
+                },
             },
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = []) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
         """
         Views the contents of files or lists the contents of directories with detailed explanations.
         
         Parameters:
             paths (List[str]): The file or directory paths to view.
             exclude_patterns (list): Patterns of files to exclude from directory listings.
+            depth (int): The maximum directory depth to search for contents.
         
         Returns:
             ToolResult: The result of the view operation.
@@ -78,11 +84,10 @@ class RepositoryTools(Tool):
                     f'if [ -d "{path}" ]; then '
                     f'echo "<directory path=\\"{path}\\">"; '
                     f'echo "Contents of {path}, excluding patterns {exclude_patterns}:"; '
-                    f'find "{path}" -maxdepth 2 {exclude_flags} ! -path "*/\\.*" -print; '
+                    f'find "{path}" -maxdepth {depth} {exclude_flags} ! -path "*/\\.*" -print; '
                     f'echo "</directory>"; '
                     f'elif [ -f "{path}" ]; then '
                     f'echo "<file path=\\"{path}\\">"; '
-                    f'echo "Contents of {path}:"; '
                     f'cat -n "{path}"; '
                     f'echo "</file>"; '
                     f'else '
