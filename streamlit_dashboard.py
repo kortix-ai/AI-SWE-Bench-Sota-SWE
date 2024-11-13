@@ -6,26 +6,6 @@ from typing import List, Dict
 import re
 
 
-def parse_tool_result(content):
-    try:
-        pattern = r'ToolResult\(success=(True|False), output=\'(.*?)\'\)'
-        match = re.match(pattern, content, re.DOTALL)
-        if match:
-            success = match.group(1) == 'True'
-            output_str = match.group(2)
-            output_unescaped = bytes(output_str, "utf-8").decode("unicode_escape")
-            output_json = json.loads(output_unescaped)
-            return {
-                "success": success,
-                "output": output_json.get("output", ""),
-            }
-    except:
-        pass
-    return {
-        "success": True,
-        "output": content,
-    }
-
 def load_evaluation_result(run_dir: str) -> Dict:
     """Load evaluation result JSON for a given run."""
     for file in os.listdir(run_dir):
@@ -115,6 +95,7 @@ def display_run_details(run_data: List[Dict]):
         st.write("No data available for this run.")
         return
 
+    assistant_count = 0
     for thread in run_data:
         messages = thread.get('messages', [])
         for message in messages:
@@ -124,6 +105,7 @@ def display_run_details(run_data: List[Dict]):
             # Assign avatar based on role
             if role == "assistant":
                 avatar = "🤖"
+                assistant_count += 1
             elif role == "user":
                 avatar = "👤"
             elif role == "system":
@@ -137,11 +119,8 @@ def display_run_details(run_data: List[Dict]):
                 formatted_content = format_message_content(content)
                 if role == "tool":
                     name = message.get("name", "")
-                    tool_result = parse_tool_result(content)
-                    success = tool_result["success"]
-                    output = tool_result["output"]
-                    
-                    icon = "✅" if success else "❌"
+                    output = content
+                    icon = "✅" 
                     label = f"{name} {icon}"
                     
                     with st.expander(label=label, expanded=st.session_state.get('expanded_tool', False)):
@@ -150,7 +129,11 @@ def display_run_details(run_data: List[Dict]):
                     with st.expander(label=f"{role.title()} Message", expanded=False):
                         st.markdown(formatted_content)
                 else:
-                    st.markdown(formatted_content)
+                    # Add iteration number for assistant messages
+                    if role == "assistant":
+                        st.markdown(f"**[{assistant_count}]** {formatted_content}")
+                    else:
+                        st.markdown(formatted_content)
                 
                 # Display tool calls if present
                 if "tool_calls" in message:

@@ -211,10 +211,7 @@ if __name__ == '__main__':
 
             if success and not stderr.strip():
                 message = stdout.strip() if stdout else f"File created at {path}"
-                return self.success_response({
-                    "message": message,
-                    "exit_code": returncode,
-                })
+                return self.success_response(message)
             else:
                 return self.fail_response(f"Create and run command failed: {stderr.strip()}")
         
@@ -256,6 +253,7 @@ if __name__ == '__main__':
             python_code = '''
 import sys
 import base64
+import difflib
 
 path = sys.argv[1]
 old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
@@ -264,34 +262,28 @@ new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
 with open(path, 'r') as f:
     content = f.read()
 
-count = content.count(old_str)
-if count == 0:
+if content.count(old_str) == 0:
     print("String '{}' not found in file".format(old_str), file=sys.stderr)
     sys.exit(1)
-elif count > 1:
-    lines = [i+1 for i, line in enumerate(content.split('\\n')) if old_str in line]
-    print("Multiple occurrences found in lines {}. Please ensure string is unique".format(lines), file=sys.stderr)
+elif content.count(old_str) > 1:
+    print("Multiple occurrences of '{}' found. Please ensure the string is unique.".format(old_str), file=sys.stderr)
     sys.exit(1)
 else:
-    content = content.replace(old_str, new_str)
+    new_content = content.replace(old_str, new_str, 1)
     with open(path, 'w') as f:
-        f.write(content)
+        f.write(new_content)
     print("Replacement successful in '{}'".format(path))
 
-    # Read the content again as lines
-    with open(path, 'r') as f:
-        lines = f.readlines()
-
-    # Find the line where the new_str occurs
-    for idx, line in enumerate(lines):
-        if new_str in line:
-            start = max(idx - 3, 0)
-            end = min(idx + 4, len(lines))
-            print("Changes applied in '{}':".format(path))
-            for i in range(start, end):
-                indicator = '=>' if i == idx else '  '
-                print("{:6d}{} {}".format(i+1, indicator, lines[i].rstrip()))
-            break
+    diff = difflib.unified_diff(
+        content.splitlines(),
+        new_content.splitlines(),
+        fromfile='before',
+        tofile='after',
+        lineterm=''
+    )
+    print("Changes:")
+    for line in diff:
+        print(line)
 '''
 
             # Encode the Python code to base64
@@ -327,9 +319,7 @@ else:
 
             if success and not stderr.strip():
                 message = stdout.strip() if stdout else f"Replaced '{old_str}' with '{new_str}' in {path}"
-                return self.success_response(
-                    "<output>\n" + message + "\n</output>"
-                    )            
+                return self.success_response(message)            
             else:
                 return self.fail_response(f"Replace string command failed: {stderr.strip()}")
 

@@ -51,15 +51,15 @@ I've uploaded a python code repository in the directory /testbed. Consider the f
 Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
 I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
 
-Your task is to make the MINIMAL changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
 
 Follow these steps to resolve the issue:
 1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
-2. Read multiple related files to have a whole understanding of the codebase.
-3. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error
+2. View files to have a whole understanding of the codebase. When you found the issue, do not stop exploring but continue to check related files to grasp the codebase context fully before any implementation.
+3. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error.
 4. Edit the sourcecode of the repo to resolve the issue
 5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
-6. Run a pull request test script "python -c ...", think about edgecases and make sure your fix handles them as well.
+6. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
             """
