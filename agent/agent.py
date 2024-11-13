@@ -30,7 +30,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(RepositoryTools, container_name=container_name)
 
     system_message = """
-    You are an expert at analyzing and improving python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while maintaining high code quality. Work systematically: analyze the problem, implement solutions, and verify your changes through testing.
+    You are an expert at analyzing and improving python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while making minial changes. Follow suggested TASKS to resolve the issue.
     """
     await thread_manager.add_message(thread_id, {
         "role": "system", 
@@ -60,6 +60,17 @@ Follow these steps to resolve the issue:
 4. Edit the sourcecode of the repo to resolve the issue
 5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
 6. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
+
+Here are suggested TASKS you can follow to resolve the issue:
+(I) Give list of files related to the issue described in the PR.
+(II) Give list of context files, that related to files in (I) where we need to update as well.
+(III) Create and run "reproduce.py" script to confirm the error.
+(IV) Detail analysis of the root cause of the issue, and make a plan to fix it.
+(V) Implement the fix in the codebase, use multiple replace string tool call for all file simultaneously.
+(VI) Run the reproduce script again to confirm the fix.
+(VII) Run the existing tests to confirm the fix.
+(VIII) Think about edge cases create and run final test cases, separately from existing tests.
+(IX) if all tests pass, output "FINISHED and TERMINATING" 
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
             """
@@ -106,7 +117,7 @@ You're working autonomously from now on. Your thinking should be thorough, step 
 
         response = await thread_manager.run_thread(
             thread_id=thread_id,
-            # system_message=system_message,
+            system_message=system_message,
             model_name=model_name_full,
             temperature=0.1,
             max_tokens=4096,
