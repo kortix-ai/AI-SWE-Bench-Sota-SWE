@@ -277,6 +277,21 @@ else:
     with open(path, 'w') as f:
         f.write(content)
     print("Replacement successful in '{}'".format(path))
+
+    # Read the content again as lines
+    with open(path, 'r') as f:
+        lines = f.readlines()
+
+    # Find the line where the new_str occurs
+    for idx, line in enumerate(lines):
+        if new_str in line:
+            start = max(idx - 3, 0)
+            end = min(idx + 4, len(lines))
+            print("Changes applied in '{}':".format(path))
+            for i in range(start, end):
+                indicator = '=>' if i == idx else '  '
+                print("{:6d}{} {}".format(i+1, indicator, lines[i].rstrip()))
+            break
 '''
 
             # Encode the Python code to base64
