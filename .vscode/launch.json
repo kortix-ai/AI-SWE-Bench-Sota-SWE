@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Debug SWE Runner",
+            "program": "${workspaceFolder}/swe_runner.py",
+            "args": [
+                "--range",
+                "1",
+                "1",
+                "--dataset-type",
+                "verified",
+                "--instance-id",
+                "astropy__astropy-14369",
+                "--max-iterations",
+                "15",
+                "--run-eval",
+                "--model-name",
+                "sonnet"
+            ]
+        }
+    ]
+}

@@ -139,15 +139,15 @@ def convert_outputs_to_jsonl(output_dir: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--num-examples", type=int, default=1,
-                        help="Number of examples to test (default: 1)")
-    group.add_argument("--test-index", type=int,
-                        help="Run a specific test by index (starting from 1)")
-    group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
-                        help="Run tests from START to END index (inclusive)")
-    parser.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
-                        help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
+    test_selection_group = parser.add_argument_group('Test Selection')
+    test_selection_group.add_argument("--num-examples", type=int, default=1,
+                                      help="Number of examples to test (default: 1)")
+    test_selection_group.add_argument("--test-index", type=int,
+                                      help="Run a specific test by index (starting from 1)")
+    test_selection_group.add_argument("--range", nargs=2, type=int, metavar=('START', 'END'),
+                                      help="Run tests from START to END index (inclusive)")
+    test_selection_group.add_argument("--instance-id", type=str,
+                                      help="Choose a specific instance by instance_id")
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
     parser.add_argument("--track-files", nargs="+",
@@ -156,9 +156,23 @@ def main():
                         help="Directory to save outputs (default: ./outputs)")
     parser.add_argument("--join-only", action="store_true",
                         help="Only join existing JSON files to JSONL, skip running tests")
-    parser.add_argument("--max-iterations", type=int, default=7,
+    parser.add_argument("--max-iterations", type=int, default=10,
                         help="Maximum number of iterations")
+    parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
+                        help="Model name to use (choices: sonnet, haiku, deepseek)")
+    dataset_group = parser.add_argument_group('Dataset Options')
+    dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
+                               help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
+    dataset_group.add_argument("--dataset-type", choices=["lite", "verified"],
+                               help="Type of dataset to use: 'lite' for SWE-bench_Lite, 'verified' for SWE-bench_Verified")
     args = parser.parse_args()
+
+    if args.dataset_type:
+        dataset_mapping = {
+            "lite": "princeton-nlp/SWE-bench_Lite",
+            "verified": "princeton-nlp/SWE-bench_Verified"
+        }
+        args.dataset = dataset_mapping[args.dataset_type]
 
     if args.join_only:
         print("Join-only mode: combining existing JSON files...")
@@ -170,7 +184,9 @@ def main():
     dataset = load_dataset(args.dataset, split=args.split)
 
     # Select instances based on arguments
-    if args.test_index is not None:
+    if args.instance_id is not None:
+        instances = dataset.filter(lambda x: x['instance_id'] == args.instance_id)
+    elif args.test_index is not None:
         if args.test_index < 1 or args.test_index > len(dataset):
             raise ValueError(f"Test index must be between 1 and {len(dataset)}")
         instances = dataset.select([args.test_index - 1])  # Convert to 0-based index
@@ -194,6 +210,7 @@ def main():
 
         # Update output file paths to use instance-specific directory but keep original names
         output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
+        ground_truth_file = os.path.join(instance_output_dir, f'{instance_id}_ground_truth.json')
         log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
         tracked_files_dir = os.path.join(instance_output_dir, 'files')
 
@@ -202,8 +219,10 @@ def main():
             subprocess.run(['rm', '-rf', instance_output_dir], check=True)
             os.makedirs(instance_output_dir)
 
-        container_name = start_docker_container(instance, args.track_files or [])
+        with open(ground_truth_file, 'w') as f:
+            json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
 
+        container_name = start_docker_container(instance, args.track_files or [])
         try:
             with tempfile.NamedTemporaryFile('w', delete=False) as f:
                 problem_file = f.name
@@ -214,7 +233,8 @@ def main():
                 '--problem-file', problem_file,
                 '--container-name', container_name,
                 '--threads-dir', os.path.join(instance_output_dir, 'threads'),
-                '--max-iterations', str(args.max_iterations)
+                '--max-iterations', str(args.max_iterations),
+                '--model-name', args.model_name,
             ]
             print("Running agent...")
             result = subprocess.run(cmd, capture_output=True, text=True)

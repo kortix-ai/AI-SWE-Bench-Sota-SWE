@@ -62,6 +62,9 @@ class ToolResult:
     success: bool
     output: str
 
+    def __str__(self) -> str:
+        return f'<OBSERVATION>{self.output}</OBERSATION>'
+
 class Tool(ABC):
     """
     Abstract base class for all tools.
