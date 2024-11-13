@@ -161,47 +161,53 @@ if __name__ == '__main__':
             return self.fail_response(f"Error executing view command: {str(e)}")
 
     @tool_schema({
-        "name": "create_file",
-        "description": "Create a new file with specified content in the repository.",
+        "name": "create_and_run",
+        "description": "Create a new file with specified content and optionally run a command after creation.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "The file path to create."},
                 "content": {"type": "string", "description": "The content to write to the file."},
+                "command": {"type": "string", "description": "Optional command to run after file creation.", "default": None},
             },
             "required": ["path", "content"]
         }
     })
-    async def create_file(self, path: str, content: str) -> ToolResult:
+    async def create_and_run(self, path: str, content: str, command: str = None) -> ToolResult:
         """
-        Creates a new file with the specified content.
+        Creates a new file with the specified content and optionally runs a command.
         
         Parameters:
             path (str): The file path to create.
             content (str): The content to write to the file.
+            command (str): Optional command to run after file creation.
         
         Returns:
-            ToolResult: The result of the create file operation.
+            ToolResult: The result of the create and run operation.
         """
         try:
-            # Single command to create the file with proper escaping and content
-            # Uses printf for better handling of special characters and multi-line content
+            # Create file with proper escaping and content
             escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            command = (
-                f'printf "%s" "{escaped_content}" > "{path}" && '
-                f'echo "File created at {path}"'
-            )
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            create_command = f'printf "%s" "{escaped_content}" > "{path}"'
+            
+            if command:
+                # If command is provided, chain it after file creation
+                full_command = f'{create_command} && {command}'
+            else:
+                full_command = f'{create_command} && echo "File created at {path}"'
+
+            stdout, stderr, returncode = await self.execute_command_in_container(full_command)
             success = returncode == 0
 
-            history = await self.state_manager.get("create_file_history") or []
+            history = await self.state_manager.get("create_and_run_history") or []
             history.append({
                 "path": path,
                 "content": content,
+                "command": command,
                 "output": stdout + stderr,
                 "success": success,
             })
-            await self.state_manager.set("create_file_history", history)
+            await self.state_manager.set("create_and_run_history", history)
 
             if success and not stderr.strip():
                 message = stdout.strip() if stdout else f"File created at {path}"
@@ -210,10 +216,10 @@ if __name__ == '__main__':
                     "exit_code": returncode,
                 })
             else:
-                return self.fail_response(f"Create file command failed: {stderr.strip()}")
+                return self.fail_response(f"Create and run command failed: {stderr.strip()}")
         
         except Exception as e:
-            return self.fail_response(f"Error creating file: {str(e)}")
+            return self.fail_response(f"Error in create and run: {str(e)}")
 
     @tool_schema({
         "name": "replace_string",
@@ -260,17 +266,17 @@ with open(path, 'r') as f:
 
 count = content.count(old_str)
 if count == 0:
-    print(f"String '{{old_str}}' not found in file", file=sys.stderr)
+    print("String '{}' not found in file".format(old_str), file=sys.stderr)
     sys.exit(1)
 elif count > 1:
     lines = [i+1 for i, line in enumerate(content.split('\\n')) if old_str in line]
-    print(f"Multiple occurrences found in lines {{lines}}. Please ensure string is unique", file=sys.stderr)
+    print("Multiple occurrences found in lines {}. Please ensure string is unique".format(lines), file=sys.stderr)
     sys.exit(1)
 else:
     content = content.replace(old_str, new_str)
     with open(path, 'w') as f:
         f.write(content)
-    print(f"Replacement successful in '{{path}}'")
+    print("Replacement successful in '{}'".format(path))
 '''
 
             # Encode the Python code to base64
@@ -306,10 +312,9 @@ else:
 
             if success and not stderr.strip():
                 message = stdout.strip() if stdout else f"Replaced '{old_str}' with '{new_str}' in {path}"
-                return self.success_response({
-                    "message": message,
-                    "exit_code": returncode,
-                })
+                return self.success_response(
+                    "<output>\n" + message + "\n</output>"
+                    )            
             else:
                 return self.fail_response(f"Replace string command failed: {stderr.strip()}")
 
