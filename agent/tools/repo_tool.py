@@ -372,3 +372,21 @@ else:
         
         except Exception as e:
             return self.fail_response(f"Error executing bash command: {str(e)}")
+
+    @tool_schema({
+        "name": "submit",
+        "description": "If you are confident that the issue is resolve, submit the fix",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    })
+    async def submit(self) -> ToolResult:
+        """
+        Signals that the task is completed.
+
+        Returns:
+            ToolResult: Success message indicating task completion.
+        """
+        return self.success_response("Task completed successfully.")

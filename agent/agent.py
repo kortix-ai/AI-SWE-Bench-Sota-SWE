@@ -29,13 +29,10 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name)
 
-    system_message = """
-    You are an expert at analyzing and improving python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while making minial changes. Follow suggested TASKS to resolve the issue.
-    """
-    await thread_manager.add_message(thread_id, {
-        "role": "system", 
-        "content": system_message,
-    })
+    system_message = {
+            "role": "system",
+            "content": f"""You are an expert at analyzing and fixing issues python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while making minial changes. Follow suggested TASKS to resolve the issue."""
+    }
 
     await thread_manager.add_message(thread_id, {
             "role": "user",
@@ -61,18 +58,7 @@ Follow these steps to resolve the issue:
 5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
 6. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
 
-Here are suggested TASKS you can follow to resolve the issue:
-(I) Give list of files related to the issue described in the PR.
-(II) Give list of context files, that related to files in (I) where we need to update as well.
-(III) Create and run "reproduce.py" script to confirm the error.
-(IV) Detail analysis of the root cause of the issue, and make a plan to fix it.
-(V) Implement the fix in the codebase, use multiple replace string tool call for all file simultaneously.
-(VI) Run the reproduce script again to confirm the fix.
-(VII) Run the existing tests to confirm the fix.
-(VIII) Think about edge cases create and run final test cases, separately from existing tests.
-(IX) if all tests pass, output "FINISHED and TERMINATING" 
-
-You're working autonomously from now on. Your thinking should be thorough, step by step.
+You're working autonomously from now on. Your thinking should be thorough, step by step, .
             """
     })
     
@@ -88,14 +74,6 @@ You're working autonomously from now on. Your thinking should be thorough, step 
                     "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
                 }
             },
-            {
-                "id": str(uuid.uuid4()),
-                "type": "function",
-                "function": {
-                    "name": "view",
-                    "arguments": json.dumps({"paths": ["/testbed/astropy"], "depth": 2})
-                }
-            }
         ]
     })
 
@@ -128,13 +106,18 @@ You're working autonomously from now on. Your thinking should be thorough, step 
         )
 
         print(f"Iteration {iteration}/{max_iterations}:")
-        # print(response)
 
-        if "FINISHED" in response and "TERMINATING" in response:
-            print("Bug fixed, stopping...")
-            break
+        # Check for 'submit' tool call in the assistant's last message
+        assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+        if assistant_messages:
+            last_assistant = assistant_messages[0]
+            tool_calls = last_assistant.get('tool_calls', [])
+            for tool_call in tool_calls:
+                if tool_call['function']['name'] == 'submit':
+                    print("Task completed via submit tool, stopping...")
+                    return
 
-        # await after_iteration()
+
 
     print(f"Agent completed after {iteration} iterations")
 
