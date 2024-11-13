@@ -256,11 +256,11 @@ class ThreadManager:
         if tool_calls:
             message["tool_calls"] = [
                 {
-                    "id": tool_call.id,
+                    "id": tool_call.get('id'),
                     "type": "function",
                     "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
+                        "name": tool_call.get('function', {}).get('name'),
+                        "arguments": tool_call.get('function', {}).get('arguments')
                     }
                 } for tool_call in tool_calls
             ]
@@ -277,9 +277,9 @@ class ThreadManager:
 
     async def execute_tools_async(self, tool_calls, available_functions, thread_id):
         async def execute_single_tool(tool_call):
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            tool_call_id = tool_call.id
+            function_name = tool_call['function']['name']
+            function_args = json.loads(tool_call['function']['arguments'])
+            tool_call_id = tool_call['id']
 
             function_to_call = available_functions.get(function_name)
             if function_to_call:
@@ -294,9 +294,9 @@ class ThreadManager:
     async def execute_tools_sync(self, tool_calls, available_functions, thread_id):
         tool_results = []
         for tool_call in tool_calls:
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
-            tool_call_id = tool_call.id
+            function_name = tool_call['function']['name']
+            function_args = json.loads(tool_call['function']['arguments'])
+            tool_call_id = tool_call['id']
 
             function_to_call = available_functions.get(function_name)
             if function_to_call:
@@ -329,6 +329,56 @@ class ThreadManager:
                 return json.load(f)
         except FileNotFoundError:
             return None
+
+    async def run_tool(self, thread_id: str, tool_name: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        tool_info = self.tool_registry.get_tool(tool_name)
+        if not tool_info:
+            logging.error(f"Tool '{tool_name}' not found.")
+            return None
+
+        function_to_call = getattr(tool_info['instance'], tool_name, None)
+        if not function_to_call:
+            logging.error(f"Function '{tool_name}' not found in tool '{tool_name}'.")
+            return None
+
+        tool_call_id = str(uuid.uuid4())
+        try:
+            function_response = await function_to_call(**params)
+        except Exception as e:
+            error_message = f"Error in {tool_name}: {str(e)}"
+            function_response = ToolResult(success=False, output=error_message)
+
+        # Create a tool message consistent with other tool executions
+        tool_message = {
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "name": tool_name,
+            "content": str(function_response),
+        }
+
+        # Add the tool message to the thread
+        await self.add_message(thread_id, tool_message)
+        return function_response
+
+    async def process_last_assistant_message(self, thread_id: str, execute_tools_async: bool = True):
+        messages = await self.list_messages(thread_id)
+        last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant'), None)
+        
+        if last_assistant_message:
+            tool_calls = last_assistant_message.get('tool_calls', [])
+            if tool_calls:
+                available_functions = self.get_available_functions()
+                if execute_tools_async:
+                    tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
+                else:
+                    tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
+                
+                for result in tool_results:
+                    await self.add_message(thread_id, result)
+            else:
+                logging.info("No tool calls found in the last assistant message.")
+        else:
+            logging.info("No assistant messages found in the thread.")
 
 if __name__ == "__main__":
     import asyncio
