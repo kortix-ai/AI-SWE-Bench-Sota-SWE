@@ -153,11 +153,7 @@ if __name__ == '__main__':
             await self.state_manager.set(history_key, history)
 
             if success and not stderr.strip():
-                return self.success_response({
-                    "output": stdout.strip(),
-                    "error": stderr.strip(),
-                    "exit_code": returncode,
-                })
+                return self.success_response(str(stdout.strip()))
             else:
                 return self.fail_response(f"View command failed: {stderr.strip()}")
         
@@ -360,11 +356,7 @@ else:
             await self.state_manager.set(history_key, history)
 
             if success and not stderr.strip():
-                return self.success_response({
-                    "output": stdout.strip(),
-                    "error": stderr.strip(),
-                    "exit_code": returncode,
-                })
+                return self.success_response(str(stdout.strip())[:2000])
             else:
                 return self.fail_response(f"Bash command failed: {stderr.strip()}")
         

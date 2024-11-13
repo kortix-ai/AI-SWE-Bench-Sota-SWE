@@ -18,16 +18,12 @@ def parse_tool_result(content):
             return {
                 "success": success,
                 "output": output_json.get("output", ""),
-                "error": output_json.get("error", ""),
-                "exit_code": output_json.get("exit_code", -1)
             }
     except:
         pass
     return {
         "success": True,
         "output": content,
-        "error": "",
-        "exit_code": 0
     }
 
 def load_evaluation_result(run_dir: str) -> Dict:
@@ -144,17 +140,12 @@ def display_run_details(run_data: List[Dict]):
                     tool_result = parse_tool_result(content)
                     success = tool_result["success"]
                     output = tool_result["output"]
-                    error = tool_result["error"]
-                    exit_code = tool_result["exit_code"]
                     
                     icon = "✅" if success else "❌"
                     label = f"{name} {icon}"
                     
-                    with st.expander(label=label, expanded=True):
+                    with st.expander(label=label, expanded=st.session_state.get('expanded_tool', False)):
                         st.code(output, language='python')
-                        if error:
-                            st.error(f"Error: {error}")
-                        st.info(f"Exit Code: {exit_code}")
                 elif role in ["user", "system"]:
                     with st.expander(label=f"{role.title()} Message", expanded=False):
                         st.markdown(formatted_content)
@@ -288,6 +279,11 @@ def main():
             st.session_state.show_thread = True
         else:
             st.session_state.show_thread = False
+
+        if st.checkbox("Expanded (tool result)"):
+            st.session_state.expanded_tool = True
+        else:
+            st.session_state.expanded_tool = False
 
 
     # Display run details if a run is selected

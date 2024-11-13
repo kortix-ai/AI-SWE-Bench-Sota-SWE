@@ -31,7 +31,7 @@ class ThreadManager:
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         with open(thread_path, 'w') as f:
-            json.dump({"messages": []}, f)
+            json.dump({"messages": []}, f, indent=2)
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
@@ -78,7 +78,7 @@ class ThreadManager:
             thread_data["messages"] = messages
             
             with open(thread_path, 'w') as f:
-                json.dump(thread_data, f)
+                json.dump(thread_data, f, indent=2)
             
             logging.info(f"Message added to thread {thread_id}: {message_data}")
         except Exception as e:
@@ -142,7 +142,7 @@ class ThreadManager:
 
                 thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
                 with open(thread_path, 'w') as f:
-                    json.dump({"messages": messages}, f)
+                    json.dump({"messages": messages}, f, indent=2)
 
                 return True
         return False
