@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 import os
@@ -60,49 +61,88 @@ class RepositoryTools(Tool):
         }
     })
     async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
-        """
-        Views the contents of files or lists the contents of directories with detailed explanations.
-        
-        Parameters:
-            paths (List[str]): The file or directory paths to view.
-            exclude_patterns (list): Patterns of files to exclude from directory listings.
-            depth (int): The maximum directory depth to search for contents.
-        
-        Returns:
-            ToolResult: The result of the view operation.
-        """
         try:
-            results = []
-            for path in paths:
-                # Construct exclusion patterns for find command
-                exclude_flags = ""
-                for pattern in exclude_patterns:
-                    exclude_flags += f' ! -name "{pattern}"'
-                
-                # Command to handle files and directories with XML tags
-                command = (
-                    f'if [ -d "{path}" ]; then '
-                    f'echo "<directory path=\\"{path}\\">"; '
-                    f'echo "Contents of {path}, excluding patterns {exclude_patterns}:"; '
-                    f'find "{path}" -maxdepth {depth} {exclude_flags} ! -path "*/\\.*" -print; '
-                    f'echo "</directory>"; '
-                    f'elif [ -f "{path}" ]; then '
-                    f'echo "<file path=\\"{path}\\">"; '
-                    f'cat -n "{path}"; '
-                    f'echo "</file>"; '
-                    f'else '
-                    f'echo "The path \'{path}\' is neither a file nor a directory." >&2; '
-                    f'fi'
-                )
-                stdout, stderr, returncode = await self.execute_command_in_container(command)
-                success = returncode == 0
-                results.append({
-                    "path": path,
-                    "output": stdout.strip(),
-                    "error": stderr.strip(),
-                    "success": success,
-                })
+            # Python script to handle file/directory operations
+            python_code = '''
+import os
+import fnmatch
+import sys
+from typing import List
 
+def should_exclude(path: str, patterns: List[str]) -> bool:
+    return any(fnmatch.fnmatch(path, f"*{pattern}") for pattern in patterns)
+
+def list_directory(root_path: str, depth: int, exclude_patterns: List[str], current_depth: int = 1) -> List[str]:
+    results = []
+    try:
+        for item in sorted(os.listdir(root_path)):
+            if item.startswith('.'):
+                continue
+                
+            full_path = os.path.join(root_path, item)
+            if should_exclude(full_path, exclude_patterns):
+                continue
+                
+            results.append(full_path)
+            if os.path.isdir(full_path) and current_depth < depth:
+                results.extend(list_directory(full_path, depth, exclude_patterns, current_depth + 1))
+    except PermissionError:
+        print(f"Permission denied: {root_path}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error accessing {root_path}: {str(e)}", file=sys.stderr)
+    return results
+
+def view_path(path: str, depth: int, exclude_patterns: List[str]):
+    if os.path.isdir(path):
+        print(f'<directory path="{path}">')
+        for item in list_directory(path, depth, exclude_patterns):
+            print(item)
+        print("</directory>")
+    elif os.path.isfile(path):
+        print(f'<file path="{path}">')
+        try:
+            with open(path, 'r') as f:
+                for i, line in enumerate(f, 1):
+                    print(f"{i:6d}\t{line}", end='')
+        except Exception as e:
+            print(f"Error reading file {path}: {str(e)}", file=sys.stderr)
+        print("</file>")
+    else:
+        print(f"The path '{path}' is neither a file nor a directory.", file=sys.stderr)
+
+def main():
+    paths = sys.argv[1].split(',')
+    exclude_patterns = sys.argv[2].split(',')
+    depth = int(sys.argv[3])
+    
+    for path in paths:
+        view_path(path.strip(), depth, exclude_patterns)
+
+if __name__ == '__main__':
+    main()
+'''
+            # Encode the Python script and arguments
+            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
+            paths_str = ','.join(paths)
+            exclude_str = ','.join(exclude_patterns)
+            
+            # Command to execute the Python script in the container
+            command = (
+                f"echo {repr(code_base64)} | base64 -d | "
+                f"python3 - {repr(paths_str)} {repr(exclude_str)} {depth}"
+            )
+            
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            success = returncode == 0
+
+            results = [{
+                "path": path,
+                "output": stdout.strip(),
+                "error": stderr.strip(),
+                "success": success,
+            } for path in paths]
+
+            # Update history
             history_key = "view_history"
             history = await self.state_manager.get(history_key) or []
             history.append({
@@ -112,17 +152,14 @@ class RepositoryTools(Tool):
             })
             await self.state_manager.set(history_key, history)
 
-            aggregated_output = "\n".join([result["output"] for result in results if result["success"]])
-            aggregated_error = "\n".join([result["error"] for result in results if not result["success"]])
-
-            if all(result["success"] for result in results):
+            if success and not stderr.strip():
                 return self.success_response({
-                    "output": aggregated_output,
-                    "error": aggregated_error,
-                    "exit_code": 0,
+                    "output": stdout.strip(),
+                    "error": stderr.strip(),
+                    "exit_code": returncode,
                 })
             else:
-                return self.fail_response(f"View command failed: {aggregated_error}")
+                return self.fail_response(f"View command failed: {stderr.strip()}")
         
         except Exception as e:
             return self.fail_response(f"Error executing view command: {str(e)}")
@@ -208,7 +245,6 @@ class RepositoryTools(Tool):
             ToolResult: The result of the replace string operation.
         """
         try:
-            import base64
 
             # Encode the old and new strings to base64 to handle special characters
             old_str_base64 = base64.b64encode(old_str.encode('utf-8')).decode('ascii')
