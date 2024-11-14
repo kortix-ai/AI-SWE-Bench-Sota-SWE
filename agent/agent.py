@@ -7,22 +7,77 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import uuid
 
+class TaskManager:
+    def __init__(self, thread_manager, state_manager, tasks, shared_knowledge):
+        self.thread_manager = thread_manager
+        self.state_manager = state_manager
+        self.tasks = tasks
+        self.shared_knowledge = shared_knowledge
+
+    async def run_tasks(self, thread_id, model_name, problem_statement):
+        model_mapping = {
+            "sonnet": "anthropic/claude-3-5-sonnet-latest",
+            "haiku": "anthropic/claude-3-5-haiku-latest",
+            "deepseek": "deepseek/deepseek-chat",
+            "gpt-4o": "gpt-4o",
+            "qwen": "openrouter/qwen/qwen-2.5-coder-32b-instruct",
+        }
+        model_name_full = model_mapping.get(model_name, "anthropic/claude-3-5-sonnet-latest")
+
+        for task in self.tasks:
+            print(f"Starting task: {task['name']}")
+
+            await self.thread_manager.add_message(thread_id, {
+                "role": "task-switch",
+                "content": f"--- Task switched to {task['name']} ---"
+            })
+
+            await self.thread_manager.add_message(thread_id, task['user_prompt'].format(
+                problem_statement=problem_statement
+            ))
+
+
+            shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
+            await self.thread_manager.add_message(thread_id, {
+                "role": "user",
+                "content": f"<shared_knowledge>{json.dumps(shared_knowledge)}</shared_knowledge>"
+            })
+
+            iteration = 0
+            while iteration < task['max_iterations']:
+                iteration += 1
+
+                response = await self.thread_manager.run_thread(
+                    thread_id=thread_id,
+                    system_message=task['system_prompt'],
+                    model_name=model_name_full,
+                    temperature=0.0,
+                    max_tokens=4096,
+                    tool_choice="auto",
+                    execute_tools_async=True,
+                    use_tools=True,
+                    execute_model_tool_calls=True
+                )
+
+                assistant_messages = await self.thread_manager.list_messages(thread_id, only_latest_assistant=True)
+                if assistant_messages:
+                    last_assistant = assistant_messages[0]
+                    tool_calls = last_assistant.get('tool_calls', [])
+                    for tool_call in tool_calls:
+                        if tool_call['function']['name'] == 'submit':
+                            print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
+                            break
+
+                await self.state_manager.set('shared_knowledge', shared_knowledge)
+
+        print("Agent completed all tasks.")
+
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
-
-    async def after_iteration():
-
-        message_content = """ 
-        Run test to check if the bug is fixed, if all tests pass, output "FINISHED" without any other text.
-        """
-        await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": message_content
-        })
 
     with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
@@ -32,98 +87,97 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
 
-    system_message = {
-            "role": "system",
-            "content": f"""You are an expert at analyzing and fixing issues python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while making minial changes. Follow suggested TASKS to resolve the issue."""
-    }
-
-    await thread_manager.add_message(thread_id, {
-            "role": "user",
-            "content": f"""
+    tasks = [
+        {
+            'name': 'Exploration',
+            'system_prompt': {
+                "role": "system",
+                "content": "You are a helpful assistant specialized in exploring code repositories."
+            },
+            'user_prompt': {
+                "role": "user",
+                "content": """
 <uploaded_files>
 /testbed/
 </uploaded_files>
-I've uploaded a python code repository in the directory /testbed. Consider the following PR description :
+I've uploaded a python code repository in the directory /testbed. Consider the following PR description:
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
-I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+Can you help me explore the repository to understand its structure and identify relevant files?
 
-Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+Your task is to make the minimal changes to non-test files in the current directory to ensure the <pr_description> is satisfied.
 
 Follow these steps to resolve the issue:
-1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
-2. View files to have a whole understanding of the codebase. When you found the issue, do not stop exploring but continue to check related files to grasp the codebase context fully before any implementation.
-3. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error.
-4. Edit the sourcecode of the repo to resolve the issue
-5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
-6. Run all the existing test to confirm the code base is still working as expected.
-7. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
+1. Explore the repository in /testbed to familiarize yourself with its structure.
+2. View files to have a complete understanding of the codebase.
+3. Identify relevant files and folders.
+4. Record useful information to the shared knowledge.
 
-You're working autonomously from now on. Your thinking should be thorough, step by step, .
-            """,
-    })
-    
-    # await thread_manager.add_message(thread_id, {
-    #     "role": "assistant",
-    #     "content": "",
-    #     "tool_calls": [
-    #         {
-    #             "id": str(uuid.uuid4()),
-    #             "type": "function",
-    #             "function": {
-    #                 "name": "view",
-    #                 "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
-    #             }
-    #         },
-    #     ]
-    # })
+You're working autonomously from now on. Your thinking should be thorough, step by step."""
+            },
+            'max_iterations': max_iterations,
+        },
+        {
+            'name': 'Analysis and Implementation',
+            'system_prompt': {
+                "role": "system",
+                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions."
+            },
+            'user_prompt': {
+                "role": "user",
+                "content": """
+Consider the shared knowledge collected during exploration and the PR description:
+<pr_description>
+{problem_statement}
+</pr_description>
 
-    await thread_manager.process_last_assistant_message(thread_id)
+Your task is to implement the necessary changes to satisfy the requirements.
 
-    iteration = 0
+Follow these steps:
+1. Analyze the shared knowledge and requirements
+2. Implement the minimal required changes
 
-    while iteration < max_iterations:
-        iteration += 1
+You're working autonomously from now on. Your thinking should be thorough, step by step."""
+            },
+            'max_iterations': max_iterations,
+        },
+        {
+            'name': 'Test and Verification',
+            'system_prompt': {
+                "role": "system",
+                "content": "You are an expert assistant in testing and verifying code changes."
+            },
+            'user_prompt': {
+                "role": "user",
+                "content": """
+Verify the implemented changes against the requirements:
+<pr_description>
+{problem_statement}
+</pr_description>
 
-        model_mapping = {
-            "sonnet": "anthropic/claude-3-5-sonnet-latest",
-            "haiku": "anthropic/claude-3-5-haiku-latest",
-            "deepseek": "deepseek/deepseek-chat",
-            "gpt-4o": "gpt-4o",
-            "qwen": "openrouter/qwen/qwen-2.5-coder-32b-instruct",
-        }
-        model_name_full = model_mapping.get(model_name, "anthropic/claude-3-5-sonnet-latest")  # default
+Follow these steps:
+1. Run tests to verify the changes
+2. Ensure all existing functionality works
+3. Submit if all tests pass
 
-        response = await thread_manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name=model_name_full,
-            temperature=0.0,
-            max_tokens=4096,
-            tool_choice="auto",
-            execute_tools_async=True,
-            use_tools=True,
-            execute_model_tool_calls=True
-        )
+You're working autonomously from now on. Your thinking should be thorough, step by step."""
+            },
+            'max_iterations': max_iterations,
+        },
+    ]
 
-        print(f"Iteration {iteration}/{max_iterations}:")
-
-        # Check for 'submit' tool call in the assistant's last message
-        assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-        if assistant_messages:
-            last_assistant = assistant_messages[0]
-            tool_calls = last_assistant.get('tool_calls', [])
-            for tool_call in tool_calls:
-                if tool_call['function']['name'] == 'submit':
-                    print("Task completed via submit tool, stopping...")
-                    return
-
-
-
-    print(f"Agent completed after {iteration} iterations")
+    shared_knowledge = {
+        'folders_to_explore': [],
+        'related_files': [],
+        'context_files': [],
+        'analysis_codebase': "",
+        'reproduce_error_path': "",
+        'command_to_test_existing_testcases_of_code_base': "",
+    }
+    task_manager = TaskManager(thread_manager, state_manager, tasks, shared_knowledge)
+    await task_manager.run_tasks(thread_id, model_name, problem_statement)
 
 if __name__ == "__main__":
     async def main():

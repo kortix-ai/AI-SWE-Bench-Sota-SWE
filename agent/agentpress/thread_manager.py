@@ -34,6 +34,40 @@ class ThreadManager:
             json.dump({"messages": []}, f, indent=2)
         return thread_id
 
+    async def reset_thread_messages(self, thread_id: str):
+        """
+        Reset the messages in a thread but keep the history saved to a file.
+        """
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
+
+        try:
+            # Read current thread messages
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            messages = thread_data.get("messages", [])
+
+            # Append messages to history
+            if os.path.exists(history_path):
+                with open(history_path, 'r') as f:
+                    history_data = json.load(f)
+                history_data["messages"].extend(messages)
+            else:
+                history_data = {"messages": messages}
+
+            with open(history_path, 'w') as f:
+                json.dump(history_data, f, indent=2)
+
+            # Reset thread messages
+            with open(thread_path, 'w') as f:
+                json.dump({"messages": []}, f, indent=2)
+
+            logging.info(f"Thread messages reset for thread {thread_id}")
+
+        except Exception as e:
+            logging.error(f"Failed to reset thread messages for thread {thread_id}: {e}")
+            raise e
+
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
