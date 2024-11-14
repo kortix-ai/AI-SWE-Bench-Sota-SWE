@@ -6,9 +6,9 @@ import os
 from typing import List
 
 class RepositoryTools(Tool):
-    def __init__(self, container_name: str):
+    def __init__(self, container_name: str, state_file: str):
         super().__init__()
-        self.state_manager = StateManager(store_file="state.json")
+        self.state_manager = StateManager(store_file=state_file)
         self.container_name = container_name
 
     async def execute_command_in_container(self, command: str):
@@ -46,11 +46,6 @@ class RepositoryTools(Tool):
                     "items": {"type": "string"},
                     "description": "The file or directory paths to view."
                 },
-                "exclude_patterns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Patterns of files to exclude from directory listings."
-                },
                 "depth": {
                     "type": "integer",
                     "description": "The maximum directory depth to search for contents.",
@@ -60,9 +55,8 @@ class RepositoryTools(Tool):
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.pyc'], depth: int = 2) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
         try:
-            # Python script to handle file/directory operations
             python_code = '''
 import os
 import fnmatch

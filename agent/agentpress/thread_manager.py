@@ -81,6 +81,11 @@ class ThreadManager:
                 json.dump(thread_data, f, indent=2)
             
             logging.info(f"Message added to thread {thread_id}: {message_data}")
+            
+            # Process tool calls if present in the message
+            if 'tool_calls' in message_data:
+                await self.process_tool_calls_from_message(thread_id, message_data, execute_tools_async=True)
+                
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise e
@@ -379,6 +384,17 @@ class ThreadManager:
                 logging.info("No tool calls found in the last assistant message.")
         else:
             logging.info("No assistant messages found in the thread.")
+    
+    async def process_tool_calls_from_message(self, thread_id: str, message_data: Dict[str, Any], execute_tools_async: bool = True):
+        tool_calls = message_data.get('tool_calls', [])
+        if tool_calls:
+            available_functions = self.get_available_functions()
+            if execute_tools_async:
+                tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
+            else:
+                tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
+            for result in tool_results:
+                await self.add_message(thread_id, result)
 
 if __name__ == "__main__":
     import asyncio
