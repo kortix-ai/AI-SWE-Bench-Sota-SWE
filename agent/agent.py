@@ -54,7 +54,7 @@ class TaskManager:
                     temperature=0.0,
                     max_tokens=4096,
                     tool_choice="auto",
-                    execute_tools_async=True,
+                    execute_tools_async=False,
                     use_tools=True,
                     execute_model_tool_calls=True
                 )
@@ -85,7 +85,10 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     instance_id = instance_data['instance_id']
 
     from tools.repo_tool import RepositoryTools
+    from tools.shared_knowledge_tool import SharedKnowledgeTool  # Added import
+
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
+    thread_manager.add_tool(SharedKnowledgeTool, state_file=state_file)  # Added line
 
     tasks = [
         {
@@ -115,7 +118,11 @@ Follow these steps to resolve the issue:
 3. Identify relevant files and folders.
 4. Record useful information to the shared knowledge.
 
-You're working autonomously from now on. Your thinking should be thorough, step by step."""
+You're working autonomously from now on. Your thinking should be thorough, step by step.
+
+You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
+
+Note that it's possible to make multiple tool calls simultaneously."""
             },
             'max_iterations': max_iterations,
         },
@@ -139,7 +146,11 @@ Follow these steps:
 1. Analyze the shared knowledge and requirements
 2. Implement the minimal required changes
 
-You're working autonomously from now on. Your thinking should be thorough, step by step."""
+You're working autonomously from now on. Your thinking should be thorough, step by step.
+
+You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
+
+Note that it's possible to make multiple tool calls simultaneously."""
             },
             'max_iterations': max_iterations,
         },
@@ -162,7 +173,12 @@ Follow these steps:
 2. Ensure all existing functionality works
 3. Submit if all tests pass
 
-You're working autonomously from now on. Your thinking should be thorough, step by step."""
+You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
+
+Note that it's possible to make multiple tool calls simultaneously.
+
+You're working autonomously from now on. Your thinking should be thorough, step by step.
+"""
             },
             'max_iterations': max_iterations,
         },
@@ -173,9 +189,11 @@ You're working autonomously from now on. Your thinking should be thorough, step 
         'related_files': [],
         'context_files': [],
         'analysis_codebase': "",
+        'pr_analysis': "",
         'reproduce_error_path': "",
-        'command_to_test_existing_testcases_of_code_base': "",
+        'command_existing_tests': [],
     }
+
     task_manager = TaskManager(thread_manager, state_manager, tasks, shared_knowledge)
     await task_manager.run_tasks(thread_id, model_name, problem_statement)
 
