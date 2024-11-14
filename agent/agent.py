@@ -32,16 +32,21 @@ class TaskManager:
                 "content": f"--- Task switched to {task['name']} ---"
             })
 
-            await self.thread_manager.add_message(thread_id, task['user_prompt'].format(
-                problem_statement=problem_statement
-            ))
-
+            formatted_prompt = {
+                "role": task['user_prompt']['role'],
+                "content": task['user_prompt']['content'].format(
+                    problem_statement=problem_statement
+                )
+            }
+            await self.thread_manager.add_message(thread_id, formatted_prompt)
 
             shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
             await self.thread_manager.add_message(thread_id, {
                 "role": "user",
                 "content": f"<shared_knowledge>{json.dumps(shared_knowledge)}</shared_knowledge>"
             })
+
+            allowed_tools = task.get('allowed_tools', [])
 
             iteration = 0
             while iteration < task['max_iterations']:
@@ -56,7 +61,8 @@ class TaskManager:
                     tool_choice="auto",
                     execute_tools_async=False,
                     use_tools=True,
-                    execute_model_tool_calls=True
+                    execute_model_tool_calls=True,
+                    allowed_tools=allowed_tools
                 )
 
                 assistant_messages = await self.thread_manager.list_messages(thread_id, only_latest_assistant=True)
@@ -85,17 +91,17 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     instance_id = instance_data['instance_id']
 
     from tools.repo_tool import RepositoryTools
-    from tools.shared_knowledge_tool import SharedKnowledgeTool  # Added import
+    from tools.shared_knowledge_tool import SharedKnowledgeTool  
 
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
-    thread_manager.add_tool(SharedKnowledgeTool, state_file=state_file)  # Added line
+    thread_manager.add_tool(SharedKnowledgeTool, state_file=state_file)  
 
     tasks = [
         {
             'name': 'Exploration',
             'system_prompt': {
                 "role": "system",
-                "content": "You are a helpful assistant specialized in exploring code repositories."
+                "content": "You are a helpful assistant specialized in exploring code repositories. You can only use the following tools: 'view', 'add_to_shared_knowledge', 'update_shared_knowledge'."
             },
             'user_prompt': {
                 "role": "user",
@@ -124,13 +130,14 @@ You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_kno
 
 Note that it's possible to make multiple tool calls simultaneously."""
             },
+            'allowed_tools': ['view', 'add_to_shared_knowledge', 'update_shared_knowledge'], 
             'max_iterations': max_iterations,
         },
         {
             'name': 'Analysis and Implementation',
             'system_prompt': {
                 "role": "system",
-                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions."
+                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions. You can only use the following tools: 'replace_string', 'create_and_run', 'add_to_shared_knowledge', 'update_shared_knowledge'."
             },
             'user_prompt': {
                 "role": "user",
@@ -152,13 +159,14 @@ You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_kno
 
 Note that it's possible to make multiple tool calls simultaneously."""
             },
+            'allowed_tools': ['replace_string', 'create_and_run', 'add_to_shared_knowledge', 'update_shared_knowledge'],
             'max_iterations': max_iterations,
         },
         {
             'name': 'Test and Verification',
             'system_prompt': {
                 "role": "system",
-                "content": "You are an expert assistant in testing and verifying code changes."
+                "content": "You are an expert assistant in testing and verifying code changes. You can only use the following tools: 'bash', 'add_to_shared_knowledge', 'update_shared_knowledge'."
             },
             'user_prompt': {
                 "role": "user",
@@ -180,6 +188,7 @@ Note that it's possible to make multiple tool calls simultaneously.
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
             },
+            'allowed_tools': ['bash', 'add_to_shared_knowledge', 'update_shared_knowledge'],  # Updated line
             'max_iterations': max_iterations,
         },
     ]
@@ -193,6 +202,8 @@ You're working autonomously from now on. Your thinking should be thorough, step 
         'reproduce_error_path': "",
         'command_existing_tests': [],
     }
+
+    await state_manager.set('shared_knowledge', shared_knowledge)
 
     task_manager = TaskManager(thread_manager, state_manager, tasks, shared_knowledge)
     await task_manager.run_tasks(thread_id, model_name, problem_statement)

@@ -193,7 +193,8 @@ class ThreadManager:
         additional_message: Optional[Dict[str, Any]] = None, 
         execute_tools_async: bool = True, 
         execute_model_tool_calls: bool = True, 
-        use_tools: bool = False
+        use_tools: bool = False,
+        allowed_tools: Optional[List[str]] = None  # Added line
     ) -> Dict[str, Any]:
         
         messages = await self.list_messages(thread_id)
@@ -202,7 +203,17 @@ class ThreadManager:
         if additional_message:
             prepared_messages.append(additional_message)
         
-        tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
+        if use_tools:
+            if allowed_tools:
+                tools = [
+                    tool_info['schema'] 
+                    for tool_name, tool_info in self.tool_registry.get_all_tools().items() 
+                    if tool_name in allowed_tools
+                ]
+            else:
+                tools = self.tool_registry.get_all_tool_schemas()
+        else:
+            tools = None
 
         try:
             llm_response = await make_llm_api_call(
@@ -234,7 +245,7 @@ class ThreadManager:
             }
 
         if use_tools and execute_model_tool_calls:
-            await self.handle_response_with_tools(thread_id, llm_response, execute_tools_async)
+            await self.handle_response_with_tools(thread_id, llm_response, execute_tools_async, allowed_tools)  # Modified line
         else:
             await self.handle_response_without_tools(thread_id, llm_response)
 
@@ -258,7 +269,7 @@ class ThreadManager:
         response_content = response.choices[0].message['content']
         await self.add_message(thread_id, {"role": "assistant", "content": response_content})
 
-    async def handle_response_with_tools(self, thread_id: str, response: Any, execute_tools_async: bool):
+    async def handle_response_with_tools(self, thread_id: str, response: Any, execute_tools_async: bool, allowed_tools: Optional[List[str]] = None):  # Added parameter
         try:
             response_message = response.choices[0].message
             tool_calls = response_message.get('tool_calls', [])
@@ -266,7 +277,7 @@ class ThreadManager:
             assistant_message = self.create_assistant_message_with_tools(response_message)
             await self.add_message(thread_id, assistant_message)
 
-            available_functions = self.get_available_functions()
+            available_functions = self.get_available_functions(allowed_tools)  # Modified line
             
             if tool_calls:
                 if execute_tools_async:
@@ -301,12 +312,14 @@ class ThreadManager:
             ]
         return message
     
-    def get_available_functions(self) -> Dict[str, Callable]:
+    def get_available_functions(self, allowed_tools: Optional[List[str]] = None) -> Dict[str, Callable]:
         available_functions = {}
         for tool_name, tool_info in self.tool_registry.get_all_tools().items():
             tool_instance = tool_info['instance']
             for func_name, func in tool_instance.__class__.__dict__.items():
                 if callable(func) and not func_name.startswith("__"):
+                    if allowed_tools and func_name not in allowed_tools:
+                        continue
                     available_functions[func_name] = getattr(tool_instance, func_name)
         return available_functions
 
@@ -475,6 +488,6 @@ if __name__ == "__main__":
         print("\nMessages in the thread:")
         for msg in messages:
             print(f"{msg['role'].capitalize()}: {msg['content']}")
-
+    
     # Run the async main function
     asyncio.run(main())
