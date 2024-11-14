@@ -66,20 +66,20 @@ You're working autonomously from now on. Your thinking should be thorough, step 
             """,
     })
     
-    await thread_manager.add_message(thread_id, {
-        "role": "assistant",
-        "content": "",
-        "tool_calls": [
-            {
-                "id": str(uuid.uuid4()),
-                "type": "function",
-                "function": {
-                    "name": "view",
-                    "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
-                }
-            },
-        ]
-    })
+    # await thread_manager.add_message(thread_id, {
+    #     "role": "assistant",
+    #     "content": "",
+    #     "tool_calls": [
+    #         {
+    #             "id": str(uuid.uuid4()),
+    #             "type": "function",
+    #             "function": {
+    #                 "name": "view",
+    #                 "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
+    #             }
+    #         },
+    #     ]
+    # })
 
     await thread_manager.process_last_assistant_message(thread_id)
 
