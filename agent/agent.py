@@ -97,7 +97,7 @@ You're working autonomously from now on. Your thinking should be thorough, step 
             thread_id=thread_id,
             system_message=system_message,
             model_name=model_name_full,
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=4096,
             tool_choice="auto",
             execute_tools_async=True,
