@@ -218,12 +218,16 @@ def main():
     with st.sidebar:
         st.title("📊 SWE Bench")
     
-        # st.header("🔍 🔍 Output Directory")
-        output_dir = st.text_input(
+        # Collect available output directories
+        archives_dir = 'archives/'
+        options = ['./outputs']
+        if os.path.exists(archives_dir):
+            archive_dirs = [os.path.join(archives_dir, d) for d in os.listdir(archives_dir) if os.path.isdir(os.path.join(archives_dir, d))]
+            options.extend(archive_dirs)
+        output_dir = st.selectbox(
             "🔍 Output Directory",
-            value="./outputs",
-            placeholder="/path/to/outputs",
-            help="Specify the directory where SWE Bench outputs are stored."
+            options=options,
+            help="Select the directory where SWE Bench outputs are stored."
         )
 
         if not os.path.exists(output_dir):

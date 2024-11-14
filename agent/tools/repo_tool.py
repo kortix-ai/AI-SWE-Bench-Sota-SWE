@@ -60,7 +60,7 @@ class RepositoryTools(Tool):
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.pyc'], depth: int = 2) -> ToolResult:
         try:
             # Python script to handle file/directory operations
             python_code = '''
