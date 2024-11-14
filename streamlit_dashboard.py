@@ -165,6 +165,8 @@ def get_log_content(log_content):
 
 def get_eval_log_content(eval_log_content):
     """Return the evaluation log content."""
+    # split by : "test session starts", and get the last part
+    eval_log_content = eval_log_content.split("test session starts")[-1].strip()
     return eval_log_content
 
 def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
@@ -198,6 +200,26 @@ def load_ground_truth(run_dir: str) -> Dict:
             with open(os.path.join(run_dir, file), 'r') as f:
                 return json.load(f)
     return {}
+
+def calculate_test_statistics(runs, output_dir):
+    """Calculate success rates for runs and tests."""
+    total_runs = len(runs)
+    successful_runs = sum(1 for run in runs if run.get('all_tests_passed'))
+    
+    total_tests = 0
+    passed_tests = 0
+    
+    for run in runs:
+        eval_result = load_evaluation_result(run['path'])
+        if eval_result:
+            report = eval_result.get('test_result', {}).get('report', {})
+            tests_status = report.get('tests_status', {})
+            if tests_status:
+                for tests in tests_status.values():
+                    passed_tests += len(tests.get('success', []))
+                    total_tests += len(tests.get('success', [])) + len(tests.get('failure', []))
+    
+    return successful_runs, total_runs, passed_tests, total_tests
 
 def main():
     st.set_page_config(page_title="SWE Bench Real-Time Visualization", layout="wide")
@@ -271,6 +293,11 @@ def main():
             st.session_state.expanded_tool = True
         else:
             st.session_state.expanded_tool = False
+
+        st.markdown("---")
+        successful_runs, total_runs, passed_tests, total_tests = calculate_test_statistics(runs, output_dir)
+        st.metric("Successful Runs", f"🔥 {successful_runs}/{total_runs}")
+        st.metric("Total Tests Passed", f"✅ {passed_tests}/{total_tests}")
 
 
     # Display run details if a run is selected

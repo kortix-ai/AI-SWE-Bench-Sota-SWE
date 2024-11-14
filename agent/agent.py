@@ -11,6 +11,7 @@ import uuid
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
 
     async def after_iteration():
@@ -43,8 +44,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 /testbed/
 </uploaded_files>
 I've uploaded a python code repository in the directory /testbed. Consider the following PR description :
-I've uploaded a python code repository in /testbed. Let's systematically analyze and fix the issue described in this PR:
-
 <pr_description>
 {problem_statement}
 </pr_description>
@@ -54,78 +53,22 @@ I've already taken care of all changes to any of the test files described in the
 
 Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
 
-PHASE 1: ANALYSIS
-1. First, analyze the PR description to identify:
-   - Core issue/bug description
-   - Expected behavior
-   - Current behavior
-
-2. Explore the codebase structure:
-   - Map out relevant modules and their relationships
-   - Identify primary affected files
-   - Document any related subsystems
-   - Note any potential ripple effects
-   - All current test cases of the repository
-
-3. Create a reproduction case:
-   - Write a minimal script to reproduce the issue
-   - Verify the exact error conditions
-   - Document all edge cases mentioned in the PR
-   - Test related functionality that might be affected
-
-PHASE 2: SOLUTION DESIGN
-1. Propose solution strategy:
-   - List all possible approaches
-   - Analyze pros/cons of each approach
-   - Consider backwards compatibility
-   - Consider edge cases and error conditions
-
-2. Review impacted areas:
-   - Document all files that need changes
-   - Consider interface changes
-   - Look for similar patterns in codebase that might need similar fixes
-   - Check for dependency impacts
-
-PHASE 3: IMPLEMENTATION
-1. Make the minimal required changes:
-   - Follow existing code style
-   - Keep changes minimal but working and complete
-
-2. Comprehensive Testing:
-   - Run the reproduction case
-   - Execute specific test cases
-   - Run full existing test suite
-   - Verify edge cases
-   - Check for regressions
-
-PHASE 4: VALIDATION
-1. Verify the fix:
-   - Confirm original issue is resolved
-   - Check all test cases pass
-   - Verify no new issues introduced
-   - Validate edge cases
-   - Confirm backwards compatibility
-
-2. Documentation:
-   - Document any assumptions
-   - Note any limitations
-   - Explain the fix approach
-   - List any related issues
-
-Think step by step and be thorough in your analysis. Document your thought process using <thoughts> tags. For each change:
-- Explain why it's needed
-- Show how it fixes the issue
-- Consider potential impacts
-
-Remember:
-- Don't modify test files
-- Make minimal but complete changes
-- Consider all edge cases
-- Maintain existing code patterns
+Follow these steps to resolve the issue:
+1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
+2. View files to have a whole understanding of the codebase. When you found the issue, do not stop exploring but continue to check related files to grasp the codebase context fully before any implementation.
+3. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error.
+4. Edit the sourcecode of the repo to resolve the issue
+5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
+6. Run all the existing test to confirm the code base is still working as expected.
+7. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step, .
             """,
-
+    })
+    
+    await thread_manager.add_message(thread_id, {
+        "role": "assistant",
+        "content": "",
         "tool_calls": [
             {
                 "id": str(uuid.uuid4()),
@@ -137,23 +80,8 @@ You're working autonomously from now on. Your thinking should be thorough, step 
             },
         ]
     })
-    
-    # await thread_manager.add_message(thread_id, {
-    #     "role": "assistant",
-    #     "content": """<thoughts>\nLet's start by exploring the repository to find relevant files:\n</thoughts>""",
-    #     "tool_calls": [
-    #         {
-    #             "id": str(uuid.uuid4()),
-    #             "type": "function",
-    #             "function": {
-    #                 "name": "view",
-    #                 "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
-    #             }
-    #         },
-    #     ]
-    # })
 
-    # await thread_manager.process_last_assistant_message(thread_id)
+    await thread_manager.process_last_assistant_message(thread_id)
 
     iteration = 0
 

@@ -5,7 +5,9 @@ import sys
 import json
 import tempfile
 from datasets import load_dataset
-import pandas as pd 
+import pandas as pd
+from multiprocessing import Pool
+from tqdm import tqdm
 
 def get_instance_docker_image(instance_id: str) -> str:
     """Get the docker image name for a specific instance."""
@@ -129,13 +131,44 @@ def convert_outputs_to_jsonl(output_dir: str):
                 all_data.extend(data)
 
     if all_data:
-        combined_output = os.path.join(output_dir, f'__combined_agentpress_output_{len(all_data)}.jsonl')
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        combined_output = os.path.join(output_dir, f'__combined_agentpress_output_{timestamp}_{len(all_data)}.jsonl')
         with open(combined_output, 'w') as f:
             for item in all_data:
                 f.write(json.dumps(item) + '\n')
         print(f'Created combined output file: {combined_output}')
     else:
         print("\nNo data found to combine")
+
+def is_instance_id_list(value):
+    """Check if a list contains what appears to be instance IDs."""
+    if not isinstance(value, list) or not value:
+        return False
+    # Check if list contains strings with common instance ID patterns
+    return all(isinstance(x, str) and ('__' in x or '_' in x) for x in value)
+
+def find_instance_ids(data):
+    """Recursively search through JSON data for instance IDs."""
+    if isinstance(data, dict):
+        for value in data.values():
+            result = find_instance_ids(value)
+            if result:
+                return result
+    elif isinstance(data, list):
+        if is_instance_id_list(data):
+            return data
+        for item in data:
+            result = find_instance_ids(item)
+            if result:
+                return result
+    return []
+
+def get_instance_ids_from_file(file_path):
+    """Load instance IDs from a JSON file."""
+    with open(file_path) as f:
+        data = json.load(f)
+        return find_instance_ids(data)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -148,6 +181,8 @@ def main():
                                       help="Run tests from START to END index (inclusive)")
     test_selection_group.add_argument("--instance-id", type=str,
                                       help="Choose a specific instance by instance_id")
+    test_selection_group.add_argument("--instances-file", type=str,
+                                      help="JSON file containing list of instance IDs to run")
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
     parser.add_argument("--track-files", nargs="+",
@@ -160,6 +195,8 @@ def main():
                         help="Maximum number of iterations")
     parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
+    parser.add_argument('--num-workers', type=int, default=1,
+                        help='Number of parallel workers')
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -186,6 +223,9 @@ def main():
     # Select instances based on arguments
     if args.instance_id is not None:
         instances = dataset.filter(lambda x: x['instance_id'] == args.instance_id)
+    elif args.instances_file is not None:
+        instance_ids = get_instance_ids_from_file(args.instances_file)
+        instances = dataset.filter(lambda x: x['instance_id'] in instance_ids)
     elif args.test_index is not None:
         if args.test_index < 1 or args.test_index > len(dataset):
             raise ValueError(f"Test index must be between 1 and {len(dataset)}")
@@ -200,57 +240,80 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print(f"\nWill test {len(instances)} instances:")
-    for idx, instance in enumerate(instances, 1):
-        instance_id = instance['instance_id']
+    # Convert instances to a list
+    instances = list(instances)
 
-        # Create instance-specific output directory with index prefix
-        instance_output_dir = os.path.join(args.output_dir, f"{instance_id}")
-        os.makedirs(instance_output_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
 
-        # Update output file paths to use instance-specific directory but keep original names
-        output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
-        ground_truth_file = os.path.join(instance_output_dir, f'{instance_id}_ground_truth.json')
-        log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
-        tracked_files_dir = os.path.join(instance_output_dir, 'files')
+    # Create list of (args, instance) tuples
+    args_instance_list = [(args, instance) for instance in instances]
 
-        # Remove instance directory if it exists
-        if os.path.exists(instance_output_dir):
-            subprocess.run(['rm', '-rf', instance_output_dir], check=True)
-            os.makedirs(instance_output_dir)
+    total_instances = len(args_instance_list)
+    pbar = tqdm(total=total_instances, desc='Instances processed')
 
-        with open(ground_truth_file, 'w') as f:
-            json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
+    if args.num_workers > 1:
+        with Pool(args.num_workers) as pool:
+            results = pool.imap_unordered(process_instance, args_instance_list)
+            for _ in results:
+                pbar.update(1)
+    else:
+        for args_instance in args_instance_list:
+            process_instance(args_instance)
+            pbar.update(1)
 
-        container_name = start_docker_container(instance, args.track_files or [])
-        try:
-            with tempfile.NamedTemporaryFile('w', delete=False) as f:
-                problem_file = f.name
-                json.dump([instance], f)
+    convert_outputs_to_jsonl(args.output_dir)
 
-            cmd = [
-                sys.executable, 'agent/agent.py',
-                '--problem-file', problem_file,
-                '--container-name', container_name,
-                '--threads-dir', os.path.join(instance_output_dir, 'threads'),
-                '--max-iterations', str(args.max_iterations),
-                '--model-name', args.model_name,
-            ]
-            print("Running agent...")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+def process_instance(args_instance_tuple):
+    args, instance = args_instance_tuple
+    instance_id = instance['instance_id']
 
-            with open(log_file, 'w') as f:
-                f.write(result.stdout)
-                f.write(result.stderr)
+    # Create instance-specific output directory with index prefix
+    instance_output_dir = os.path.join(args.output_dir, f"{instance_id}")
+    os.makedirs(instance_output_dir, exist_ok=True)
 
-            if result.returncode != 0:
-                print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
-                continue
+    # Update output file paths to use instance-specific directory but keep original names
+    output_file = os.path.join(instance_output_dir, f'{instance_id}.json')
+    ground_truth_file = os.path.join(instance_output_dir, f'{instance_id}_ground_truth.json')
+    log_file = os.path.join(instance_output_dir, f'{instance_id}.log')
+    tracked_files_dir = os.path.join(instance_output_dir, 'files')
 
-            if args.track_files:
-                extract_tracked_files(container_name, args.track_files, os.path.join(instance_output_dir, 'files'))
+    # Remove instance directory if it exists
+    if os.path.exists(instance_output_dir):
+        subprocess.run(['rm', '-rf', instance_output_dir], check=True)
+        os.makedirs(instance_output_dir)
 
-            git_commands = f"""
+    with open(ground_truth_file, 'w') as f:
+        json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
+
+    container_name = start_docker_container(instance, args.track_files or [])
+    try:
+        with tempfile.NamedTemporaryFile('w', delete=False) as f:
+            problem_file = f.name
+            json.dump([instance], f)
+
+        cmd = [
+            sys.executable, 'agent/agent.py',
+            '--problem-file', problem_file,
+            '--container-name', container_name,
+            '--threads-dir', os.path.join(instance_output_dir, 'threads'),
+            '--max-iterations', str(args.max_iterations),
+            '--model-name', args.model_name,
+        ]
+        print(f"Running agent for instance {instance_id}...")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        with open(log_file, 'w') as f:
+            f.write(result.stdout)
+            f.write(result.stderr)
+
+        if result.returncode != 0:
+            print(f"Error running agent for instance {instance_id}:\n{result.stderr}")
+            return
+
+        if args.track_files:
+            extract_tracked_files(container_name, args.track_files, os.path.join(instance_output_dir, 'files'))
+
+        git_commands = f"""
 mkdir -p /workspace/data &&
 git config --global user.email "agent@example.com" && 
 git config --global user.name "Agent" && 
@@ -259,36 +322,34 @@ git commit -m "Agent modifications" || true &&
 pwd && 
 git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.diff
 """
-            result_git = execute_command_in_container(container_name, git_commands)
+        result_git = execute_command_in_container(container_name, git_commands)
 
-            subprocess.run(['docker', 'cp', f'{container_name}:/workspace/data/git_patch.diff', os.path.join(instance_output_dir, f'{instance_id}.diff')], check=True)
+        subprocess.run(['docker', 'cp', f'{container_name}:/workspace/data/git_patch.diff', os.path.join(instance_output_dir, f'{instance_id}.diff')], check=True)
 
-            # Read the git_patch.diff
-            git_patch_file = os.path.join(instance_output_dir, f'{instance_id}.diff')
-            if os.path.exists(git_patch_file):
-                with open(git_patch_file, 'r') as f:
-                    git_patch = f.read()
-            else:
-                git_patch = ""
+        # Read the git_patch.diff
+        git_patch_file = os.path.join(instance_output_dir, f'{instance_id}.diff')
+        if os.path.exists(git_patch_file):
+            with open(git_patch_file, 'r') as f:
+                git_patch = f.read()
+        else:
+            git_patch = ""
 
-            # Prepare the output data
-            output = {
-                "instance_id": instance_id,
-                "model_patch": git_patch,
-                "model_name_or_path": "YourModelName"  # Replace with actual model name if available
-            }
+        # Prepare the output data
+        output = {
+            "instance_id": instance_id,
+            "model_patch": git_patch,
+            "model_name_or_path": "YourModelName"  # Replace with actual model name if available
+        }
 
-            # Save the output to JSON file
-            with open(output_file, 'w') as f:
-                json.dump(output, f, indent=2)
+        # Save the output to JSON file
+        with open(output_file, 'w') as f:
+            json.dump(output, f, indent=2)
 
-            print(f"Saved output for instance {instance_id} to {output_file}")
-            print(f"Saved logs for instance {instance_id} to {log_file}")
+        print(f"Saved output for instance {instance_id} to {output_file}")
+        print(f"Saved logs for instance {instance_id} to {log_file}")
 
-        finally:
-            stop_docker_container(container_name)
-
-    convert_outputs_to_jsonl(args.output_dir)
+    finally:
+        stop_docker_container(container_name)
 
 if __name__ == "__main__":
     main()

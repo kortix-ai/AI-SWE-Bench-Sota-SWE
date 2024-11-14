@@ -82,10 +82,6 @@ class ThreadManager:
             
             logging.info(f"Message added to thread {thread_id}: {message_data}")
             
-            # Process tool calls if present in the message
-            if 'tool_calls' in message_data:
-                await self.process_tool_calls_from_message(thread_id, message_data, execute_tools_async=True)
-                
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise e

@@ -87,7 +87,9 @@ def run_evaluation(
 
     if num_workers > 1:
         with Pool(num_workers) as pool:
-            results = pool.imap_unordered(process_instance_func, [row for _, row in dataset.iterrows()])
+            # Convert instances to (instance, output_dir) tuples
+            instance_tuples = [(row, output_dir) for _, row in dataset.iterrows()]
+            results = pool.imap_unordered(process_instance_wrapper, instance_tuples)
             for result in results:
                 update_progress(result)
     else:
@@ -358,19 +360,21 @@ def main():
     # Prepare dataset
     instances = prepare_dataset(df_predictions, output_file)
 
-    def process_instance_wrapper(instance):
-        return process_instance(instance, args.output_dir)
-
-    # Run evaluation
+    # Move process_instance_wrapper outside of main() to make it pickleable
     run_evaluation(
         dataset=instances,
         output_file=output_file,
         output_dir=args.output_dir,
         num_workers=args.num_workers,
-        process_instance_func=process_instance_wrapper,
+        process_instance_func=lambda instance: process_instance(instance, args.output_dir),
     )
 
     print("\nEvaluation completed.")
+
+# Move process_instance_wrapper outside main() as a standalone function
+def process_instance_wrapper(instance_and_output_dir):
+    instance, output_dir = instance_and_output_dir
+    return process_instance(instance, output_dir)
 
 if __name__ == '__main__':
     main()
