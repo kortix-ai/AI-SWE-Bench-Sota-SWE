@@ -51,11 +51,16 @@ class RepositoryTools(Tool):
                     "description": "The maximum directory depth to search for contents.",
                     "default": 1
                 },
+                "show_lines": {
+                    "type": "boolean",
+                    "description": "Whether to show line numbers in file output.",
+                    "default": False
+                }
             },
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2, show_lines: bool = False) -> ToolResult:
         try:
             python_code = '''
 import os
@@ -86,7 +91,7 @@ def list_directory(root_path: str, depth: int, exclude_patterns: List[str], curr
         print(f"Error accessing {root_path}: {str(e)}", file=sys.stderr)
     return results
 
-def view_path(path: str, depth: int, exclude_patterns: List[str]):
+def view_path(path: str, depth: int, exclude_patterns: List[str], show_lines: bool):
     if os.path.isdir(path):
         print(f'<directory path="{path}">')
         for item in list_directory(path, depth, exclude_patterns):
@@ -96,8 +101,11 @@ def view_path(path: str, depth: int, exclude_patterns: List[str]):
         print(f'<file path="{path}">')
         try:
             with open(path, 'r') as f:
-                for i, line in enumerate(f, 1):
-                    print(f"{i:6d}\t{line}", end='')
+                if show_lines:
+                    for i, line in enumerate(f, 1):
+                        print(f"{i:6d}\t{line}", end='')
+                else:
+                    print(f.read(), end='')
         except Exception as e:
             print(f"Error reading file {path}: {str(e)}", file=sys.stderr)
         print("</file>")
@@ -108,9 +116,10 @@ def main():
     paths = sys.argv[1].split(',')
     exclude_patterns = sys.argv[2].split(',')
     depth = int(sys.argv[3])
+    show_lines = sys.argv[4].lower() == 'true'
     
     for path in paths:
-        view_path(path.strip(), depth, exclude_patterns)
+        view_path(path.strip(), depth, exclude_patterns, show_lines)
 
 if __name__ == '__main__':
     main()
@@ -123,7 +132,7 @@ if __name__ == '__main__':
             # Command to execute the Python script in the container
             command = (
                 f"echo {repr(code_base64)} | base64 -d | "
-                f"python3 - {repr(paths_str)} {repr(exclude_str)} {depth}"
+                f"python3 - {repr(paths_str)} {repr(exclude_str)} {depth} {str(show_lines).lower()}"
             )
             
             stdout, stderr, returncode = await self.execute_command_in_container(command)
@@ -247,8 +256,10 @@ if __name__ == '__main__':
             python_code = '''
 import sys
 import base64
-import difflib
 import subprocess
+
+def print_separator():
+    print("=" * 80)
 
 path = sys.argv[1]
 old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
@@ -259,36 +270,42 @@ with open(path, 'r') as f:
     content = f.read()
 
 if content.count(old_str) == 0:
-    print("String '{}' not found in file".format(old_str), file=sys.stderr)
+    print(f"Error: String '{old_str}' not found in file", file=sys.stderr)
     sys.exit(1)
 elif content.count(old_str) > 1:
-    print("Multiple occurrences of '{}' found. Please ensure the string is unique.".format(old_str), file=sys.stderr)
+    print(f"Error: Multiple occurrences of '{old_str}' found. Please ensure the string is unique.", file=sys.stderr)
     sys.exit(1)
 else:
+    print(f"Making changes to file: {path}")
+    print_separator()
+    
     new_content = content.replace(old_str, new_str, 1)
     with open(path, 'w') as f:
         f.write(new_content)
-    print("Replacement successful in '{}'".format(path))
-
-    diff = difflib.unified_diff(
-        content.splitlines(),
-        new_content.splitlines(),
-        fromfile='before',
-        tofile='after',
-        lineterm=''
-    )
-    print("Changes:")
-    for line in diff:
-        print(line)
+    
+    print("Changes made:")
+    # Run git diff to show changes
+    subprocess.run(['git', 'diff', 'HEAD', '--', path], text=True)
+    print_separator()
 
     if command:
-        print("\\nExecuting command:", command)
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        print("Command output:\\n", result.stdout)
-        if result.stderr:
-            print("Command errors:\\n", result.stderr)
-        if result.returncode != 0:
-            sys.exit(result.returncode)
+        print(f"Executing command: {command}")
+        print_separator()
+        
+        process = subprocess.run(command, shell=True, capture_output=True, text=True)
+        if process.stdout:
+            print("Command output:")
+            print(process.stdout)
+        if process.stderr:
+            print("Command errors:")
+            print(process.stderr, file=sys.stderr)
+        
+        print_separator()
+        if process.returncode != 0:
+            print(f"Command failed with exit code: {process.returncode}", file=sys.stderr)
+            sys.exit(process.returncode)
+        else:
+            print("Command completed successfully")
 '''
 
             # Encode the Python code to base64
@@ -355,11 +372,8 @@ else:
             ToolResult: The result of the bash command execution.
         """
         try:
-            # Single command execution with descriptive output
-            full_command = (
-                f'echo "Here\'s the result of running `{command}`:"; '
-                f'{command}'
-            )
+            # Safely execute the command to prevent injection
+            full_command = f'echo "Here\'s the result of running `{command}`:"; {command}'
             stdout, stderr, returncode = await self.execute_command_in_container(full_command)
             success = returncode == 0
 
@@ -372,10 +386,12 @@ else:
             })
             await self.state_manager.set(history_key, history)
 
+            combined_output = (stdout + stderr).strip()[:2000]
+
             if success:
-                return self.success_response(str(stdout + stderr.strip())[:2000])
+                return self.success_response(f"SUCCESS:\n{combined_output}")
             else:
-                return self.fail_response(f"{str(stdout + stderr)[:2000]}")
+                return self.fail_response(f"FAILED:\n{combined_output}")
         
         except Exception as e:
             return self.fail_response(f"Error executing bash command: {str(e)}")

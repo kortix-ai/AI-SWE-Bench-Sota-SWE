@@ -11,7 +11,8 @@ shared_knowledge_schema = """
 The shared_knowledge is a JSON object with the following schema:
 {
     'files_to_edit': [],
-    'context_files': [],
+    'related_files': [],
+    'related_folders': [],
     'detail_issue_analyze': "",
     'path_to_reproduce_error.py': "",
     'path_to_edge_cases.py': "",
@@ -63,7 +64,7 @@ class TaskManager:
             elif task['name'] == 'Analysis and Implementation':
                 shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
 
-                await self.thread_manager.add_message(thread_id,{
+                await self.thread_manager.add_message(thread_id, {
                     "role": task['user_prompt']['role'],
                     "content": task['user_prompt']['content'].format(
                         problem_statement=problem_statement,
@@ -71,20 +72,25 @@ class TaskManager:
                     )
                 })
 
-                paths = shared_knowledge.get('selected_related_folders', []) + \
-                        shared_knowledge.get('related_files', []) + \
-                        shared_knowledge.get('context_files', []) 
+                paths = shared_knowledge.get('files_to_edit', []) + \
+                        shared_knowledge.get('related_files', [])
 
-                await self.thread_manager.run_tool_as_message(
-                    thread_id,
-                    'view',
-                    {'paths': paths},
-                    role='user'
-                )
+                await self.thread_manager.add_message_and_run_tool(thread_id, {
+                    "role": "assistant",
+                    "content": "<thoughts> First, let's check the files you've explored so far.<thoughts>",
+                    "tool_calls": [{
+                        "id": str(uuid.uuid4()),
+                        "type": "function",
+                        "function": {
+                            "name": "view",
+                            "arguments": json.dumps({"paths": paths})
+                        }
+                    }]
+                })
             else:
                 shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
 
-                await self.thread_manager.add_message(thread_id,{
+                await self.thread_manager.add_message(thread_id, {
                     "role": task['user_prompt']['role'],
                     "content": task['user_prompt']['content'].format(
                         problem_statement=problem_statement,
@@ -92,9 +98,8 @@ class TaskManager:
                     )
                 })
 
-                paths = shared_knowledge.get('selected_related_folders', []) + \
-                        shared_knowledge.get('related_files', []) + \
-                        shared_knowledge.get('context_files', []) 
+                paths = shared_knowledge.get('files_to_edit', []) 
+                        # shared_knowledge.get('only_important_context_files', [])
 
                 await self.thread_manager.run_tool_as_message(
                     thread_id,
@@ -102,8 +107,6 @@ class TaskManager:
                     {'paths': paths},
                     role='user'
                 )
-
-
 
             allowed_tools = task.get('allowed_tools', []) + common_allowed_tools
 
@@ -162,15 +165,15 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(SubmitWithSummaryTool, state_file=state_file)
 
     tasks = [
-            {
-                'name': 'Exploration',
-                'system_prompt': {
-                    "role": "system",
-                    "content": "You are a helpful assistant specialized in exploring code repositories and preparing tests. Your discoveries will help  developer to implement the necessary changes."
-                },
-                'user_prompt': {
-                    "role": "user",
-                    "content": """
+        {
+            'name': 'Exploration',
+            'system_prompt': {
+                "role": "system",
+                "content": "You are a helpful assistant specialized in exploring code repositories and preparing tests. Your discoveries will help the developer to implement the necessary changes."
+            },
+            'user_prompt': {
+                "role": "user",
+                "content": """
 <uploaded_files>
 /testbed/
 </uploaded_files>
@@ -179,11 +182,11 @@ I've uploaded a python code repository in the directory /testbed. Consider the f
 {problem_statement}
 </pr_description>
 
-Can you help me explore the repository to understand its structure and identify relevant files that allow an assitant to fix the issue with all the context needed?
+Can you help me explore the repository to understand its structure and identify relevant files that allow an assistant to fix the issue with all the context needed?
 
 Follow these steps to resolve the issue:
 1. Explore the repository in /testbed to familiarize yourself with its structure.
-2. View files to have a complete understanding of the codebase. 
+2. View files to have a complete understanding of the codebase.
 3. Analyze the problem, and identify relevant files and folders.
 4. If you've identified, do not stop but continue to explore more files that the fix might impact.
 5. Create a script to reproduce the error and execute it with `python <filename.py>` to confirm the error.
@@ -191,49 +194,51 @@ Follow these steps to resolve the issue:
 7. Submit and record useful information to the shared knowledge.
 
 When you are confident that your exploration has enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
-<shared_knowledge_shema>
+<shared_knowledge_schema>
 {shared_knowledge_schema}
 </shared_knowledge_schema>
 
-Note that you do not have to fix the issue in this task, focus on gather efficiently information and context.
-View a lot of files SIMULTANOUSLY to get a better understanding of the codebase.
+Note that you do not have to fix the issue in this task, focus on gathering efficiently information and context.
+View all the of files SIMULTANEOUSLY to get a better understanding of the codebase.
+In important folder, check all the files.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
-                },
-                'max_iterations': max_iterations,
-                'allowed_tools': ['submit_with_summary', 'create_and_run']
             },
-            {
-                'name': 'Analysis and Implementation',
-                'system_prompt': {
-                    "role": "system",
-                    "content": "You are a skilled assistant proficient in analyzing code, implementing fix to solve PR while updating other related files to maintain the functionalities of the python open source repository."
-                },
-                'user_prompt': {
-                    "role": "user",
-                    "content": """
-Consider the shared knowledge collected during exploration and the PR description:
-<shared_knowledge>
-{shared_knowledge}
-</shared_knowledge>
+            'max_iterations': max_iterations,
+            'allowed_tools': ['submit_with_summary', 'create_and_run']
+        },
+        {
+            'name': 'Analysis and Implementation',
+            'system_prompt': {
+                "role": "system",
+                "content": "You are a skilled assistant proficient in analyzing code and implementing fixes to solve PRs while updating other related files to maintain the functionalities of the Python open-source repository."
+            },
+            'user_prompt': {
+                "role": "user",
+                "content": """
+Consider the PR description:
 
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
-I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+Can you implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met. Focus on making changes to non-test files in the current directory to ensure the <pr_description> is satisfied.
 
-Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+Directly make the necessary changes to the source code to resolve the issue described.
+Before using any edit tool :
+1. List all files that you will edit.
+2. Make an update snippet for each file, using (... existing code ...) to omit irrelevant parts.
 
-Follow these steps:
-1. Run the reproduce_erorr script and test commands listed, to confirm the error.
-2. Edit the sourcecode of the repo to resolve the issue
-3. Rerun your reproduce script and confirm that the error is fixed!
-4. Think about edgecases and make sure your fix handles them as well 
+Reproduce error and edge cases scripts are provided in the shared knowledge. Run test and fix until the requirements are met.
 
-You're working autonomously from now on. Your thinking should be thorough, and so it's fine if it's very long.
+Here is what we know so far, if you want to see other files, feel free to use the view tool:
+<shared_knowledge>
+{shared_knowledge}
+</shared_knowledge>
+
+You are working autonomously from now on. Your thinking should be thorough, so it's fine if it's very long.
+Thinking in <thoughts> tags, followed by <actions> tags for the actions you will take.
 """
                 },
                 'max_iterations': 30,

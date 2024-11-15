@@ -427,6 +427,25 @@ class ThreadManager:
                 logging.info("No tool calls found in the last assistant message.")
         else:
             logging.info("No assistant messages found in the thread.")
+
+    async def add_message_and_run_tool(self, thread_id: str, message_data: Dict[str, Any]) -> None:
+        """
+        Add a message to the thread and execute its tool calls immediately.
+        
+        Args:
+            thread_id: The ID of the thread
+            message_data: The message data containing tool calls to execute
+        """
+        # Add the message first
+        await self.add_message(thread_id, message_data)
+        
+        # Execute tool calls if present
+        if 'tool_calls' in message_data:
+            available_functions = self.get_available_functions()
+            tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
+            
+            for result in tool_results:
+                await self.add_message(thread_id, result)
     
     async def process_tool_calls_from_message(self, thread_id: str, message_data: Dict[str, Any], execute_tools_async: bool = True):
         tool_calls = message_data.get('tool_calls', [])
