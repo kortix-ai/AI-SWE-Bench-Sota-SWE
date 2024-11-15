@@ -439,55 +439,26 @@ class ThreadManager:
             for result in tool_results:
                 await self.add_message(thread_id, result)
 
-if __name__ == "__main__":
-    import asyncio
-    from tools.files_tool import FilesTool
-
-    async def main():
-        manager = ThreadManager()
-
-        manager.add_tool(FilesTool, ['create_file', 'read_file'])
-
-        thread_id = await manager.create_thread()
-
-        await manager.add_message(thread_id, {"role": "user", "content": "Please create a file with a random name with the content 'Hello, world!'"})
-
-        system_message = {"role": "system", "content": "You are a helpful assistant that can create, read, update, and delete files."}
-        model_name = "gpt-4o"
+    async def add_to_history_only(self, thread_id: str, message_data: Dict[str, Any]):
+        """
+        Add a message only to thread history without including it in the active messages.
+        """
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
         
-        # Test with tools
-        response_with_tools = await manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name=model_name,
-            temperature=0.7,
-            max_tokens=150,
-            tool_choice="auto",
-            additional_message=None,            
-            execute_tools_async=True,
-            execute_model_tool_calls=True,
-            use_tools=True
-        )
+        try:
+            if os.path.exists(thread_path):
+                with open(thread_path, 'r') as f:
+                    history_data = json.load(f)
+            else:
+                history_data = {"messages": []}
 
-        print("Response with tools:", response_with_tools)
+            history_data["messages"].append(message_data)
 
-        # Test without tools
-        response_without_tools = await manager.run_thread(
-            thread_id=thread_id,
-            model_name=model_name,
-            temperature=0.7,
-            max_tokens=150,
-            additional_message={"role": "user", "content": "What's the capital of France?"},
-            use_tools=False
-        )
+            with open(thread_path, 'w') as f:
+                json.dump(history_data, f, indent=2)
 
-        print("Response without tools:", response_without_tools)
+            logging.info(f"Message added to history for thread {thread_id}: {message_data}")
 
-        # List messages in the thread
-        messages = await manager.list_messages(thread_id)
-        print("\nMessages in the thread:")
-        for msg in messages:
-            print(f"{msg['role'].capitalize()}: {msg['content']}")
-    
-    # Run the async main function
-    asyncio.run(main())
+        except Exception as e:
+            logging.error(f"Failed to add message to history for thread {thread_id}: {e}")
+            raise e

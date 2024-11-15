@@ -27,7 +27,7 @@ class TaskManager:
         for task in self.tasks:
             print(f"Starting task: {task['name']}")
 
-            await self.thread_manager.add_message(thread_id, {
+            await self.thread_manager.add_to_history_only(thread_id, {
                 "role": "task-switch",
                 "content": f"--- Task switched to {task['name']} ---"
             })
