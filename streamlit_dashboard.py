@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Dict
 import re
 
-
 def load_evaluation_result(run_dir: str) -> Dict:
     """Load evaluation result JSON for a given run."""
     for file in os.listdir(run_dir):

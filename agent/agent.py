@@ -6,6 +6,7 @@ from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import uuid
+from prompts import system_prompt, continue_instructions  # Fixed import
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
@@ -15,13 +16,21 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     state_manager = StateManager(store_file=state_file)
 
     async def after_iteration():
-
-        message_content = """ 
-        Run test to check if the bug is fixed, if all tests pass, output "FINISHED" without any other text.
-        """
+        # Get all previous messages
+        messages = await thread_manager.list_messages(thread_id)
+        
+        # Replace any previous continue instructions with shortened tag
+        for i, message in enumerate(messages):
+            if message['role'] == 'user' and message['content'] == continue_instructions:
+                await thread_manager.modify_message(thread_id, i, {
+                    "role": "user",
+                    "content": "<continue_instructions></continue_instructions>"
+                })
+        
+        # Add new continue instructions message
         await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": message_content
+            "role": "user",
+            "content": continue_instructions
         })
 
     with open(problem_file, 'r') as f:
@@ -32,56 +41,40 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
 
+    # Format the system prompt with the problem statement
+    system = system_prompt.format(problem_statement=problem_statement)
+    
     system_message = {
-            "role": "system",
-            "content": f"""You are an expert at analyzing and fixing issues python open source repositories. Your purpose is to understand PR requirements and implement precise, minimal changes that solve the described issues while making minial changes. Follow suggested TASKS to resolve the issue."""
+        "role": "system",
+        "content": system
     }
 
     await thread_manager.add_message(thread_id, {
-            "role": "user",
-            "content": f"""
+        "role": "user",
+        "content": f"""
 <uploaded_files>
 /testbed/
 </uploaded_files>
-I've uploaded a python code repository in the directory /testbed. Consider the following PR description :
-<pr_description>
+I've uploaded a python code repository in the directory /testbed. Consider the following issue description :
+<issue_description>
 {problem_statement}
-</pr_description>
+</issue_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
-I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+IMPLEMENT the necessary changes to the repository so that the requirements specified in the <issue_description> are met.
 
-Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+Your task is to make the minimal changes to non-tests files in the current directory to ensure the <issue_description> is satisfied & the issue is resolved.
 
 Follow these steps to resolve the issue:
 1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
-2. View files to have a whole understanding of the codebase. When you found the issue, do not stop exploring but continue to check related files to grasp the codebase context fully before any implementation.
-3. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error.
+2. View files to have a whole understanding of the codebase. When you found the issue, do not stop exploring but continue to check related files to grasp the codebase context fully before any implementation. 
+3. Create a script to reproduce the error and execute it with `python <filename.py>`, to confirm the error. 
 4. Edit the sourcecode of the repo to resolve the issue
 5. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
-6. Run all the existing test to confirm the code base is still working as expected.
-7. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
+6. Run a pull request test script, think about edgecases and make sure your fix handles them as well.
 
-You're working autonomously from now on. Your thinking should be thorough, step by step, .
-            """,
+You're working autonomously from now on. Your thinking should be thorough, step by step.
+"""
     })
-    
-    # await thread_manager.add_message(thread_id, {
-    #     "role": "assistant",
-    #     "content": "",
-    #     "tool_calls": [
-    #         {
-    #             "id": str(uuid.uuid4()),
-    #             "type": "function",
-    #             "function": {
-    #                 "name": "view",
-    #                 "arguments": json.dumps({"paths": ["/testbed"], "depth": 1})
-    #             }
-    #         },
-    #     ]
-    # })
-
-    await thread_manager.process_last_assistant_message(thread_id)
 
     iteration = 0
 
@@ -102,7 +95,7 @@ You're working autonomously from now on. Your thinking should be thorough, step 
             system_message=system_message,
             model_name=model_name_full,
             temperature=0.0,
-            max_tokens=4096,
+            max_tokens=8192,
             tool_choice="auto",
             execute_tools_async=True,
             use_tools=True,
@@ -110,6 +103,8 @@ You're working autonomously from now on. Your thinking should be thorough, step 
         )
 
         print(f"Iteration {iteration}/{max_iterations}:")
+
+        # await after_iteration()
 
         # Check for 'submit' tool call in the assistant's last message
         assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
@@ -120,8 +115,6 @@ You're working autonomously from now on. Your thinking should be thorough, step 
                 if tool_call['function']['name'] == 'submit':
                     print("Task completed via submit tool, stopping...")
                     return
-
-
 
     print(f"Agent completed after {iteration} iterations")
 

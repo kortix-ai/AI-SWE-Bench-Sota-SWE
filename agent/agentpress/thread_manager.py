@@ -392,6 +392,38 @@ class ThreadManager:
             for result in tool_results:
                 await self.add_message(thread_id, result)
 
+    async def modify_message(self, thread_id: str, message_index: int, new_message: Dict[str, Any]):
+        """
+        Modify a specific message in the thread by its index.
+        
+        Args:
+            thread_id (str): The ID of the thread
+            message_index (int): The index of the message to modify
+            new_message (Dict[str, Any]): The new message data
+        """
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            messages = thread_data["messages"]
+            if 0 <= message_index < len(messages):
+                messages[message_index] = new_message
+                thread_data["messages"] = messages
+                
+                with open(thread_path, 'w') as f:
+                    json.dump(thread_data, f, indent=2)
+                
+                logging.info(f"Modified message at index {message_index} in thread {thread_id}")
+            else:
+                logging.error(f"Message index {message_index} out of range for thread {thread_id}")
+                
+        except Exception as e:
+            logging.error(f"Failed to modify message in thread {thread_id}: {e}")
+            raise e
+        
+
 if __name__ == "__main__":
     import asyncio
     from tools.files_tool import FilesTool

@@ -180,6 +180,17 @@ if __name__ == '__main__':
             ToolResult: The result of the create and run operation.
         """
         try:
+            # Check if file already exists
+            check_command = f'test -f "{path}"'
+            _, _, returncode = await self.execute_command_in_container(check_command)
+            if returncode == 0:
+                return self.fail_response(f"File {path} already exists. Cannot overwrite existing files.")
+
+            # Create directory if it doesn't exist
+            directory = os.path.dirname(path)
+            mkdir_command = f'mkdir -p "{directory}"'
+            await self.execute_command_in_container(mkdir_command)
+
             # Create file with proper escaping and content
             escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
             create_command = f'printf "%s" "{escaped_content}" > "{path}"'

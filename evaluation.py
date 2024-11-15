@@ -325,14 +325,26 @@ def main():
         default=1,
         help='Number of parallel workers',
     )
+    parser.add_argument(
+        '--single-instance',
+        action='store_true',
+        help='Evaluate a single instance (skips dataset preparation)',
+    )
     args = parser.parse_args()
 
-    # Load predictions
-    with open(args.input_file, 'r') as f:
-        predictions = [json.loads(line) for line in f]
-
-    # Convert predictions to DataFrame
-    df_predictions = pd.DataFrame(predictions)
+    # Modify prepare_dataset function to handle single instance
+    if args.single_instance:
+        # For single instance evaluation, skip the usual dataset preparation
+        with open(args.input_file, 'r') as f:
+            instance_data = json.load(f)
+            if not isinstance(instance_data, list):
+                instance_data = [instance_data]
+            df_predictions = pd.DataFrame(instance_data)
+    else:
+        # Original dataset preparation logic
+        with open(args.input_file, 'r') as f:
+            predictions = [json.loads(line) for line in f]
+        df_predictions = pd.DataFrame(predictions)
 
     # Ensure required columns are present
     required_columns = {'instance_id', 'model_patch'}
