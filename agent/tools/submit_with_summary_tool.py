@@ -25,6 +25,6 @@ class SubmitWithSummaryTool(Tool):
         try:
             shared_knowledge_data = json.loads(shared_knowledge)
             await self.state_manager.set('shared_knowledge', shared_knowledge_data)
-            return self.success_response("Task completed successfully. Shared knowledge saved.")
+            return self.success_response("Task completed successfully. Shared knowledge saved.\n" + json.dumps(shared_knowledge_data, indent=2))
         except json.JSONDecodeError as e:
             return self.fail_response(f"Invalid JSON format for shared_knowledge: {str(e)}")

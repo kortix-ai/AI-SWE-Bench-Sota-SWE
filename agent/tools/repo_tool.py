@@ -146,10 +146,10 @@ if __name__ == '__main__':
             })
             await self.state_manager.set(history_key, history)
 
-            if success and not stderr.strip():
-                return self.success_response(str(stdout.strip()))
+            if success:
+                return self.success_response(stdout + stderr)
             else:
-                return self.fail_response(f"View command failed: {stderr.strip()}")
+                return self.fail_response(f"View command output: {stdout + stderr}")
         
         except Exception as e:
             return self.fail_response(f"Error executing view command: {str(e)}")
@@ -185,7 +185,6 @@ if __name__ == '__main__':
             create_command = f'printf "%s" "{escaped_content}" > "{path}"'
             
             if command:
-                # If command is provided, chain it after file creation
                 full_command = f'{create_command} && {command}'
             else:
                 full_command = f'{create_command} && echo "File created at {path}"'
@@ -203,11 +202,10 @@ if __name__ == '__main__':
             })
             await self.state_manager.set("create_and_run_history", history)
 
-            if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"File created at {path}"
-                return self.success_response(message)
+            if success:
+                return self.success_response(stdout + stderr)
             else:
-                return self.fail_response(f"Create and run command failed: {stderr.strip()}")
+                return self.fail_response(f"Create and run command output: {stdout + stderr}")
         
         except Exception as e:
             return self.fail_response(f"Error in create and run: {str(e)}")
@@ -311,11 +309,10 @@ else:
             })
             await self.state_manager.set("replace_string_history", history)
 
-            if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"Replaced '{old_str}' with '{new_str}' in {path}"
-                return self.success_response(message)            
+            if success:
+                return self.success_response(stdout + stderr)
             else:
-                return self.fail_response(f"Replace string command failed: {stderr.strip()}")
+                return self.fail_response(f"Replace string command output: {stdout + stderr}")
 
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
@@ -359,10 +356,10 @@ else:
             })
             await self.state_manager.set(history_key, history)
 
-            if success and not stderr.strip():
-                return self.success_response(str(stdout.strip())[:2000])
+            if success:
+                return self.success_response(str(stdout + stderr.strip())[:2000])
             else:
-                return self.fail_response(f"Bash command failed: {stderr.strip()}")
+                return self.fail_response(f"Here's the output of bash command: {str(stdout + stderr)[:2000]}")
         
         except Exception as e:
             return self.fail_response(f"Error executing bash command: {str(e)}")

@@ -175,9 +175,9 @@ def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
     content = "<full-log>\n<agent-reason-execution-process>\n"
     content += get_chat_content(run_data)
     content += "</agent-reason-execution-process>\n\n"
-    content += "<eval_logs>\n"
-    content += get_eval_log_content(eval_log_content)
-    content += "</eval_logs>\n\n"
+    # content += "<eval_logs>\n"
+    # content += get_eval_log_content(eval_log_content)
+    # content += "</eval_logs>\n\n"
     
     ground_truth = load_ground_truth(run_dir)
     if ground_truth:

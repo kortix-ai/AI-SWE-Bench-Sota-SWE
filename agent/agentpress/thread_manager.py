@@ -495,7 +495,7 @@ class ThreadManager:
         # Create a message with the specified role
         message_data = {
             "role": role,
-            "content": f"<context name='{tool_name}' arguments='{params}'> " + "<OBSERVATION>" + content + "</OBSERVATION> </context>"
+            "content": f"Check the current context below, feel free to explore new files:\n<context>" + "<OBSERVATION>" + content + "</OBSERVATION></context>"
         }
 
         # Add the message to the thread

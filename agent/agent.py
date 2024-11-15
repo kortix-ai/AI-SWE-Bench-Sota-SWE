@@ -10,17 +10,17 @@ import uuid
 shared_knowledge_schema = """
 The shared_knowledge is a JSON object with the following schema:
 {
-    'folders_to_explore': [],
+    'selected_related_folders': [],
     'related_files': [],
     'context_files': [],
     'analysis_codebase': "",
     'pr_analysis': "",
-    'reproduce_error_path': "",
-    'command_existing_tests': [],
+    'path_to_reproduce_error.py': "",
+    'run_existing_tests': "normally starts with pytest",
 }
 """
 
-common_allowed_tools = ['view', 'submit_with_summary']
+common_allowed_tools = ['view']
 
 class TaskManager:
     def __init__(self, thread_manager, state_manager, tasks, shared_knowledge):
@@ -62,6 +62,27 @@ class TaskManager:
                     {'paths': ['/testbed'], 'depth': 1},
                     role='user'
                 )
+            elif task['name'] == 'Analysis and Implementation':
+                shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
+
+                await self.thread_manager.add_message(thread_id,{
+                    "role": task['user_prompt']['role'],
+                    "content": task['user_prompt']['content'].format(
+                        problem_statement=problem_statement,
+                        shared_knowledge=json.dumps(shared_knowledge)
+                    )
+                })
+
+                paths = shared_knowledge.get('selected_related_folders', []) + \
+                        shared_knowledge.get('related_files', []) + \
+                        shared_knowledge.get('context_files', []) 
+
+                await self.thread_manager.run_tool_as_message(
+                    thread_id,
+                    'view',
+                    {'paths': paths},
+                    role='user'
+                )
             else:
                 shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
 
@@ -73,7 +94,7 @@ class TaskManager:
                     )
                 })
 
-                paths = shared_knowledge.get('folders_to_explore', []) + \
+                paths = shared_knowledge.get('selected_related_folders', []) + \
                         shared_knowledge.get('related_files', []) + \
                         shared_knowledge.get('context_files', []) 
 
@@ -83,6 +104,7 @@ class TaskManager:
                     {'paths': paths},
                     role='user'
                 )
+
 
 
             allowed_tools = task.get('allowed_tools', []) + common_allowed_tools
@@ -95,7 +117,7 @@ class TaskManager:
                 if iteration == task['max_iterations']:
                     await self.thread_manager.add_message(thread_id, {
                         "role": "user",
-                        "content": "Time's up! Please submit the task."
+                        "content": "Time's up! Please use submit tool to submit the task."
                     })
 
                 response = await self.thread_manager.run_thread(
@@ -146,7 +168,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 'name': 'Exploration',
                 'system_prompt': {
                     "role": "system",
-                    "content": "You are a helpful assistant specialized in exploring code repositories. Your discoveries will help another assistant to implement the necessary changes."
+                    "content": "You are a helpful assistant specialized in exploring code repositories and preparing tests. Your discoveries will help  developer to implement the necessary changes."
                 },
                 'user_prompt': {
                     "role": "user",
@@ -166,82 +188,91 @@ Follow these steps to resolve the issue:
 2. View files to have a complete understanding of the codebase. 
 3. Analyze the problem, and identify relevant files and folders.
 4. If you've identified, do not stop but continue to explore more files that the fix might impact.
-5. Submit and record useful information to the shared knowledge.
+5. Create a script to reproduce the error and execute it with `python <filename.py>` to confirm the error.
+6. Submit and record useful information to the shared knowledge.
 
 When you are confident that your exploration has enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
 <shared_knowledge_shema>
 {shared_knowledge_schema}
 </shared_knowledge_schema>
 
+Note that you do not have to fix the issue in this task, focus on gather efficiently information and context.
 View a lot of files SIMULTANOUSLY to get a better understanding of the codebase.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
                 },
                 'max_iterations': max_iterations,
+                'allowed_tools': ['submit_with_summary', 'create_and_run']
             },
             {
                 'name': 'Analysis and Implementation',
                 'system_prompt': {
                     "role": "system",
-                    "content": "You are a skilled assistant proficient in analyzing code and implementing solutions."
+                    "content": "You are a skilled assistant proficient in analyzing code, implementing fix to solve PR while updating other related files to maintain the functionalities of the python open source repository."
                 },
                 'user_prompt': {
                     "role": "user",
                     "content": """
 Consider the shared knowledge collected during exploration and the PR description:
-<pr_description>
-{problem_statement}
-</pr_description>
-
-Your task is to implement the necessary changes to satisfy the requirements.
-
-Follow these steps:
-1. Analyze the shared knowledge and requirements
-2. Implement the minimal required changes
-
 <shared_knowledge>
 {shared_knowledge}
 </shared_knowledge>
-
-Note that it's possible to make multiple tool calls simultaneously.
-
-You're working autonomously from now on. Your thinking should be thorough, step by step.
-"""
-                },
-                'max_iterations': max_iterations,
-            },
-            {
-                'name': 'Test and Verification',
-                'system_prompt': {
-                    "role": "system",
-                    "content": "You are an expert assistant in testing and verifying code changes."
-                },
-                'user_prompt': {
-                    "role": "user",
-                    "content": """
-Verify the implemented changes against the requirements:
 
 <pr_description>
 {problem_statement}
 </pr_description>
 
+Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
+I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+
+Your task is to make the minimal changes to non-tests files in the current directory to ensure the <pr_description> is satisfied.
+
 Follow these steps:
-1. Run tests to verify the changes
-2. Ensure all existing functionality works
-3. Submit if all tests pass
+1. Run the reproduce_erorr script and test commands listed, to confirm the error.
+2. Analyze the shared knowledge and requirements
+3. Implement the minimal required changes to fix the issue, make sure related functionalities of other files are maintained.
 
-<shared_knowledge>
-{shared_knowledge}
-</shared_knowledge>
-
-Note that it's possible to make multiple tool calls simultaneously.
+You can use multiple tools in a single time, e.g use the 'replace_string' tool to make changes then bash tool to run the file right after.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
                 },
                 'max_iterations': max_iterations,
+                'allowed_tools': ['bash', 'replace_string', 'submit_with_summary']
             },
+#             {
+#                 'name': 'Test and Verification',
+#                 'system_prompt': {
+#                     "role": "system",
+#                     "content": "You are an expert assistant in testing and verifying code changes."
+#                 },
+#                 'user_prompt': {
+#                     "role": "user",
+#                     "content": """
+# Verify the implemented changes against the requirements:
+
+# <shared_knowledge>
+# {shared_knowledge}
+# </shared_knowledge>
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Follow these steps:
+# 1. Run tests to verify the changes
+# 2. Ensure all existing functionality works
+# 3. Submit if all tests pass
+
+# Note that it's possible to make multiple tool calls simultaneously.
+
+# You're working autonomously from now on. Your thinking should be thorough, step by step.
+# """
+#                 },
+#                 'max_iterations': max_iterations,
+#                 'allowed_tools': ['bash', 'replace_string', 'submit']
+#             },
         ]
 
     task_manager = TaskManager(thread_manager, state_manager, tasks, None)
