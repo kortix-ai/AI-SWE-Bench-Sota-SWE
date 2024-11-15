@@ -423,6 +423,35 @@ class ThreadManager:
             logging.error(f"Failed to modify message in thread {thread_id}: {e}")
             raise e
         
+    async def remove_message(self, thread_id: str, message_index: int):
+        """
+        Remove a specific message from the thread by its index.
+        
+        Args:
+            thread_id (str): The ID of the thread
+            message_index (int): The index of the message to remove
+        """
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            messages = thread_data["messages"]
+            if 0 <= message_index < len(messages):
+                messages.pop(message_index)
+                thread_data["messages"] = messages
+                
+                with open(thread_path, 'w') as f:
+                    json.dump(thread_data, f, indent=2)
+                
+                logging.info(f"Removed message at index {message_index} from thread {thread_id}")
+            else:
+                logging.error(f"Message index {message_index} out of range for thread {thread_id}")
+                
+        except Exception as e:
+            logging.error(f"Failed to remove message from thread {thread_id}: {e}")
+            raise e
 
 if __name__ == "__main__":
     import asyncio
