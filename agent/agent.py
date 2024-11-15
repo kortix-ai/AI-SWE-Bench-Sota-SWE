@@ -46,28 +46,44 @@ class TaskManager:
                 "role": "task-switch",
                 "content": f"--- Task switched to {task['name']} ---"
             })
-            self.thread_manager.reset_thread_messages(thread_id)
+            await self.thread_manager.reset_thread_messages(thread_id)
 
-            # Retrieve shared_knowledge if not the first task
-            if task['name'] != 'Exploration':
-                shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
-                formatted_prompt = {
-                    "role": task['user_prompt']['role'],
-                    "content": task['user_prompt']['content'].format(
-                        problem_statement=problem_statement,
-                        shared_knowledge=json.dumps(shared_knowledge)
-                    )
-                }
-            else:
-                formatted_prompt = {
+            if task['name'] == 'Exploration':
+                await self.thread_manager.add_message(thread_id, {
                     "role": task['user_prompt']['role'],
                     "content": task['user_prompt']['content'].format(
                         problem_statement=problem_statement,
                         shared_knowledge_schema=shared_knowledge_schema
                     )
-                }
+                })
+                await self.thread_manager.run_tool_as_message(
+                    thread_id,
+                    'view',
+                    {'paths': ['/testbed'], 'depth': 1},
+                    role='user'
+                )
+            else:
+                shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
 
-            await self.thread_manager.add_message(thread_id, formatted_prompt)
+                await self.thread_manager.add_message(thread_id,{
+                    "role": task['user_prompt']['role'],
+                    "content": task['user_prompt']['content'].format(
+                        problem_statement=problem_statement,
+                        shared_knowledge=json.dumps(shared_knowledge)
+                    )
+                })
+
+                paths = shared_knowledge.get('folders_to_explore', []) + \
+                        shared_knowledge.get('related_files', []) + \
+                        shared_knowledge.get('context_files', []) 
+
+                await self.thread_manager.run_tool_as_message(
+                    thread_id,
+                    'view',
+                    {'paths': paths},
+                    role='user'
+                )
+
 
             allowed_tools = task.get('allowed_tools', []) + common_allowed_tools
 
@@ -75,6 +91,12 @@ class TaskManager:
             task_completed = False
             while iteration < task['max_iterations'] and not task_completed:
                 iteration += 1
+
+                if iteration == task['max_iterations']:
+                    await self.thread_manager.add_message(thread_id, {
+                        "role": "user",
+                        "content": "Time's up! Please submit the task."
+                    })
 
                 response = await self.thread_manager.run_thread(
                     thread_id=thread_id,
@@ -98,7 +120,6 @@ class TaskManager:
                             print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
                             task_completed = True
                             break
-
 
         print("Agent completed all tasks.")
 
@@ -179,7 +200,6 @@ Follow these steps:
 1. Analyze the shared knowledge and requirements
 2. Implement the minimal required changes
 
-
 <shared_knowledge>
 {shared_knowledge}
 </shared_knowledge>
@@ -201,9 +221,7 @@ You're working autonomously from now on. Your thinking should be thorough, step 
                     "role": "user",
                     "content": """
 Verify the implemented changes against the requirements:
-<shared_knowledge>
-{shared_knowledge}
-</shared_knowledge>
+
 <pr_description>
 {problem_statement}
 </pr_description>
@@ -213,7 +231,9 @@ Follow these steps:
 2. Ensure all existing functionality works
 3. Submit if all tests pass
 
-You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
+<shared_knowledge>
+{shared_knowledge}
+</shared_knowledge>
 
 Note that it's possible to make multiple tool calls simultaneously.
 

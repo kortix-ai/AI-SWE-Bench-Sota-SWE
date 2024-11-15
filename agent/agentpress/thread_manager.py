@@ -462,3 +462,42 @@ class ThreadManager:
         except Exception as e:
             logging.error(f"Failed to add message to history for thread {thread_id}: {e}")
             raise e
+
+    async def run_tool_as_message(self, thread_id: str, tool_name: str, params: Dict[str, Any], role: str = 'user') -> Optional[Dict[str, Any]]:
+        """
+        Runs a tool and adds its output as a message with the specified role.
+
+        Args:
+            thread_id (str): The thread identifier.
+            tool_name (str): The name of the tool to run.
+            params (Dict[str, Any]): Parameters to pass to the tool.
+            role (str): The role for the message ('user' or 'assistant').
+
+        Returns:
+            Optional[Dict[str, Any]]: The tool result if successful, None otherwise.
+        """
+        tool_info = self.tool_registry.get_tool(tool_name)
+        if not tool_info:
+            logging.error(f"Tool '{tool_name}' not found.")
+            return None
+
+        function_to_call = getattr(tool_info['instance'], tool_name, None)
+        if not function_to_call:
+            logging.error(f"Function '{tool_name}' not found in tool '{tool_name}'.")
+            return None
+
+        try:
+            function_response = await function_to_call(**params)
+            content = function_response.output if function_response.success else f"Error: {function_response.output}"
+        except Exception as e:
+            content = f"Error in {tool_name}: {str(e)}"
+
+        # Create a message with the specified role
+        message_data = {
+            "role": role,
+            "content": f"<context name='{tool_name}' arguments='{params}'> " + "<OBSERVATION>" + content + "</OBSERVATION> </context>"
+        }
+
+        # Add the message to the thread
+        await self.add_message(thread_id, message_data)
+        return function_response
