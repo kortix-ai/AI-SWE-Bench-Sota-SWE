@@ -51,7 +51,7 @@ def load_thread_data(run_dir: str) -> List[Dict]:
     thread_data = []
     if os.path.exists(threads_dir):
         for file in sorted(os.listdir(threads_dir)):
-            if file.endswith('.json'):
+            if file.endswith('_history.json'):
                 try:
                     with open(os.path.join(threads_dir, file), 'r') as f:
                         thread_data.append(json.load(f))

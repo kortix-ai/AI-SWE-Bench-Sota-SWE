@@ -46,6 +46,7 @@ class TaskManager:
                 "role": "task-switch",
                 "content": f"--- Task switched to {task['name']} ---"
             })
+            self.thread_manager.reset_thread_messages(thread_id)
 
             # Retrieve shared_knowledge if not the first task
             if task['name'] != 'Exploration':
@@ -71,7 +72,8 @@ class TaskManager:
             allowed_tools = task.get('allowed_tools', []) + common_allowed_tools
 
             iteration = 0
-            while iteration < task['max_iterations']:
+            task_completed = False
+            while iteration < task['max_iterations'] and not task_completed:
                 iteration += 1
 
                 response = await self.thread_manager.run_thread(
@@ -89,11 +91,12 @@ class TaskManager:
 
                 assistant_messages = await self.thread_manager.list_messages(thread_id, only_latest_assistant=True)
                 if assistant_messages:
-                    last_assistant = assistant_messages[-1]
+                    last_assistant = assistant_messages[0]
                     tool_calls = last_assistant.get('tool_calls', [])
                     for tool_call in tool_calls:
                         if tool_call['function']['name'] in ['submit', 'submit_with_summary']:
                             print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
+                            task_completed = True
                             break
 
 
