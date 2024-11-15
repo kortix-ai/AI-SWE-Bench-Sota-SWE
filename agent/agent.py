@@ -40,11 +40,6 @@ class TaskManager:
             }
             await self.thread_manager.add_message(thread_id, formatted_prompt)
 
-            shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
-            await self.thread_manager.add_message(thread_id, {
-                "role": "user",
-                "content": f"<shared_knowledge>{json.dumps(shared_knowledge)}</shared_knowledge>"
-            })
 
             allowed_tools = task.get('allowed_tools', [])
 
@@ -70,11 +65,10 @@ class TaskManager:
                     last_assistant = assistant_messages[0]
                     tool_calls = last_assistant.get('tool_calls', [])
                     for tool_call in tool_calls:
-                        if tool_call['function']['name'] == 'submit':
+                        if tool_call['function']['name'] in ['submit', 'submit_with_summary']:
                             print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
                             break
 
-                await self.state_manager.set('shared_knowledge', shared_knowledge)
 
         print("Agent completed all tasks.")
 
@@ -91,17 +85,17 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     instance_id = instance_data['instance_id']
 
     from tools.repo_tool import RepositoryTools
-    from tools.shared_knowledge_tool import SharedKnowledgeTool  
+    from tools.submit_with_summary_tool import SubmitWithSummaryTool
 
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
-    thread_manager.add_tool(SharedKnowledgeTool, state_file=state_file)  
+    thread_manager.add_tool(SubmitWithSummaryTool, state_file=state_file)
 
     tasks = [
         {
             'name': 'Exploration',
             'system_prompt': {
                 "role": "system",
-                "content": "You are a helpful assistant specialized in exploring code repositories. You can only use the following tools: 'view', 'add_to_shared_knowledge', 'update_shared_knowledge'."
+                "content": "You are a helpful assistant specialized in exploring code repositories."
             },
             'user_prompt': {
                 "role": "user",
@@ -130,14 +124,14 @@ You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_kno
 
 Note that it's possible to make multiple tool calls simultaneously."""
             },
-            'allowed_tools': ['view', 'add_to_shared_knowledge', 'update_shared_knowledge'], 
+            'allowed_tools': ['view'],
             'max_iterations': max_iterations,
         },
         {
             'name': 'Analysis and Implementation',
             'system_prompt': {
                 "role": "system",
-                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions. You can only use the following tools: 'replace_string', 'create_and_run', 'add_to_shared_knowledge', 'update_shared_knowledge'."
+                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions. You can only use the following tools: 'replace_string', 'create_and_run'."
             },
             'user_prompt': {
                 "role": "user",
@@ -159,14 +153,14 @@ You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_kno
 
 Note that it's possible to make multiple tool calls simultaneously."""
             },
-            'allowed_tools': ['replace_string', 'create_and_run', 'add_to_shared_knowledge', 'update_shared_knowledge'],
+            'allowed_tools': ['replace_string', 'create_and_run'],
             'max_iterations': max_iterations,
         },
         {
             'name': 'Test and Verification',
             'system_prompt': {
                 "role": "system",
-                "content": "You are an expert assistant in testing and verifying code changes. You can only use the following tools: 'bash', 'add_to_shared_knowledge', 'update_shared_knowledge'."
+                "content": "You are an expert assistant in testing and verifying code changes. You can only use the following tools: 'bash', 'submit_with_summary'."
             },
             'user_prompt': {
                 "role": "user",
@@ -188,24 +182,12 @@ Note that it's possible to make multiple tool calls simultaneously.
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
             },
-            'allowed_tools': ['bash', 'add_to_shared_knowledge', 'update_shared_knowledge'],  # Updated line
+            'allowed_tools': ['bash', 'submit_with_summary'],
             'max_iterations': max_iterations,
         },
     ]
 
-    shared_knowledge = {
-        'folders_to_explore': [],
-        'related_files': [],
-        'context_files': [],
-        'analysis_codebase': "",
-        'pr_analysis': "",
-        'reproduce_error_path': "",
-        'command_existing_tests': [],
-    }
-
-    await state_manager.set('shared_knowledge', shared_knowledge)
-
-    task_manager = TaskManager(thread_manager, state_manager, tasks, shared_knowledge)
+    task_manager = TaskManager(thread_manager, state_manager, tasks, None)
     await task_manager.run_tasks(thread_id, model_name, problem_statement)
 
 if __name__ == "__main__":
