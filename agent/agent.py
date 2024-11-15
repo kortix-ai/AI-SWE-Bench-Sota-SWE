@@ -7,6 +7,21 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import uuid
 
+shared_knowledge_schema = """
+The shared_knowledge is a JSON object with the following schema:
+{
+    'folders_to_explore': [],
+    'related_files': [],
+    'context_files': [],
+    'analysis_codebase': "",
+    'pr_analysis': "",
+    'reproduce_error_path': "",
+    'command_existing_tests': [],
+}
+"""
+
+common_allowed_tools = ['view', 'submit_with_summary']
+
 class TaskManager:
     def __init__(self, thread_manager, state_manager, tasks, shared_knowledge):
         self.thread_manager = thread_manager
@@ -32,16 +47,28 @@ class TaskManager:
                 "content": f"--- Task switched to {task['name']} ---"
             })
 
-            formatted_prompt = {
-                "role": task['user_prompt']['role'],
-                "content": task['user_prompt']['content'].format(
-                    problem_statement=problem_statement
-                )
-            }
+            # Retrieve shared_knowledge if not the first task
+            if task['name'] != 'Exploration':
+                shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
+                formatted_prompt = {
+                    "role": task['user_prompt']['role'],
+                    "content": task['user_prompt']['content'].format(
+                        problem_statement=problem_statement,
+                        shared_knowledge=json.dumps(shared_knowledge)
+                    )
+                }
+            else:
+                formatted_prompt = {
+                    "role": task['user_prompt']['role'],
+                    "content": task['user_prompt']['content'].format(
+                        problem_statement=problem_statement,
+                        shared_knowledge_schema=shared_knowledge_schema
+                    )
+                }
+
             await self.thread_manager.add_message(thread_id, formatted_prompt)
 
-
-            allowed_tools = task.get('allowed_tools', [])
+            allowed_tools = task.get('allowed_tools', []) + common_allowed_tools
 
             iteration = 0
             while iteration < task['max_iterations']:
@@ -62,7 +89,7 @@ class TaskManager:
 
                 assistant_messages = await self.thread_manager.list_messages(thread_id, only_latest_assistant=True)
                 if assistant_messages:
-                    last_assistant = assistant_messages[0]
+                    last_assistant = assistant_messages[-1]
                     tool_calls = last_assistant.get('tool_calls', [])
                     for tool_call in tool_calls:
                         if tool_call['function']['name'] in ['submit', 'submit_with_summary']:
@@ -91,15 +118,15 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(SubmitWithSummaryTool, state_file=state_file)
 
     tasks = [
-        {
-            'name': 'Exploration',
-            'system_prompt': {
-                "role": "system",
-                "content": "You are a helpful assistant specialized in exploring code repositories."
-            },
-            'user_prompt': {
-                "role": "user",
-                "content": """
+            {
+                'name': 'Exploration',
+                'system_prompt': {
+                    "role": "system",
+                    "content": "You are a helpful assistant specialized in exploring code repositories. Your discoveries will help another assistant to implement the necessary changes."
+                },
+                'user_prompt': {
+                    "role": "user",
+                    "content": """
 <uploaded_files>
 /testbed/
 </uploaded_files>
@@ -108,34 +135,36 @@ I've uploaded a python code repository in the directory /testbed. Consider the f
 {problem_statement}
 </pr_description>
 
-Can you help me explore the repository to understand its structure and identify relevant files?
-
-Your task is to make the minimal changes to non-test files in the current directory to ensure the <pr_description> is satisfied.
+Can you help me explore the repository to understand its structure and identify relevant files that allow an assitant to fix the issue with all the context needed?
 
 Follow these steps to resolve the issue:
 1. Explore the repository in /testbed to familiarize yourself with its structure.
-2. View files to have a complete understanding of the codebase.
-3. Identify relevant files and folders.
-4. Record useful information to the shared knowledge.
+2. View files to have a complete understanding of the codebase. 
+3. Analyze the problem, and identify relevant files and folders.
+4. If you've identified, do not stop but continue to explore more files that the fix might impact.
+5. Submit and record useful information to the shared knowledge.
+
+When you are confident that your exploration has enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
+<shared_knowledge_shema>
+{shared_knowledge_schema}
+</shared_knowledge_schema>
+
+View a lot of files SIMULTANOUSLY to get a better understanding of the codebase.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
-
-You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
-
-Note that it's possible to make multiple tool calls simultaneously."""
+"""
+                },
+                'max_iterations': max_iterations,
             },
-            'allowed_tools': ['view'],
-            'max_iterations': max_iterations,
-        },
-        {
-            'name': 'Analysis and Implementation',
-            'system_prompt': {
-                "role": "system",
-                "content": "You are a skilled assistant proficient in analyzing code and implementing solutions. You can only use the following tools: 'replace_string', 'create_and_run'."
-            },
-            'user_prompt': {
-                "role": "user",
-                "content": """
+            {
+                'name': 'Analysis and Implementation',
+                'system_prompt': {
+                    "role": "system",
+                    "content": "You are a skilled assistant proficient in analyzing code and implementing solutions."
+                },
+                'user_prompt': {
+                    "role": "user",
+                    "content": """
 Consider the shared knowledge collected during exploration and the PR description:
 <pr_description>
 {problem_statement}
@@ -147,25 +176,31 @@ Follow these steps:
 1. Analyze the shared knowledge and requirements
 2. Implement the minimal required changes
 
+
+<shared_knowledge>
+{shared_knowledge}
+</shared_knowledge>
+
+Note that it's possible to make multiple tool calls simultaneously.
+
 You're working autonomously from now on. Your thinking should be thorough, step by step.
-
-You can use tools to manipulate the shared_knowledge. Use the 'add_to_shared_knowledge' tool to add items, and 'update_shared_knowledge' to update values.
-
-Note that it's possible to make multiple tool calls simultaneously."""
+"""
+                },
+                'max_iterations': max_iterations,
             },
-            'allowed_tools': ['replace_string', 'create_and_run'],
-            'max_iterations': max_iterations,
-        },
-        {
-            'name': 'Test and Verification',
-            'system_prompt': {
-                "role": "system",
-                "content": "You are an expert assistant in testing and verifying code changes. You can only use the following tools: 'bash', 'submit_with_summary'."
-            },
-            'user_prompt': {
-                "role": "user",
-                "content": """
+            {
+                'name': 'Test and Verification',
+                'system_prompt': {
+                    "role": "system",
+                    "content": "You are an expert assistant in testing and verifying code changes."
+                },
+                'user_prompt': {
+                    "role": "user",
+                    "content": """
 Verify the implemented changes against the requirements:
+<shared_knowledge>
+{shared_knowledge}
+</shared_knowledge>
 <pr_description>
 {problem_statement}
 </pr_description>
@@ -181,11 +216,10 @@ Note that it's possible to make multiple tool calls simultaneously.
 
 You're working autonomously from now on. Your thinking should be thorough, step by step.
 """
+                },
+                'max_iterations': max_iterations,
             },
-            'allowed_tools': ['bash', 'submit_with_summary'],
-            'max_iterations': max_iterations,
-        },
-    ]
+        ]
 
     task_manager = TaskManager(thread_manager, state_manager, tasks, None)
     await task_manager.run_tasks(thread_id, model_name, problem_statement)
