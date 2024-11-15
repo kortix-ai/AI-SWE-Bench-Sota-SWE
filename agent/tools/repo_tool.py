@@ -49,7 +49,7 @@ class RepositoryTools(Tool):
                 "depth": {
                     "type": "integer",
                     "description": "The maximum directory depth to search for contents.",
-                    "default": 2
+                    "default": 1
                 },
             },
             "required": ["paths"]
@@ -211,26 +211,28 @@ if __name__ == '__main__':
             return self.fail_response(f"Error in create and run: {str(e)}")
 
     @tool_schema({
-        "name": "replace_string",
-        "description": "Replace a specific string in a file with another string.",
+        "name": "edit_and_run",
+        "description": "Replace a specific string in a file with another string and optionally run a command after.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "The file path where the replacement should occur."},
                 "old_str": {"type": "string", "description": "The string to be replaced."},
                 "new_str": {"type": "string", "description": "The string to replace with."},
+                "command": {"type": "string", "description": "Optional command to run after replacement.", "default": None},
             },
             "required": ["path", "old_str", "new_str"]
         }
     })
-    async def replace_string(self, path: str, old_str: str, new_str: str) -> ToolResult:
+    async def edit_and_run(self, path: str, old_str: str, new_str: str, command: str = None) -> ToolResult:
         """
-        Replaces a specific string in a file with another string.
+        Replaces a specific string in a file with another string and optionally runs a command.
 
         Parameters:
             path (str): The file path where the replacement should occur.
             old_str (str): The string to be replaced.
             new_str (str): The string to replace with.
+            command (str): Optional command to run after replacement.
 
         Returns:
             ToolResult: The result of the replace string operation.
@@ -246,10 +248,12 @@ if __name__ == '__main__':
 import sys
 import base64
 import difflib
+import subprocess
 
 path = sys.argv[1]
 old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
 new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
+command = base64.b64decode(sys.argv[4]).decode('utf-8') if sys.argv[4] != 'None' else None
 
 with open(path, 'r') as f:
     content = f.read()
@@ -276,6 +280,15 @@ else:
     print("Changes:")
     for line in diff:
         print(line)
+
+    if command:
+        print("\\nExecuting command:", command)
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        print("Command output:\\n", result.stdout)
+        if result.stderr:
+            print("Command errors:\\n", result.stderr)
+        if result.returncode != 0:
+            sys.exit(result.returncode)
 '''
 
             # Encode the Python code to base64
@@ -289,25 +302,28 @@ else:
             escaped_path = bash_single_quote(path)
             escaped_old_str_base64 = bash_single_quote(old_str_base64)
             escaped_new_str_base64 = bash_single_quote(new_str_base64)
+            command_base64 = base64.b64encode(str(command).encode('utf-8')).decode('ascii') if command else 'None'
+            escaped_command_base64 = bash_single_quote(command_base64)
 
             # Build the command to execute inside the container
             command = (
                 f"echo {bash_single_quote(code_base64)} | base64 -d | "
-                f"python3 - {escaped_path} {escaped_old_str_base64} {escaped_new_str_base64}"
+                f"python3 - {escaped_path} {escaped_old_str_base64} {escaped_new_str_base64} {escaped_command_base64}"
             )
 
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            history = await self.state_manager.get("replace_string_history") or []
+            history = await self.state_manager.get("edit_and_run_history") or []
             history.append({
                 "path": path,
                 "old_str": old_str,
                 "new_str": new_str,
+                "command": command,
                 "output": stdout + stderr,
                 "success": success,
             })
-            await self.state_manager.set("replace_string_history", history)
+            await self.state_manager.set("edit_and_run_history", history)
 
             if success:
                 return self.success_response(stdout + stderr)
@@ -359,7 +375,7 @@ else:
             if success:
                 return self.success_response(str(stdout + stderr.strip())[:2000])
             else:
-                return self.fail_response(f"Here's the output of bash command: {str(stdout + stderr)[:2000]}")
+                return self.fail_response(f"{str(stdout + stderr)[:2000]}")
         
         except Exception as e:
             return self.fail_response(f"Error executing bash command: {str(e)}")

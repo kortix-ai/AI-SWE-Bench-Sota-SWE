@@ -70,7 +70,7 @@ def load_diff_file(run_dir: str, run_name: str) -> str:
 def load_log_file(run_dir: str, run_name: str) -> str:
     """Load log file content."""
     log_file = os.path.join(run_dir, f"{run_name}.log")
-    if os.path.exists(log_file):
+    if os.path.exists(log_file, 'r'):
         with open(log_file, 'r') as f:
             return f.read()
     return ""
@@ -299,20 +299,30 @@ def main():
         st.metric("Successful Runs", f"🔥 {successful_runs}/{total_runs}")
         st.metric("Total Tests Passed", f"✅ {passed_tests}/{total_tests}")
 
+        # Add a file uploader at the bottom of the sidebar
+        st.markdown("---")
+        uploaded_chat_file = st.file_uploader("Upload a chat file", type="json")
+        if uploaded_chat_file is not None:
+            chat_data = json.load(uploaded_chat_file)
+            st.session_state.uploaded_chat_data = [{"messages": chat_data}]
+            st.success("Chat file uploaded successfully!")
 
-    # Display run details if a run is selected
-    if selected_run:
-        st.header(f"📁 Run Details: {selected_run}")
-        
-        # Create tabs
-        tab_names = ["💬Chat", "📝Code Diff", "💡Ground Truth", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs", "🗄 Combined Logs"]
-        current_tab = st.tabs(tab_names)
-        
-        # Load data based on active tab
-        with current_tab[0]:  # Chat tab
+    # Create tabs outside the selected_run condition
+    tab_names = ["💬Chat", "📝Code Diff", "💡Ground Truth", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs", "🗄 Combined Logs"]
+    current_tab = st.tabs(tab_names)
+
+    # Handle Chat tab regardless of run selection
+    with current_tab[0]:  # Chat tab
+        if selected_run:
             run_data = load_thread_data(run_dir)
             display_run_details(run_data)
-            
+        elif 'uploaded_chat_data' in st.session_state:
+            display_run_details(st.session_state.uploaded_chat_data)
+        else:
+            st.info("No chat data available. Select a run or upload a chat file.")
+
+    # Only show other tabs if run is selected
+    if selected_run:
         with current_tab[1]:  # Diff tab
             diff_content = load_diff_file(run_dir, selected_run)
             if diff_content:
@@ -402,10 +412,10 @@ def main():
             else:
                 st.info("No combined logs available")
     else:
-        # add space here
-        st.markdown("---")
-
-        st.info("👈 Please select a run from the sidebar")
+        # Make other tabs show info message
+        for tab in current_tab[1:]:
+            with tab:
+                st.info("👈 Please select a run from the sidebar to view this information")
 
 if __name__ == "__main__":
     main()

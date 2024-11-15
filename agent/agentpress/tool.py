@@ -63,7 +63,7 @@ class ToolResult:
     output: str
 
     def __str__(self) -> str:
-        return f'<OBSERVATION>{self.output}</OBERSATION>'
+        return f'<OBSERVATION>{self.output}</OBSERVATION>'
 
 class Tool(ABC):
     """

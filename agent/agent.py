@@ -10,13 +10,11 @@ import uuid
 shared_knowledge_schema = """
 The shared_knowledge is a JSON object with the following schema:
 {
-    'selected_related_folders': [],
-    'related_files': [],
+    'files_to_edit': [],
     'context_files': [],
-    'analysis_codebase': "",
-    'pr_analysis': "",
+    'detail_issue_analyze': "",
     'path_to_reproduce_error.py': "",
-    'run_existing_tests': "normally starts with pytest",
+    'path_to_edge_cases.py': "",
 }
 """
 
@@ -189,7 +187,8 @@ Follow these steps to resolve the issue:
 3. Analyze the problem, and identify relevant files and folders.
 4. If you've identified, do not stop but continue to explore more files that the fix might impact.
 5. Create a script to reproduce the error and execute it with `python <filename.py>` to confirm the error.
-6. Submit and record useful information to the shared knowledge.
+6. Analyze more files and create an edge cases script to test the fix.
+7. Submit and record useful information to the shared knowledge.
 
 When you are confident that your exploration has enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
 <shared_knowledge_shema>
@@ -230,16 +229,15 @@ Your task is to make the minimal changes to non-tests files in the current direc
 
 Follow these steps:
 1. Run the reproduce_erorr script and test commands listed, to confirm the error.
-2. Analyze the shared knowledge and requirements
-3. Implement the minimal required changes to fix the issue, make sure related functionalities of other files are maintained.
+2. Edit the sourcecode of the repo to resolve the issue
+3. Rerun your reproduce script and confirm that the error is fixed!
+4. Think about edgecases and make sure your fix handles them as well 
 
-You can use multiple tools in a single time, e.g use the 'replace_string' tool to make changes then bash tool to run the file right after.
-
-You're working autonomously from now on. Your thinking should be thorough, step by step.
+You're working autonomously from now on. Your thinking should be thorough, and so it's fine if it's very long.
 """
                 },
-                'max_iterations': max_iterations,
-                'allowed_tools': ['bash', 'replace_string', 'submit_with_summary']
+                'max_iterations': 30,
+                'allowed_tools': ['bash', 'edit_and_run', 'submit_with_summary']
             },
 #             {
 #                 'name': 'Test and Verification',
@@ -271,7 +269,7 @@ You're working autonomously from now on. Your thinking should be thorough, step 
 # """
 #                 },
 #                 'max_iterations': max_iterations,
-#                 'allowed_tools': ['bash', 'replace_string', 'submit']
+#                 'allowed_tools': ['bash', 'edit_and_run', 'submit']
 #             },
         ]
 
