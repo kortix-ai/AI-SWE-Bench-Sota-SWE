@@ -24,10 +24,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             if message['role'] == 'user' and message['content'] == continue_instructions:
                 await thread_manager.remove_message(thread_id, i)
         
-        # Add new continue instructions message
+        # Add new continue instructions message with current iteration
+        formatted_instructions = continue_instructions.format(current_iteration=iteration)
         await thread_manager.add_message(thread_id, {
             "role": "user",
-            "content": continue_instructions
+            "content": formatted_instructions
         })
 
     with open(problem_file, 'r') as f:
@@ -63,15 +64,48 @@ IMPLEMENT the necessary changes to the repository so that the requirements speci
 
 Your task is to make the minimal changes to non-test files in the current directory to ensure the <issue_description> is satisfied & the issue is resolved.
 
+TOOL USAGE GUIDELINES:
+1. EFFICIENT EXECUTION:
+   - Combine multiple tool calls in single response
+   - Chain related operations together
+   - Examples of efficient patterns:
+
+   a) Making multiple changes:
+      <actions>
+      Tool calls:
+      1. replace_string(file1, old1, new1)
+      2. replace_string(file1, old2, new2)
+      3. create_and_run(test_path, test_content, "python test.py")
+      </actions>
+
+   b) Analyzing multiple files:
+      <actions>
+      Tool calls:
+      1. view(paths=["/path1", "/path2", "/path3"])
+      </actions>
+
+   c) Running multiple tests:
+      <actions>
+      Tool calls:
+      1. create_and_run(test1_path, test1_content, "python test1.py")
+      2. create_and_run(test2_path, test2_content, "python test2.py")
+      </actions>
+
+2. TOOL SELECTION:
+   - Use 'view' for file exploration
+   - Use 'create_and_run' for testing
+   - Use 'replace_string' for code changes
+   - Use 'bash' only when necessary
+
 CRITICAL: Follow these steps and ALWAYS output your analysis using <observations>, <thoughts>, and <actions> tags:
 
 1. EXPLORE AND UNDERSTAND:
-   - First explore the repo to understand its structure
+   - Use 'view' to explore the repo structure
    - Search for and identify ALL relevant test files:
      * Look in /tests/ directories
      * Find test files matching source files you might modify
      * Identify related test suites and helpers
-   - View ALL related files to fully understand the codebase context
+   - View ALL related files to understand the codebase context
    - Take time to understand the complete problem space
    - Think through potential edge cases
    - Consider failure modes
@@ -86,7 +120,7 @@ CRITICAL: Follow these steps and ALWAYS output your analysis using <observations
    - Consider test variations needed
 
 3. CREATE COMPREHENSIVE TESTS:
-   - Develop AT LEAST 3 different reproduction scripts:
+   - Use 'create_and_run' to develop AT LEAST 3 different reproduction scripts:
      * Basic functionality tests
      * Edge case tests
      * Complex scenario tests
@@ -99,7 +133,7 @@ CRITICAL: Follow these steps and ALWAYS output your analysis using <observations
    - Analyze results carefully
 
 4. IMPLEMENT AND VERIFY:
-   - Use replace_string for ALL source code modifications
+   - Use 'replace_string' for ALL source code modifications
    - Run ALL reproduction variations
    - Verify ALL test cases pass
    - Check backward compatibility
@@ -124,6 +158,7 @@ REMEMBER:
 - Never rush to submit
 - Step back and verify
 - Ensure 100% confidence in solution
+- Use the correct tool for each task
 
 You're working autonomously. Think deeply and step by step.
 """

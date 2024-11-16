@@ -348,20 +348,6 @@ git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.d
         print(f"Saved output for instance {instance_id} to {output_file}")
         print(f"Saved logs for instance {instance_id} to {log_file}")
 
-        # Add immediate evaluation if requested
-        if getattr(args, 'immediate_eval', False):
-            print(f"\nRunning immediate evaluation for instance {instance_id}...")
-            eval_cmd = [
-                sys.executable, "evaluation.py",
-                "--input-file", output_file,
-                "--output-dir", args.output_dir,
-                "--dataset", args.dataset,
-                "--split", args.split,
-                "--single-instance",  # New flag to indicate single instance evaluation
-                "--num-workers", "1"  # Force single worker for single instance
-            ]
-            subprocess.run(eval_cmd, check=True)
-
     finally:
         stop_docker_container(container_name)
 
