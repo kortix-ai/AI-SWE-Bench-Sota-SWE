@@ -119,11 +119,14 @@ CRITICAL REQUIREMENTS FOR ALL SCRIPTS:
    - Validate results
    - Report validation status
 
+
 AVAILABLE TOOLS:
+
 1. FILE OPERATIONS:
    - view: View multiple files/directories in a single call
      * ALWAYS batch related files together
-     * Example: view("paths": ["/path/to/file1.py", "/path/to/file2.py", "/path/to/tests"])
+     * Example: view "paths": ["/path/to/file1.py", "/path/to/file2.py", "/path/to/tests"]
+     * DO NOT make separate calls for related files
    - create_file: Create scripts (MUST be followed by bash execution)
      * Example pattern:
        ```
@@ -132,6 +135,18 @@ AVAILABLE TOOLS:
        ```
    - replace_string: Replace specific string in file
    - update_file: Update entire file content (rarely needed)
+
+2. TERMINAL OPERATIONS:
+   - bash: Execute commands and see output in terminal session
+   - DO NOT USE TO CREATE FILES, VIEW FILES OR FILE TREE – USE THE APPROPRIATE TOOL FOR THAT.
+   - MUST be the last tool call before submit
+   - MUST run verification scripts before submission
+
+3. COMPLETION:
+   - submit: Use ONLY after:
+     * ALL verification steps pass
+     * Last tool call was 'bash' running tests
+     * NO pending code changes
 
 IMPORTANT: 
 - All test files have been properly configured - DO NOT modify any test files
