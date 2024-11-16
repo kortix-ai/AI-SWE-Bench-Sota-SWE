@@ -15,20 +15,40 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
 
+    
     async def after_iteration():
         # Get all previous messages
         messages = await thread_manager.list_messages(thread_id)
         
         # Remove any previous continue instructions
         for i, message in enumerate(messages):
-            if message['role'] == 'user' and message['content'] == continue_instructions:
+            if message['role'] == 'user' and continue_instructions in message['content']:
                 await thread_manager.remove_message(thread_id, i)
         
-        # Add new continue instructions message with current iteration
-        formatted_instructions = continue_instructions.format(current_iteration=iteration)
+        workspace = await state_manager.get("workspace")
+        
+        instructions = f"""
+<current_state>
+{workspace}
+</current_state>
+
+Your current workspace state is shown below.
+Your current workspace state (similar to VS Code):
+
+<current_state>
+{workspace}
+</current_state>
+
+This workspace shows your current context:
+- EXPLORER: Shows the repository structure
+- OPEN EDITORS: Files you're currently viewing/editing
+- TERMINAL SESSION: Recent command outputs and their status
+
+{continue_instructions}
+"""
         await thread_manager.add_message(thread_id, {
             "role": "user",
-            "content": formatted_instructions
+            "content": instructions
         })
 
     with open(problem_file, 'r') as f:
@@ -44,23 +64,26 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     
     system_message = {
         "role": "system",
-        "content": system
+        "content": system + continue_instructions
     }
 
     await thread_manager.add_message(thread_id, {
         "role": "user",
         "content": f"""
-<uploaded_files>
+
+YOUR GOAL IS SOLVING THE ISSUE.
+
+The python code repository is uploaded in the directory /testbed. 
+<current_repository>
 /testbed/
-</uploaded_files>
+</current_repository>
 
-The python code repository is uploaded in the directory /testbed. Consider the following issue description:
-
+The issue description:
 <issue_description>
 {problem_statement}
 </issue_description>
 
-IMPLEMENT the necessary changes to the repository so that the requirements specified in the <issue_description> are met.
+IMPLEMENT the necessary changes to the repository so that the requirements specified in the <issue_description> are met and the issue is resolved.
 
 Your task is to make the minimal changes to non-test files in the current directory to ensure the <issue_description> is satisfied & the issue is resolved.
 
@@ -185,7 +208,7 @@ You're working autonomously. Think deeply and step by step.
             temperature=0.0,
             max_tokens=8192,
             tool_choice="auto",
-            execute_tools_async=True,
+            execute_tools_async=False,
             use_tools=True,
             execute_model_tool_calls=True
         )

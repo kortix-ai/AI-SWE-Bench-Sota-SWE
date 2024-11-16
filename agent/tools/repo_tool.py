@@ -4,12 +4,64 @@ from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 import os
 from typing import List
+from datetime import datetime
 
 class RepositoryTools(Tool):
     def __init__(self, container_name: str, state_file: str):
         super().__init__()
         self.state_manager = StateManager(store_file=state_file)
         self.container_name = container_name
+        # Initialize workspace state
+        asyncio.create_task(self._init_workspace_state())
+
+    async def _init_workspace_state(self):
+        """Initialize the workspace state with empty structures."""
+        workspace_state = {
+            "file_tree": {},           # Current directory structure
+            "open_files": {},          # Currently open files and their contents
+            "terminal_session": [],    # Current terminal session output (last N commands)
+        }
+        await self.state_manager.set("workspace", workspace_state)
+
+    async def _update_file_tree(self, path: str):
+        """Update the file tree structure."""
+        workspace = await self.state_manager.get("workspace")
+        parts = path.strip("/").split("/")
+        current = workspace["file_tree"]
+        
+        for i, part in enumerate(parts[:-1]):
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        
+        if os.path.isfile(path):
+            current[parts[-1]] = "file"
+        else:
+            current[parts[-1]] = {}
+
+        await self.state_manager.set("workspace", workspace)
+
+    async def _update_open_file(self, path: str, content: str):
+        """Update or add a file in the open files list."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["open_files"][path] = {
+            "content": content,
+            "last_modified": datetime.now().isoformat()
+        }
+        await self.state_manager.set("workspace", workspace)
+
+    async def _update_terminal(self, command: str, output: str, success: bool):
+        """Update terminal session with new output."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["terminal_session"].append({
+            "command": command,
+            "output": output,
+            "success": success,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep only last 5 commands
+        workspace["terminal_session"] = workspace["terminal_session"][-5:]
+        await self.state_manager.set("workspace", workspace)
 
     async def execute_command_in_container(self, command: str):
         """
@@ -129,24 +181,13 @@ if __name__ == '__main__':
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            results = [{
-                "path": path,
-                "output": stdout.strip(),
-                "error": stderr.strip(),
-                "success": success,
-            } for path in paths]
-
-            # Update history
-            history_key = "view_history"
-            history = await self.state_manager.get(history_key) or []
-            history.append({
-                "paths": paths,
-                "exclude_patterns": exclude_patterns,
-                "results": results,
-            })
-            await self.state_manager.set(history_key, history)
-
             if success and not stderr.strip():
+                # Update workspace state
+                for path in paths:
+                    await self._update_file_tree(path)
+                    if os.path.isfile(path):
+                        await self._update_open_file(path, stdout.strip())
+                
                 return self.success_response(str(stdout.strip()))
             else:
                 return self.fail_response(f"View command failed: {stderr.strip()}")
@@ -155,30 +196,19 @@ if __name__ == '__main__':
             return self.fail_response(f"Error executing view command: {str(e)}")
 
     @tool_schema({
-        "name": "create_and_run",
-        "description": "Create a new file with specified content and optionally run a command after creation.",
+        "name": "create_file",
+        "description": "Create a new file with specified content.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "The file path to create."},
                 "content": {"type": "string", "description": "The content to write to the file."},
-                "command": {"type": "string", "description": "Optional command to run after file creation.", "default": None},
             },
             "required": ["path", "content"]
         }
     })
-    async def create_and_run(self, path: str, content: str, command: str = None) -> ToolResult:
-        """
-        Creates a new file with the specified content and optionally runs a command.
-        
-        Parameters:
-            path (str): The file path to create.
-            content (str): The content to write to the file.
-            command (str): Optional command to run after file creation.
-        
-        Returns:
-            ToolResult: The result of the create and run operation.
-        """
+    async def create_file(self, path: str, content: str) -> ToolResult:
+        """Creates a new file with the specified content."""
         try:
             # Create directory if it doesn't exist
             directory = os.path.dirname(path)
@@ -189,34 +219,106 @@ if __name__ == '__main__':
             escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
             create_command = f'printf "%s" "{escaped_content}" > "{path}"'
             
-            if command:
-                # If command is provided, chain it after file creation
-                full_command = f'{create_command} && {command}'
-            else:
-                full_command = f'{create_command} && echo "File created at {path}"'
-
-            stdout, stderr, returncode = await self.execute_command_in_container(full_command)
+            stdout, stderr, returncode = await self.execute_command_in_container(create_command)
             success = returncode == 0
 
-            history = await self.state_manager.get("create_and_run_history") or []
-            history.append({
-                "path": path,
-                "content": content,
-                "command": command,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set("create_and_run_history", history)
-
             if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"File created at {path}"
-                return self.success_response(message)
+                # Update workspace state
+                await self._update_file_tree(path)
+                await self._update_open_file(path, content)
+                
+                return self.success_response(f"File created at {path}")
             else:
                 error_msg = stderr.strip() if stderr.strip() else "Unknown error occurred"
-                return self.fail_response(f"Create and run command failed: {error_msg}")
+                return self.fail_response(f"Create file failed: {error_msg}")
         
         except Exception as e:
-            return self.fail_response(f"Error in create and run: {str(e)}")
+            return self.fail_response(f"Error creating file: {str(e)}")
+
+    @tool_schema({
+        "name": "read_file",
+        "description": "Read the contents of a file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "The file path to read."},
+            },
+            "required": ["path"]
+        }
+    })
+    async def read_file(self, path: str) -> ToolResult:
+        """Reads and returns the contents of a file."""
+        try:
+            command = f'cat "{path}"'
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            success = returncode == 0
+
+            if success and not stderr.strip():
+                return self.success_response(stdout)
+            else:
+                return self.fail_response(f"Read file failed: {stderr.strip()}")
+
+        except Exception as e:
+            return self.fail_response(f"Error reading file: {str(e)}")
+
+    @tool_schema({
+        "name": "update_file",
+        "description": "Update the entire contents of a file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "The file path to update."},
+                "content": {"type": "string", "description": "The new content for the file."},
+            },
+            "required": ["path", "content"]
+        }
+    })
+    async def update_file(self, path: str, content: str) -> ToolResult:
+        """Updates a file with new content."""
+        try:
+            escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
+            update_command = f'printf "%s" "{escaped_content}" > "{path}"'
+            
+            stdout, stderr, returncode = await self.execute_command_in_container(update_command)
+            success = returncode == 0
+
+            if success and not stderr.strip():
+                return self.success_response(f"File updated at {path}")
+            else:
+                error_msg = stderr.strip() if stderr.strip() else "Unknown error occurred"
+                return self.fail_response(f"Update file failed: {error_msg}")
+        
+        except Exception as e:
+            return self.fail_response(f"Error updating file: {str(e)}")
+
+    @tool_schema({
+        "name": "send_terminal_cmd",
+        "description": "Execute a command in the terminal.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The command to execute."},
+            },
+            "required": ["command"]
+        }
+    })
+    async def send_terminal_cmd(self, command: str) -> ToolResult:
+        """Executes a command in the terminal and returns the result."""
+        try:
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            success = returncode == 0
+
+            # Update workspace state
+            output = stdout.strip() if success else stderr.strip()
+            await self._update_terminal(command, output, success)
+
+            if success:
+                return self.success_response(stdout.strip())
+            else:
+                return self.fail_response(f"Command failed: {stderr.strip()}")
+        
+        except Exception as e:
+            return self.fail_response(f"Error executing command: {str(e)}")
 
     @tool_schema({
         "name": "replace_string",
@@ -307,21 +409,15 @@ else:
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            history = await self.state_manager.get("replace_string_history") or []
-            history.append({
-                "path": path,
-                "old_str": old_str,
-                "new_str": new_str,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set("replace_string_history", history)
-
             if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"Replaced '{old_str}' with '{new_str}' in {path}"
-                return self.success_response(message)            
+                # Update workspace state by reading the new content
+                read_cmd = f'cat "{path}"'
+                new_content, _, _ = await self.execute_command_in_container(read_cmd)
+                await self._update_open_file(path, new_content.strip())
+                
+                return self.success_response(stdout.strip())
             else:
-                return self.fail_response(f"Replace string command failed: {stderr.strip()}")
+                return self.fail_response(f"Replace string failed: {stderr.strip()}")
 
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
@@ -355,15 +451,6 @@ else:
             )
             stdout, stderr, returncode = await self.execute_command_in_container(full_command)
             success = returncode == 0
-
-            history_key = "bash_history"
-            history = await self.state_manager.get(history_key) or []
-            history.append({
-                "command": command,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set(history_key, history)
 
             if success and not stderr.strip():
                 return self.success_response(str(stdout.strip())[:2000])
