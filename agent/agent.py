@@ -74,6 +74,56 @@ The issue description:
 <issue_description>
 {problem_statement}
 </issue_description>
+
+IMPORTANT: All test files have been properly configured - DO NOT modify any test files. Focus only on minimal changes to source files.
+
+REQUIRED WORKFLOW:
+1. EXPLORE AND UNDERSTAND:
+   - Use 'view' to explore the entire repository
+   - Search for and identify ALL relevant test files:
+     * Look in /tests/ directories
+     * Find test files matching source files
+     * Study test patterns and methodologies
+   - Map out all relevant source files
+   - Understand the codebase structure
+   - Document your findings
+
+2. REPRODUCE THE ERROR:
+   - Create a minimal script to reproduce the issue
+   - Run it to verify the exact error
+   - Compare with issue description
+   - Verify against existing test patterns
+   - Document the reproduction
+
+3. ANALYZE DEEPLY:
+   - Study the error cause
+   - Map affected code paths
+   - Consider edge cases
+   - Document assumptions
+   - Plan minimal changes
+
+4. IMPLEMENT CAREFULLY:
+   - Make minimal source changes
+   - Use ONLY replace_string
+   - Follow code style
+   - Document changes
+
+5. VERIFY THOROUGHLY:
+   - Rerun reproduction script
+   - Confirm error is fixed
+   - Test edge cases
+   - Document all results
+
+6. FINAL REVIEW:
+   - Review entire solution
+   - Verify minimal changes
+   - Check all edge cases
+   - Confirm issue resolution
+   - Document verification
+
+NEVER submit until ALL steps are complete and verified!
+
+Start by exploring the repository to understand its structure.
 """
     })
 
@@ -105,7 +155,7 @@ The issue description:
 
         print(f"Iteration {iteration}/{max_iterations}:")
 
-        await after_iteration()
+        # await after_iteration()
 
         # Check for 'submit' tool call in the assistant's last message
         assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
