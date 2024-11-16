@@ -15,7 +15,16 @@ class SubmitWithSummaryTool(Tool):
             "properties": {
                 "shared_knowledge": {
                     "type": "string",
-                    "description": "A summary of your discoveries, in JSON format."
+                    "description": """A summary of your discoveries, in JSON format, with the following schema:
+                    {
+                            'files_to_edit': [],
+                            'related_files': [],
+                            'related_folders': [],
+                            'pr_description_with_details': "",
+                            'files_explanations': "",
+                            'guidance_to_resolve': "",
+                    }
+                    """
                 }
             },
             "required": ["shared_knowledge"]

@@ -1,0 +1,1 @@
+{"instance_id": "django__django-10880", "model_patch": "diff --git a/django/db/models/aggregates.py b/django/db/m...", "model_name_or_path": "YourModelName"}

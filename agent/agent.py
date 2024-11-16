@@ -13,9 +13,9 @@ The shared_knowledge is a JSON object with the following schema:
     'files_to_edit': [],
     'related_files': [],
     'related_folders': [],
-    'detail_issue_analyze': "",
-    'path_to_reproduce_error.py': "",
-    'path_to_edge_cases.py': "",
+    'pr_description_with_details': "",
+    'files_explanations': "",
+    'guidance_to_resolve': "",
 }
 """
 
@@ -48,11 +48,12 @@ class TaskManager:
             await self.thread_manager.reset_thread_messages(thread_id)
 
             if task['name'] == 'Exploration':
+                # Add exploration reminder message
                 await self.thread_manager.add_message(thread_id, {
                     "role": task['user_prompt']['role'],
                     "content": task['user_prompt']['content'].format(
                         problem_statement=problem_statement,
-                        shared_knowledge_schema=shared_knowledge_schema
+                        # shared_knowledge_schema=shared_knowledge_schema
                     )
                 })
                 await self.thread_manager.run_tool_as_message(
@@ -61,6 +62,10 @@ class TaskManager:
                     {'paths': ['/testbed'], 'depth': 1},
                     role='user'
                 )
+                await self.thread_manager.add_message(thread_id, {
+                    "role": "user",
+                    "content": f"You have {task['max_iterations']} iterations available for exploration. Use must take the most of of it to explore as many relevant files as possible. The more thorough your exploration, the better the implementation will be. Keep going until I ask you to stop."
+                })
             elif task['name'] == 'Analysis and Implementation':
                 shared_knowledge = await self.state_manager.get('shared_knowledge') or {}
 
@@ -72,12 +77,11 @@ class TaskManager:
                     )
                 })
 
-                paths = shared_knowledge.get('files_to_edit', []) + \
-                        shared_knowledge.get('related_files', [])
+                paths = shared_knowledge.get('files_to_edit', []) + shared_knowledge.get('related_files', [])
 
                 await self.thread_manager.add_message_and_run_tool(thread_id, {
                     "role": "assistant",
-                    "content": "<thoughts> First, let's check the files you've explored so far.<thoughts>",
+                    "content": "Let's check the files you've explored so far. Then I'll make analysis and thinking about all the edge cases while making minimal changes when implementing.",
                     "tool_calls": [{
                         "id": str(uuid.uuid4()),
                         "type": "function",
@@ -140,9 +144,15 @@ class TaskManager:
                     tool_calls = last_assistant.get('tool_calls', [])
                     for tool_call in tool_calls:
                         if tool_call['function']['name'] in ['submit', 'submit_with_summary']:
-                            print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
-                            task_completed = True
-                            break
+                            if iteration < task['max_iterations']:
+                                await self.thread_manager.add_message(thread_id, {
+                                    "role": "user",
+                                    "content": f"[Iteration {iteration}/{task['max_iterations']}] You've submitted too early. Please continue to explore or implement."
+                                })
+                            else:
+                                print(f"Task '{task['name']}' completed via submit tool, moving to next task...")
+                                task_completed = True
+                                break
 
         print("Agent completed all tasks.")
 
@@ -164,48 +174,98 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
     thread_manager.add_tool(SubmitWithSummaryTool, state_file=state_file)
 
-    tasks = [
-        {
-            'name': 'Exploration',
-            'system_prompt': {
-                "role": "system",
-                "content": "You are a helpful assistant specialized in exploring code repositories and preparing tests. Your discoveries will help the developer to implement the necessary changes."
-            },
-            'user_prompt': {
-                "role": "user",
-                "content": """
-<uploaded_files>
-/testbed/
-</uploaded_files>
-I've uploaded a python code repository in the directory /testbed. Consider the following PR description:
-<pr_description>
+    tasks = [{
+    'name': 'Exploration',
+    'system_prompt': {
+        "role": "system",
+        "content": """
+        You are an AI assistant specialized in exploring code repositories and preparing tests. Your task is to help developers understand and fix issues in a codebase by thoroughly exploring the repository and gathering relevant information.
+        """.strip()
+    },
+    'user_prompt': {
+        "role": "user",
+        "content": """
+
+First, let's examine the problem statement:
+
+<problem_statement>
 {problem_statement}
-</pr_description>
+</problem_statement>
 
-Can you help me explore the repository to understand its structure and identify relevant files that allow an assistant to fix the issue with all the context needed?
+Now, let's explore the repository located at the following path:
 
-Follow these steps to resolve the issue:
-1. Explore the repository in /testbed to familiarize yourself with its structure.
-2. View files to have a complete understanding of the codebase.
-3. Analyze the problem, and identify relevant files and folders.
-4. If you've identified, do not stop but continue to explore more files that the fix might impact.
-5. Create a script to reproduce the error and execute it with `python <filename.py>` to confirm the error.
-6. Analyze more files and create an edge cases script to test the fix.
-7. Submit and record useful information to the shared knowledge.
+<repository_path>
+/testbed/
+</repository_path>
 
-When you are confident that your exploration has enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
-<shared_knowledge_schema>
-{shared_knowledge_schema}
-</shared_knowledge_schema>
+Your goal is to explore this repository thoroughly and gather all necessary context to fix the issue described in the problem statement. Follow these steps:
 
-Note that you do not have to fix the issue in this task, focus on gathering efficiently information and context.
-View all the of files SIMULTANEOUSLY to get a better understanding of the codebase.
-In important folder, check all the files.
+1. Explore the repository structure:
+   - Navigate and view directory related to the problem.
 
-You're working autonomously from now on. Your thinking should be thorough, step by step.
+2. Investigate important folders:
+   - Identify folders that seem relevant to the problem statement.
+
+3. Analyze the problem:
+   - Compare the problem statement to the repository structure.
+   - Identify potential areas where the issue might be located.
+
+4. Identify relevant files and folders:
+   - Based on your analysis, determine which files and folders are most likely to be involved in the fix.
+
+5. Classify files:
+   - For each file you examine, classify it as relevant or irrelevant to the issue.
+   - Provide a brief explanation for your classification.
+
+6. Continue exploration:
+   - Do not stop after identifying a few relevant files.
+   - Consider potential side effects or related areas that might be impacted by the fix.
+
+As you gather useful information, record it using the following shared knowledge schema:
+
+Important: Do not submit your findings prematurely. Ensure that you have conducted a thorough exploration of the repository before concluding your task. Your exploration should cover:
+
+- All potentially relevant files and folders
+- Possible side effects of the proposed fix
+- Any dependencies or related components that might be affected
+
+Only when you are confident that you have gathered comprehensive information and context should you use the 'submit_with_summary' tool.
+
+Remember, your task is to gather information and context, not to fix the issue directly. Provide as much relevant detail as possible to assist the developer in implementing the necessary changes.
+
+You are working autonomously from now on, you must to you at least one tool in the end of your response. IMPORTANT : Make sure to use view MULTIPLE FILES a time to make use of the tool efficiently.
 """
-            },
-            'max_iterations': max_iterations,
+        
+#         """
+# <uploaded_files>
+# /testbed/
+# </uploaded_files>
+# I've uploaded a Python code repository in the directory /testbed. Consider the following PR description:
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Can you help me explore the repository to understand its structure and identify relevant files that will allow an assistant to fix the issue with all the necessary context?
+
+# Follow these steps to resolve the issue:
+# 1. <simultaneous_actions>Explore the repository in /testbed to familiarize yourself with its structure by viewing all files and directories at once.</simultaneous_actions>
+# 2. In important folders, check all the files thoroughly.
+# 3. Use <thoughts> tags to document your internal reasoning and insights as you explore.
+# 4. Analyze the problem and identify all relevant files and folders.
+# 5. After reading a file, classify it as relevant or irrelevant to the issue.
+# 6. Do not stop after identifying some files; continue to explore more files that the fix might impact.
+# 7. Submit and record useful information to the shared knowledge.
+
+# When you are confident that your exploration has gathered enough information and related files to solve the PR, submit the task using the 'submit_with_summary' tool. Follow the format below:
+# <shared_knowledge_schema>
+# {shared_knowledge_schema}
+# </shared_knowledge_schema>
+
+# Note that you do not have to fix the issue in this task; focus on efficiently gathering information and context.
+# You're working autonomously from now on. Your thinking should be thorough and step-by-step.
+# """
+    },
+            'max_iterations': 15,
             'allowed_tools': ['submit_with_summary', 'create_and_run']
         },
         {
@@ -225,12 +285,11 @@ Consider the PR description:
 
 Can you implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met. Focus on making changes to non-test files in the current directory to ensure the <pr_description> is satisfied.
 
-Directly make the necessary changes to the source code to resolve the issue described.
-Before using any edit tool :
-1. List all files that you will edit.
-2. Make an update snippet for each file, using (... existing code ...) to omit irrelevant parts.
-
-Reproduce error and edge cases scripts are provided in the shared knowledge. Run test and fix until the requirements are met.
+Follow these steps to resolve the issue:
+1. Create a script to reproduce_error.py and execute it to confirm the error.
+2. Edit the sourcecode of the repo to resolve the issue
+3. Rerun your reproduce script and related existing tests scripts to confirm that the error is fixed and the code base is maintaining it functionalities !
+4. Think about edge cases and handle them as well.
 
 Here is what we know so far, if you want to see other files, feel free to use the view tool:
 <shared_knowledge>
@@ -238,11 +297,15 @@ Here is what we know so far, if you want to see other files, feel free to use th
 </shared_knowledge>
 
 You are working autonomously from now on. Your thinking should be thorough, so it's fine if it's very long.
-Thinking in <thoughts> tags, followed by <actions> tags for the actions you will take.
 """
                 },
-                'max_iterations': 30,
-                'allowed_tools': ['bash', 'edit_and_run', 'submit_with_summary']
+                'max_iterations': 20,
+                'allowed_tools': ['bash', 
+                                  'edit_and_run', 
+                                #   'create_and_run', 
+                                #   'submit_with_summary'
+                                'submit'
+                                  ]
             },
 #             {
 #                 'name': 'Test and Verification',

@@ -54,13 +54,13 @@ class RepositoryTools(Tool):
                 "show_lines": {
                     "type": "boolean",
                     "description": "Whether to show line numbers in file output.",
-                    "default": False
+                    "default": True
                 }
             },
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2, show_lines: bool = False) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2, show_lines: bool = True) -> ToolResult:
         try:
             python_code = '''
 import os
@@ -270,7 +270,7 @@ with open(path, 'r') as f:
     content = f.read()
 
 if content.count(old_str) == 0:
-    print(f"Error: String '{old_str}' not found in file", file=sys.stderr)
+    print(f"Error: String '{old_str}' not found in file, please check the indentation.", file=sys.stderr)
     sys.exit(1)
 elif content.count(old_str) > 1:
     print(f"Error: Multiple occurrences of '{old_str}' found. Please ensure the string is unique.", file=sys.stderr)
@@ -283,16 +283,19 @@ else:
     with open(path, 'w') as f:
         f.write(new_content)
     
+    # Add the file to git to enable diff
+    subprocess.run(['git', 'add', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
     print("Changes made:")
     # Run git diff to show changes
-    subprocess.run(['git', 'diff', 'HEAD', '--', path], text=True)
+    subprocess.run(['git', 'diff', '--cached', '--', path], text=True)
     print_separator()
 
     if command:
         print(f"Executing command: {command}")
         print_separator()
         
-        process = subprocess.run(command, shell=True, capture_output=True, text=True)
+        process = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if process.stdout:
             print("Command output:")
             print(process.stdout)

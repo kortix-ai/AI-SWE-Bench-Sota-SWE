@@ -51,12 +51,14 @@ def prepare_dataset(dataset: pd.DataFrame, output_file: str, eval_n_limit: int =
         if not should_overwrite_results(output_file):
             print("Exiting without overwriting existing results.")
             sys.exit(0)
-            
-        with open(output_file, 'r') as f:
-            for line in f:
-                data = json.loads(line)
-                finished_ids.add(str(data[id_column]))
-        print(f'Output file {output_file} already exists. Loaded {len(finished_ids)} finished instances.')
+        # After should_overwrite_results, file will be deleted if user chose to overwrite
+        # So we only read from it if it still exists
+        if os.path.exists(output_file):  # Check again in case file was deleted
+            with open(output_file, 'r') as f:
+                for line in f:
+                    data = json.loads(line)
+                    finished_ids.add(str(data[id_column]))
+            print(f'Output file {output_file} already exists. Loaded {len(finished_ids)} finished instances.')
 
     new_dataset = [
         instance
