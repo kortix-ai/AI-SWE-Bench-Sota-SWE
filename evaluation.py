@@ -31,11 +31,27 @@ def execute_command_in_container(container_name, command, timeout=None):
         print(f"Command timed out after {timeout} seconds: {command}")
         raise e
 
+def should_overwrite_results(output_file: str) -> bool:
+    """Ask user if they want to overwrite existing results."""
+    if os.path.exists(output_file):
+        response = input(f"\nEvaluation results already exist at {output_file}. Overwrite? (y/n): ").lower()
+        while response not in ['y', 'n']:
+            response = input("Please enter 'y' or 'n': ").lower()
+        if response == 'y':
+            os.remove(output_file)
+        return response == 'y'
+    return True
+
 def prepare_dataset(dataset: pd.DataFrame, output_file: str, eval_n_limit: int = None):
     id_column = 'instance_id'
     print(f'Writing evaluation output to {output_file}')
     finished_ids: set[str] = set()
+    
     if os.path.exists(output_file):
+        if not should_overwrite_results(output_file):
+            print("Exiting without overwriting existing results.")
+            sys.exit(0)
+            
         with open(output_file, 'r') as f:
             for line in f:
                 data = json.loads(line)
