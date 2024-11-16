@@ -344,21 +344,28 @@ def main():
     # Create a mapping of instance_id to dataset instance
     instance_map = {instance['instance_id']: instance for instance in dataset}
     
-    # Match predictions with dataset instances
-    df_predictions['instance'] = df_predictions['instance_id'].map(instance_map)
+    # Match predictions with dataset instances and handle nested instance data
+    def get_instance(row):
+        # First check if instance is already in the correct format
+        if isinstance(row.get('instance'), dict) and 'instance_id' in row['instance']:
+            return row['instance']
+        # Otherwise look up in dataset
+        return instance_map.get(row['instance_id'])
     
-    # Filter out rows where no matching instance was found
-    valid_predictions = df_predictions['instance'].notna()
-    if not valid_predictions.all():
-        missing_ids = df_predictions.loc[~valid_predictions, 'instance_id'].tolist()
+    df_predictions['instance'] = df_predictions.apply(get_instance, axis=1)
+    
+    # Verify we have valid instances
+    invalid_predictions = df_predictions['instance'].isna()
+    if invalid_predictions.any():
+        missing_ids = df_predictions.loc[invalid_predictions, 'instance_id'].tolist()
         print(f"Warning: Could not find dataset instances for the following IDs: {missing_ids}")
-        df_predictions = df_predictions[valid_predictions].copy()
-    
-    if len(df_predictions) == 0:
-        print("Error: No valid predictions found that match the dataset instances")
-        return
+        raise ValueError("Some predictions could not be matched to dataset instances")
 
     df_predictions['test_spec'] = df_predictions['instance'].apply(make_test_spec)
+
+    # Filter out any instances not found in the dataset
+    df_predictions = df_predictions[df_predictions['instance'].notnull()]
+    print(f"Evaluating {len(df_predictions)} instances.")
 
     # Prepare dataset for evaluation
     output_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
