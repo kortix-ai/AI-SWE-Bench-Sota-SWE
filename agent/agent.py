@@ -15,7 +15,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
 
-    
     async def after_iteration():
         # Get all previous messages
         messages = await thread_manager.list_messages(thread_id)
@@ -27,23 +26,17 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         
         workspace = await state_manager.get("workspace")
         
+#         Your current workspace state (similar to VS Code):
+# <current_state>
+# {workspace}
+# </current_state>
+
+# This workspace shows your current context:
+# - EXPLORER: Shows the repository structure
+# - OPEN EDITORS: Files you're currently viewing/editing
+# - TERMINAL SESSION: Recent command inputs and their outputs
+
         instructions = f"""
-<current_state>
-{workspace}
-</current_state>
-
-Your current workspace state is shown below.
-Your current workspace state (similar to VS Code):
-
-<current_state>
-{workspace}
-</current_state>
-
-This workspace shows your current context:
-- EXPLORER: Shows the repository structure
-- OPEN EDITORS: Files you're currently viewing/editing
-- TERMINAL SESSION: Recent command outputs and their status
-
 {continue_instructions}
 """
         await thread_manager.add_message(thread_id, {

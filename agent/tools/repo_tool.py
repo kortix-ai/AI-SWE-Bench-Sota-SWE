@@ -23,22 +23,38 @@ class RepositoryTools(Tool):
         }
         await self.state_manager.set("workspace", workspace_state)
 
-    async def _update_file_tree(self, path: str):
-        """Update the file tree structure."""
-        workspace = await self.state_manager.get("workspace")
-        parts = path.strip("/").split("/")
-        current = workspace["file_tree"]
+    async def _parse_directory_listing(self, output: str) -> dict:
+        """Parse directory listing output into a tree structure."""
+        file_tree = {}
         
-        for i, part in enumerate(parts[:-1]):
-            if part not in current:
-                current[part] = {}
-            current = current[part]
+        for line in output.strip().split('\n'):
+            if line.startswith('<directory') or line.startswith('</directory'):
+                continue
+                
+            # Clean and normalize path
+            path = line.strip()
+            if path.startswith('/testbed/'):
+                path = path[9:]  # Remove /testbed/ prefix
+            if not path:
+                continue
+                
+            # Build tree structure
+            parts = path.split('/')
+            current = file_tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    current[part] = "file"
+                else:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
         
-        if os.path.isfile(path):
-            current[parts[-1]] = "file"
-        else:
-            current[parts[-1]] = {}
+        return file_tree
 
+    async def _update_file_tree(self, file_tree: dict):
+        """Update the file tree in workspace state."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["file_tree"] = file_tree
         await self.state_manager.set("workspace", workspace)
 
     async def _update_open_file(self, path: str, content: str):
@@ -86,6 +102,23 @@ class RepositoryTools(Tool):
         )
         stdout, stderr = await process.communicate()
         return stdout.decode(), stderr.decode(), process.returncode
+
+    async def _extract_file_content(self, output: str) -> str:
+        """Extract file content from view output."""
+        content_lines = []
+        in_file_content = False
+        
+        for line in output.strip().split('\n'):
+            if line.startswith('<file'):
+                in_file_content = True
+                continue
+            elif line.startswith('</file'):
+                in_file_content = False
+                continue
+            if in_file_content and '\t' in line:
+                content_lines.append(line.split('\t', 1)[1])
+        
+        return '\n'.join(content_lines)
 
     @tool_schema({
         "name": "view",
@@ -182,11 +215,16 @@ if __name__ == '__main__':
             success = returncode == 0
 
             if success and not stderr.strip():
-                # Update workspace state
                 for path in paths:
-                    await self._update_file_tree(path)
-                    if os.path.isfile(path):
-                        await self._update_open_file(path, stdout.strip())
+                    if os.path.isdir(path):
+                        # Update file tree from directory listing
+                        file_tree = await self._parse_directory_listing(stdout)
+                        await self._update_file_tree(file_tree)
+                    else:
+                        # For files, extract content and add to open_files
+                        content = await self._extract_file_content(stdout)
+                        if content:
+                            await self._update_open_file(path, content)
                 
                 return self.success_response(str(stdout.strip()))
             else:
@@ -401,8 +439,10 @@ else:
             success = returncode == 0
 
             if success and not stderr.strip():
+                await self._update_terminal(command, stdout.strip(), True)
                 return self.success_response(str(stdout.strip())[:2000])
             else:
+                await self._update_terminal(command, stderr.strip(), False)
                 return self.fail_response(f"Bash command failed: {stderr.strip()}")
         
         except Exception as e:

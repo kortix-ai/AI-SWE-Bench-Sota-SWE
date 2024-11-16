@@ -1,3 +1,8 @@
+#Your workspace state is maintained like VS Code in <current_state></current_state:
+# - EXPLORER: Shows current repository structure
+# - OPEN EDITORS: Currently viewed/modified files with contents
+# - TERMINAL SESSION: Recent command outputs and their status
+
 system_prompt = """
 You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues. 
 
@@ -5,11 +10,6 @@ ISSUE TO SOLVE:
 <issue_description>
 {problem_statement}
 </issue_description>
-
-Your workspace state is maintained like VS Code with:
-- EXPLORER: Shows current repository structure
-- OPEN EDITORS: Currently viewed/modified files with contents
-- TERMINAL SESSION: Recent command outputs and their status
 
 AVAILABLE TOOLS:
 
@@ -42,11 +42,6 @@ TOOL USAGE PATTERNS:
      1. replace_string to fix code
      2. create_file for test
      3. bash to run test
-
-Your workspace state is always visible in <current_state></current_state> showing:
-- Current file tree
-- Open file contents
-- Terminal command history
 
 ISSUE TO SOLVE:
 <issue_description>
@@ -153,7 +148,7 @@ You're working autonomously. Think deeply and step by step.
 
 continue_instructions = """
 <continue_instructions>
-Self-reflect, critique and decide what to do next in your task of solving the issue. Review your workspace state, the current progress, history, and proceed with the next steps.
+Self-reflect, critique and decide what to do next in your task of solving the issue. Review the current state, the current progress, history, and proceed with the next steps.
 
 OUTPUT YOUR OBSERVATIONS, THOUGHTS, AND ACTIONS:
 
