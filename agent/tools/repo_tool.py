@@ -235,29 +235,6 @@ if __name__ == '__main__':
         except Exception as e:
             return self.fail_response(f"Error creating file: {str(e)}")
 
-    @tool_schema({
-        "name": "read_file",
-        "description": "Read the contents of a file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The file path to read."},
-            },
-            "required": ["path"]
-        }
-    })
-    async def read_file(self, path: str) -> ToolResult:
-        """Reads and returns the contents of a file."""
-        try:
-            command = f'cat "{path}"'
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            success = returncode == 0
-
-            if success and not stderr.strip():
-                return self.success_response(stdout)
-            else:
-                return self.fail_response(f"Read file failed: {stderr.strip()}")
-
         except Exception as e:
             return self.fail_response(f"Error reading file: {str(e)}")
 
@@ -290,35 +267,6 @@ if __name__ == '__main__':
         
         except Exception as e:
             return self.fail_response(f"Error updating file: {str(e)}")
-
-    @tool_schema({
-        "name": "send_terminal_cmd",
-        "description": "Execute a command in the terminal.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "The command to execute."},
-            },
-            "required": ["command"]
-        }
-    })
-    async def send_terminal_cmd(self, command: str) -> ToolResult:
-        """Executes a command in the terminal and returns the result."""
-        try:
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            success = returncode == 0
-
-            # Update workspace state
-            output = stdout.strip() if success else stderr.strip()
-            await self._update_terminal(command, output, success)
-
-            if success:
-                return self.success_response(stdout.strip())
-            else:
-                return self.fail_response(f"Command failed: {stderr.strip()}")
-        
-        except Exception as e:
-            return self.fail_response(f"Error executing command: {str(e)}")
 
     @tool_schema({
         "name": "replace_string",

@@ -2,7 +2,7 @@
 
 # Lite:  300 testcases => --range 1 300
 
-python swe_runner.py --range 202 204 --dataset-type lite --num-workers 3 --max-iterations 35 --run-eval --model-name "sonnet" #--no-archive
+python swe_runner.py --range 203 205 --dataset-type lite --num-workers 3 --max-iterations 35 --run-eval --model-name "sonnet" #--no-archive
 
 
 # Verified:  500 testcases

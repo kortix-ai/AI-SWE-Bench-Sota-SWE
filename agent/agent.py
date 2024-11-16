@@ -68,9 +68,8 @@ This workspace shows your current context:
     }
 
     await thread_manager.add_message(thread_id, {
-        "role": "user",
+        "role": "user", 
         "content": f"""
-
 YOUR GOAL IS SOLVING THE ISSUE.
 
 The python code repository is uploaded in the directory /testbed. 
@@ -82,108 +81,6 @@ The issue description:
 <issue_description>
 {problem_statement}
 </issue_description>
-
-IMPLEMENT the necessary changes to the repository so that the requirements specified in the <issue_description> are met and the issue is resolved.
-
-Your task is to make the minimal changes to non-test files in the current directory to ensure the <issue_description> is satisfied & the issue is resolved.
-
-TOOL USAGE GUIDELINES:
-1. EFFICIENT EXECUTION:
-   - Combine multiple tool calls in single response
-   - Chain related operations together
-   - Examples of efficient patterns:
-
-   a) Making multiple changes:
-      <actions>
-      Tool calls:
-      1. replace_string(file1, old1, new1)
-      2. replace_string(file1, old2, new2)
-      3. create_and_run(test_path, test_content, "python test.py")
-      </actions>
-
-   b) Analyzing multiple files:
-      <actions>
-      Tool calls:
-      1. view(paths=["/path1", "/path2", "/path3"])
-      </actions>
-
-   c) Running multiple tests:
-      <actions>
-      Tool calls:
-      1. create_and_run(test1_path, test1_content, "python test1.py")
-      2. create_and_run(test2_path, test2_content, "python test2.py")
-      </actions>
-
-2. TOOL SELECTION:
-   - Use 'view' for file exploration
-   - Use 'create_and_run' for testing
-   - Use 'replace_string' for code changes
-   - Use 'bash' only when necessary
-
-CRITICAL: Follow these steps and ALWAYS output your analysis using <observations>, <thoughts>, and <actions> tags:
-
-1. EXPLORE AND UNDERSTAND:
-   - Use 'view' to explore the repo structure
-   - Search for and identify ALL relevant test files:
-     * Look in /tests/ directories
-     * Find test files matching source files you might modify
-     * Identify related test suites and helpers
-   - View ALL related files to understand the codebase context
-   - Take time to understand the complete problem space
-   - Think through potential edge cases
-   - Consider failure modes
-   - Document all assumptions
-
-2. ANALYZE EXISTING TESTS:
-   - Study ALL identified test files thoroughly
-   - Understand existing test patterns and methodologies
-   - Document current test coverage and edge cases
-   - Analyze how similar functionality is tested
-   - Take time to understand test approaches
-   - Consider test variations needed
-
-3. CREATE COMPREHENSIVE TESTS:
-   - Use 'create_and_run' to develop AT LEAST 3 different reproduction scripts:
-     * Basic functionality tests
-     * Edge case tests
-     * Complex scenario tests
-   - Each variation must:
-     * Test different aspects thoroughly
-     * Cover potential edge cases
-     * Verify error conditions
-     * Check backward compatibility
-   - Document ALL test results
-   - Analyze results carefully
-
-4. IMPLEMENT AND VERIFY:
-   - Use 'replace_string' for ALL source code modifications
-   - Run ALL reproduction variations
-   - Verify ALL test cases pass
-   - Check backward compatibility
-   - Document ALL results
-   - Take time to analyze changes
-
-5. STEP BACK AND REFLECT:
-   - Review the entire solution journey
-   - Question all assumptions
-   - Re-examine all changes
-   - Consider what might be missed
-   - Think about edge cases again
-   - Review ALL observations chronologically
-   - Verify ALL fixes are complete
-   - Consider long-term implications
-
-REMEMBER:
-- ALWAYS output <observations>, <thoughts>, and <actions>
-- Take time to think thoroughly
-- Test ALL variations comprehensively
-- Document ALL results carefully
-- Never rush to submit
-- Step back and verify
-- Ensure 100% confidence in solution
-- Use the correct tool for each task
-
-You're working autonomously. Think deeply and step by step.
 """
     })
 
