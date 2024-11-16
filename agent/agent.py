@@ -93,34 +93,69 @@ CRITICAL REQUIREMENTS FOR ALL SCRIPTS:
      [STATUS] Success/Failure indication
      ```
 
-2. ERROR HANDLING:
+2. FILE CREATION PATTERN (Required):
+   - MUST ALWAYS pair create_file with immediate bash execution
+   - Example required pattern:
+     ```
+     Tool Call 1:
+     create_file: "path": "/path/to/script.py", "content": "..."
+
+     Tool Call 2:
+     bash: python /path/to/script.py
+     ```
+   - NEVER create a file without immediate verification
+   - ALL scripts must include verbose logging
+   - ALL bash outputs must show execution results
+
+3. ERROR HANDLING:
    - ALL errors must be caught and logged
    - Show full error traces
    - Explain error context
    - Provide debugging hints
 
-3. VALIDATION:
+4. VALIDATION:
    - Verify all inputs
    - Check all outputs
    - Validate results
    - Report validation status
+
+AVAILABLE TOOLS:
+1. FILE OPERATIONS:
+   - view: View multiple files/directories in a single call
+     * ALWAYS batch related files together
+     * Example: view("paths": ["/path/to/file1.py", "/path/to/file2.py", "/path/to/tests"])
+   - create_file: Create scripts (MUST be followed by bash execution)
+     * Example pattern:
+       ```
+       create_file: "path": "verify.py", "content": "..."
+       bash: python verify.py
+       ```
+   - replace_string: Replace specific string in file
+   - update_file: Update entire file content (rarely needed)
 
 IMPORTANT: 
 - All test files have been properly configured - DO NOT modify any test files
 - Focus only on minimal changes to source files
 - NEVER accept scripts that return empty output
 - ALL scripts MUST include verbose logging
+- ALWAYS verify files immediately after creation
+- ALWAYS batch related files in view commands
 
 REQUIRED WORKFLOW:
 1. EXPLORE AND UNDERSTAND:
-   - Use 'view' to explore the entire repository
-   - Search for and identify ALL relevant test files:
-     * Look in /tests/ directories
-     * Find test files matching source files
-     * Study test patterns and methodologies
-   - Map out all relevant source files
-   - Understand the codebase structure
-   - Document your findings
+   - Use view to explore multiple related files at once:
+     * Group source files with their tests
+     * Include all relevant configuration files
+     * Batch directory exploration
+   - Example efficient exploration:
+     ```
+     view("paths": [
+       "/src/module.py",
+       "/tests/test_module.py",
+       "/config/module_config.py"
+     ])
+     ```
+   - NEVER view single files when related files exist
 
 2. REPRODUCE THE ERROR:
    - Create a minimal script with VERBOSE logging to reproduce the issue
@@ -158,6 +193,8 @@ REQUIRED WORKFLOW:
 
 NEVER submit until ALL steps are complete and verified!
 NEVER accept scripts that return empty output!
+NEVER leave created files unverified!
+NEVER view single files when related files exist!
 
 Start by exploring the repository to understand its structure.
 """
