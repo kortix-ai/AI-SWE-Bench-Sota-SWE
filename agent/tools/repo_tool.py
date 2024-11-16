@@ -3,14 +3,82 @@ import base64
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 import os
-from typing import List
+from typing import List, Optional
 from datetime import datetime
+
+class BashSession:
+    """Manages a persistent bash session in the Docker container."""
+    
+    def __init__(self, container_name: str):
+        self.container_name = container_name
+        self._process: Optional[asyncio.subprocess.Process] = None
+        self._started = False
+        
+    async def start(self):
+        """Start a new bash session in the container."""
+        if self._started:
+            return
+            
+        cmd = ['docker', 'exec', '-i', self.container_name, 'bash']
+        self._process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        self._started = True
+        
+        # Initialize conda environment
+        await self.execute('. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed')
+        
+    async def execute(self, command: str) -> tuple[str, str, int]:
+        """Execute a command in the bash session."""
+        if not self._started or not self._process:
+            await self.start()
+            
+        assert self._process and self._process.stdin and self._process.stdout and self._process.stderr
+        
+        # Add command terminator to help identify end of output
+        terminator = f"__CMD_COMPLETE_{os.urandom(8).hex()}__"
+        full_command = f"{command}\necho {terminator}\n"
+        
+        try:
+            self._process.stdin.write(full_command.encode())
+            await self._process.stdin.drain()
+            
+            # Read output until terminator
+            output = []
+            error = []
+            while True:
+                line = await self._process.stdout.readline()
+                decoded = line.decode().rstrip()
+                if decoded == terminator:
+                    break
+                output.append(decoded)
+                
+            # Check for any stderr output
+            while self._process.stderr.at_eof():
+                line = await self._process.stderr.readline()
+                if line:
+                    error.append(line.decode().rstrip())
+                    
+            return '\n'.join(output), '\n'.join(error), 0
+            
+        except Exception as e:
+            return '', str(e), 1
+            
+    def stop(self):
+        """Stop the bash session."""
+        if self._started and self._process:
+            self._process.terminate()
+        self._started = False
 
 class RepositoryTools(Tool):
     def __init__(self, container_name: str, state_file: str):
         super().__init__()
         self.state_manager = StateManager(store_file=state_file)
         self.container_name = container_name
+        self._bash_session = BashSession(container_name)
         # Initialize workspace state
         asyncio.create_task(self._init_workspace_state())
 
@@ -235,7 +303,7 @@ if __name__ == '__main__':
 
     @tool_schema({
         "name": "create_file",
-        "description": "Create a new file with specified content.",
+        "description": "Create a new file w ith specified content.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -275,36 +343,6 @@ if __name__ == '__main__':
 
         except Exception as e:
             return self.fail_response(f"Error reading file: {str(e)}")
-
-    @tool_schema({
-        "name": "update_file",
-        "description": "Update the entire contents of a file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The file path to update."},
-                "content": {"type": "string", "description": "The new content for the file."},
-            },
-            "required": ["path", "content"]
-        }
-    })
-    async def update_file(self, path: str, content: str) -> ToolResult:
-        """Updates a file with new content."""
-        try:
-            escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            update_command = f'printf "%s" "{escaped_content}" > "{path}"'
-            
-            stdout, stderr, returncode = await self.execute_command_in_container(update_command)
-            success = returncode == 0
-
-            if success and not stderr.strip():
-                return self.success_response(f"File updated at {path}")
-            else:
-                error_msg = stderr.strip() if stderr.strip() else "Unknown error occurred"
-                return self.fail_response(f"Update file failed: {error_msg}")
-        
-        except Exception as e:
-            return self.fail_response(f"Error updating file: {str(e)}")
 
     @tool_schema({
         "name": "replace_string",
@@ -415,35 +453,42 @@ else:
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "The shell command to execute."},
+                "restart": {"type": "boolean", "description": "Whether to restart the bash session.", "default": False}
             },
             "required": ["command"]
         }
     })
-    async def bash(self, command: str) -> ToolResult:
+    async def bash(self, command: str, restart: bool = False) -> ToolResult:
         """
         Executes an arbitrary bash command with explanatory output.
         
         Parameters:
             command (str): The shell command to execute.
+            restart (bool): Whether to restart the bash session.
         
         Returns:
             ToolResult: The result of the bash command execution.
         """
         try:
-            # Single command execution with descriptive output
-            full_command = (
-                f'echo "Here\'s the result of running `{command}`:"; '
-                f'{command}'
-            )
-            stdout, stderr, returncode = await self.execute_command_in_container(full_command)
-            success = returncode == 0
-
-            if success and not stderr.strip():
-                await self._update_terminal(command, stdout.strip(), True)
-                return self.success_response(str(stdout.strip())[:2000])
+            if restart:
+                self._bash_session.stop()
+                self._bash_session = BashSession(self.container_name)
+                
+            stdout, stderr, returncode = await self._bash_session.execute(command)
+            
+            # Don't treat warnings as failures
+            success = returncode == 0 or (stderr and 'warning:' in stderr.lower())
+            
+            if success:
+                output = stdout
+                if stderr:
+                    output = f"{output}\nWarnings:\n{stderr}" if output else stderr
+                    
+                await self._update_terminal(command, output, True)
+                return self.success_response(output[:2000])
             else:
-                await self._update_terminal(command, stderr.strip(), False)
-                return self.fail_response(f"Bash command failed: {stderr.strip()}")
+                await self._update_terminal(command, stderr, False)
+                return self.fail_response(f"Bash command failed: {stderr}")
         
         except Exception as e:
             return self.fail_response(f"Error executing bash command: {str(e)}")
