@@ -16,8 +16,8 @@ AVAILABLE TOOLS:
 1. FILE OPERATIONS:
    - view: View files/directories (can view multiple paths)
    - create_file: Create new file with content
-   - update_file: Update entire file content
-   - replace_string: Replace specific string in file
+   - replace_string: Replace specific string in file (REQUIRED for ALL code modifications)
+   - update_file: Update entire file content (Use ONLY when explicitly required)
 
 2. TERMINAL OPERATIONS:
    - bash: Execute commands and see output in terminal session
@@ -28,8 +28,9 @@ AVAILABLE TOOLS:
 TOOL USAGE PATTERNS:
 1. File Modifications:
    - First view files to understand content
-   - Then make changes with replace_string
-   - Verify changes with view
+   - Then use ONLY replace_string for changes
+   - Format: replace_string(file_path, old_string, new_string)
+   - NEVER create patch files or diffs
 
 2. Testing Changes:
    - Create test with create_file
@@ -37,11 +38,12 @@ TOOL USAGE PATTERNS:
    - Check output in terminal session
 
 3. Multiple Operations:
-   - Can chain multiple tool calls in one response
+   - Chain multiple replace_string calls for complex changes
    - Example:
-     1. replace_string to fix code
-     2. create_file for test
-     3. bash to run test
+     1. replace_string for first code change
+     2. replace_string for second code change
+     3. create_file for test
+     4. bash to run test
 
 ISSUE TO SOLVE:
 <issue_description>
@@ -113,12 +115,15 @@ CRITICAL: Follow these steps and ALWAYS output your analysis using <observations
    - Verify ALL fixes are complete
 
 KEY GUIDELINES:
+- ALWAYS use replace_string for code modifications
+- NEVER create patch files
+- NEVER use diff-based approaches
 - Always analyze tool results methodically
 - Think through each step's implications
 - DO NOT modify any test files - they are correct as is
 - NEVER proceed without finding and analyzing matching test files first
 - Create focused reproduction cases for the specific issue
-- Make minimal, focused changes to source files only
+- Make minimal, focused changes using replace_string only
 - Test thoroughly with existing test files
 - Print and verify edge cases and error conditions
 - Never skip verification steps
@@ -132,6 +137,7 @@ KEY GUIDELINES:
   * Verifying against existing test cases AS IS
   * Running ALL related tests without modification
   * Confirming the specific issue is resolved
+  * Using ONLY replace_string for code changes
 
 REMEMBER:
 - ALWAYS output <observations>, <thoughts>, and <actions>
@@ -150,6 +156,11 @@ continue_instructions = """
 <continue_instructions>
 Self-reflect, critique and decide what to do next in your task of solving the issue. Review the current state, the current progress, history, and proceed with the next steps.
 
+REMEMBER:
+- ALWAYS use replace_string for code modifications
+- NEVER create patch files
+- NEVER use diff-based approaches
+
 OUTPUT YOUR OBSERVATIONS, THOUGHTS, AND ACTIONS:
 
 <observations>
@@ -162,6 +173,7 @@ OUTPUT YOUR OBSERVATIONS, THOUGHTS, AND ACTIONS:
 - Error conditions found
 - Edge cases discovered
 - All focused on the current problem
+- Verification of replace_string operations
 </observations>
 
 <thoughts>
@@ -170,16 +182,17 @@ OUTPUT YOUR OBSERVATIONS, THOUGHTS, AND ACTIONS:
 - Understanding of the exact issue
 - Consideration of relevant edge cases
 - Evaluation of fix approaches
+- Planning precise string replacements
 - Review of test results
 - Error handling strategy
 - Long-term implications of this fix
 </thoughts>
 
 <actions>
-- Specific next steps to solve this issue
-- Clear purpose for each action
+- Specific next steps using replace_string for changes
+- Clear purpose for each string replacement
 - Expected outcomes for this fix
-- Verification plans
+- Verification plans for each replacement
 - Error handling approach
 - Test coverage plans
 - Validation strategy

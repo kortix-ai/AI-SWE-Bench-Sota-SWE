@@ -328,30 +328,37 @@ def main():
     args = parser.parse_args()
 
     # Load predictions
-    with open(args.input_file, 'r') as f:
-        predictions = [json.loads(line) for line in f]
-
-    # Convert predictions to DataFrame
+    predictions = []
+    with open(args.input_file) as f:
+        for line in f:
+            predictions.append(json.loads(line))
+    
+    # Create DataFrame with predictions
     df_predictions = pd.DataFrame(predictions)
-
-    # Ensure required columns are present
-    required_columns = {'instance_id', 'model_patch'}
-    if not required_columns.issubset(df_predictions.columns):
-        raise ValueError(f"Input file must contain the following columns: {required_columns}")
-
+    
     # Load dataset
-    print(f"Loading dataset {args.dataset} ({args.split})...")
-    dataset = load_swebench_dataset(args.dataset, args.split)
-    instance_id_to_instance = {instance['instance_id']: instance for instance in dataset}
+    print(f"Loading dataset {args.dataset} (test)...")
+    dataset = load_dataset(args.dataset, split="test")
     print(f"Loaded {len(dataset)} instances from the dataset.")
+    
+    # Create a mapping of instance_id to dataset instance
+    instance_map = {instance['instance_id']: instance for instance in dataset}
+    
+    # Match predictions with dataset instances
+    df_predictions['instance'] = df_predictions['instance_id'].map(instance_map)
+    
+    # Filter out rows where no matching instance was found
+    valid_predictions = df_predictions['instance'].notna()
+    if not valid_predictions.all():
+        missing_ids = df_predictions.loc[~valid_predictions, 'instance_id'].tolist()
+        print(f"Warning: Could not find dataset instances for the following IDs: {missing_ids}")
+        df_predictions = df_predictions[valid_predictions].copy()
+    
+    if len(df_predictions) == 0:
+        print("Error: No valid predictions found that match the dataset instances")
+        return
 
-    # Merge predictions with dataset
-    df_predictions['instance'] = df_predictions['instance_id'].apply(lambda x: instance_id_to_instance.get(x))
     df_predictions['test_spec'] = df_predictions['instance'].apply(make_test_spec)
-
-    # Filter out any instances not found in the dataset
-    df_predictions = df_predictions[df_predictions['instance'].notnull()]
-    print(f"Evaluating {len(df_predictions)} instances.")
 
     # Prepare dataset for evaluation
     output_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
