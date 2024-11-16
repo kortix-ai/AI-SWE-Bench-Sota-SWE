@@ -27,6 +27,36 @@ AVAILABLE TOOLS:
 3. COMPLETION:
    - submit: Use ONLY after ALL verification steps pass
 
+CRITICAL REQUIREMENTS FOR ALL SCRIPTS:
+1. VERBOSE LOGGING IS MANDATORY:
+   - EVERY script MUST include detailed logging
+   - Print step-by-step execution progress
+   - Show input values and parameters
+   - Display intermediate results
+   - Report all operations and their outcomes
+   - Include debugging information
+   - NEVER return empty output
+   - Use logging format:
+     ```
+     [STEP] Description of current step
+     [INPUT] Show input values
+     [DEBUG] Show intermediate values
+     [RESULT] Show operation result
+     [STATUS] Success/Failure indication
+     ```
+
+2. ERROR HANDLING:
+   - ALL errors must be caught and logged
+   - Show full error traces
+   - Explain error context
+   - Provide debugging hints
+
+3. VALIDATION:
+   - Verify all inputs
+   - Check all outputs
+   - Validate results
+   - Report validation status
+
 CRITICAL WORKFLOW:
 1. EXPLORE AND UNDERSTAND (Required):
    - First explore the entire repository structure
@@ -39,7 +69,7 @@ CRITICAL WORKFLOW:
    - Document key findings
    
 2. REPRODUCE (Required):
-   - Create a minimal script to reproduce the exact error
+   - Create a minimal script with VERBOSE logging to reproduce the exact error
    - Run it to verify the error occurs
    - Document the exact error message
    - Compare with issue description
@@ -61,6 +91,7 @@ CRITICAL WORKFLOW:
    - Document each change
    
 5. VERIFY THOROUGHLY (Required):
+   - Create verification scripts with VERBOSE logging
    - Rerun reproduction script
    - Verify against existing test cases
    - Confirm error is fixed
@@ -68,14 +99,19 @@ CRITICAL WORKFLOW:
    - Document all results
    
 6. CREATE VERIFICATION SCRIPTS (Required):
-   - Create AT LEAST 3 different reproduction scripts:
+   - Create AT LEAST 3 different reproduction scripts with VERBOSE logging:
      * VARIATION 1: Basic functionality test
      * VARIATION 2: Edge case tests
      * VARIATION 3: Complex scenario tests
    - Each script must:
      * Focus on the specific issue
-     * Print debugging information
+     * Include DETAILED logging
+     * Print step-by-step progress
+     * Show input/output values
+     * Display debugging information
+     * Report validation results
      * Show clear success/failure
+     * NEVER return empty output
    
 7. FINAL REVIEW (Required):
    - Review entire solution
@@ -86,15 +122,17 @@ CRITICAL WORKFLOW:
    - Document verification
 
 NEVER submit until ALL steps are complete and documented!
+NEVER accept scripts that return empty output!
 
 KEY GUIDELINES:
 - Study ALL test files first
-- Create focused reproduction scripts
+- Create focused reproduction scripts with VERBOSE logging
 - Make minimal source code changes
 - Test thoroughly against existing tests
 - Document everything
 - Never skip steps
 - Never rush to submit
+- Never accept empty script output
 
 REMEMBER:
 - ALWAYS output <observations>, <thoughts>, and <actions>
@@ -127,6 +165,7 @@ REQUIRED CHECKLIST:
 
 NEVER proceed to next step until current step is complete!
 NEVER submit until ALL checkboxes are verified!
+ITS VERY IMPORTANT TO FOLLOW THESE INSTRUCTIONS AND COMPLETE THE CHECKLIST!
 
 OUTPUT YOUR ANALYSIS:
 

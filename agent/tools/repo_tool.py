@@ -6,79 +6,71 @@ import os
 from typing import List, Optional
 from datetime import datetime
 
-class BashSession:
-    """Manages a persistent bash session in the Docker container."""
+class BashExecutor:
+    """Executes bash commands in Docker container using individual exec calls."""
     
     def __init__(self, container_name: str):
         self.container_name = container_name
-        self._process: Optional[asyncio.subprocess.Process] = None
-        self._started = False
-        
-    async def start(self):
-        """Start a new bash session in the container."""
-        if self._started:
-            return
-            
-        cmd = ['docker', 'exec', '-i', self.container_name, 'bash']
-        self._process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        self._started = True
-        
-        # Initialize conda environment
-        await self.execute('. /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed')
         
     async def execute(self, command: str) -> tuple[str, str, int]:
-        """Execute a command in the bash session."""
-        if not self._started or not self._process:
-            await self.start()
-            
-        assert self._process and self._process.stdin and self._process.stdout and self._process.stderr
-        
-        # Add command terminator to help identify end of output
-        terminator = f"__CMD_COMPLETE_{os.urandom(8).hex()}__"
-        full_command = f"{command}\necho {terminator}\n"
-        
+        """Execute a command in the container using docker exec."""
         try:
-            self._process.stdin.write(full_command.encode())
-            await self._process.stdin.drain()
+            # Ensure we're in /testbed and have conda environment
+            wrapped_command = (
+                f'. /opt/miniconda3/etc/profile.d/conda.sh && '
+                f'conda activate testbed && '
+                f'cd /testbed && '
+                f'set -o pipefail && '
+                f'{command}'
+            )
             
-            # Read output until terminator
-            output = []
-            error = []
-            while True:
-                line = await self._process.stdout.readline()
-                decoded = line.decode().rstrip()
-                if decoded == terminator:
-                    break
-                output.append(decoded)
+            # Use docker exec directly for each command
+            cmd = [
+                'docker', 'exec',
+                '-i',  # Interactive mode
+                self.container_name,
+                '/bin/bash', '-c', wrapped_command
+            ]
+            
+            # Execute the command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Wait for command completion with timeout
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=300  # 5 minute timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    process.terminate()
+                except:
+                    pass
+                return '', 'Command execution timed out after 5 minutes', 1
                 
-            # Check for any stderr output
-            while self._process.stderr.at_eof():
-                line = await self._process.stderr.readline()
-                if line:
-                    error.append(line.decode().rstrip())
-                    
-            return '\n'.join(output), '\n'.join(error), 0
+            # Decode outputs
+            stdout_str = stdout.decode().strip() if stdout else ''
+            stderr_str = stderr.decode().strip() if stderr else ''
+            
+            # Handle empty output
+            if not stdout_str and not stderr_str and process.returncode == 0:
+                stdout_str = "Command completed successfully but produced no output"
+                
+            return stdout_str, stderr_str, process.returncode
             
         except Exception as e:
-            return '', str(e), 1
-            
-    def stop(self):
-        """Stop the bash session."""
-        if self._started and self._process:
-            self._process.terminate()
-        self._started = False
+            return '', f"Error executing command: {str(e)}", 1
 
 class RepositoryTools(Tool):
     def __init__(self, container_name: str, state_file: str):
         super().__init__()
         self.state_manager = StateManager(store_file=state_file)
         self.container_name = container_name
-        self._bash_session = BashSession(container_name)
+        self._bash_executor = BashExecutor(container_name)
         # Initialize workspace state
         asyncio.create_task(self._init_workspace_state())
 
@@ -453,45 +445,89 @@ else:
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "The shell command to execute."},
-                "restart": {"type": "boolean", "description": "Whether to restart the bash session.", "default": False}
             },
             "required": ["command"]
         }
     })
-    async def bash(self, command: str, restart: bool = False) -> ToolResult:
+    async def bash(self, command: str) -> ToolResult:
         """
         Executes an arbitrary bash command with explanatory output.
         
         Parameters:
             command (str): The shell command to execute.
-            restart (bool): Whether to restart the bash session.
         
         Returns:
             ToolResult: The result of the bash command execution.
         """
         try:
-            if restart:
-                self._bash_session.stop()
-                self._bash_session = BashSession(self.container_name)
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            
+            # Format the output with execution context
+            output_parts = [
+                f"Command executed: {command}",
+                f"Working directory: /testbed",
+                f"Return code: {returncode}"
+            ]
+            
+            # Process stdout if present
+            if stdout:
+                output_parts.append("Standard output:")
+                output_parts.append(stdout)
+            
+            # Process stderr and determine if it contains only warnings
+            has_warnings = False
+            has_errors = False
+            if stderr:
+                stderr_lines = stderr.split('\n')
+                warning_lines = []
+                error_lines = []
                 
-            stdout, stderr, returncode = await self._bash_session.execute(command)
-            
-            # Don't treat warnings as failures
-            success = returncode == 0 or (stderr and 'warning:' in stderr.lower())
-            
-            if success:
-                output = stdout
-                if stderr:
-                    output = f"{output}\nWarnings:\n{stderr}" if output else stderr
+                for line in stderr_lines:
+                    line = line.lower()
+                    if 'warning' in line or 'warn' in line:
+                        has_warnings = True
+                        warning_lines.append(line)
+                    else:
+                        has_errors = True
+                        error_lines.append(line)
+                
+                if has_warnings:
+                    output_parts.append("Warnings:")
+                    output_parts.extend(warning_lines)
                     
-                await self._update_terminal(command, output, True)
-                return self.success_response(output[:2000])
+                if has_errors:
+                    output_parts.append("Errors:")
+                    output_parts.extend(error_lines)
+            
+            full_output = '\n'.join(output_parts)
+            
+            # Consider success if:
+            # 1. returncode is 0, OR
+            # 2. there are only warnings (no errors), OR
+            # 3. stderr contains only warnings
+            success = (
+                returncode == 0 or
+                (has_warnings and not has_errors) or
+                (stderr and not has_errors and 'warning' in stderr.lower())
+            )
+            
+            # Always update terminal session
+            await self._update_terminal(command, full_output, success)
+            
+            # Return success response even with warnings
+            if success:
+                return self.success_response(full_output[:2000])
             else:
-                await self._update_terminal(command, stderr, False)
-                return self.fail_response(f"Bash command failed: {stderr}")
+                return self.fail_response(full_output[:2000])
         
         except Exception as e:
-            return self.fail_response(f"Error executing bash command: {str(e)}")
+            error_output = (
+                f"Error executing bash command:\n"
+                f"Command: {command}\n"
+                f"Exception: {str(e)}"
+            )
+            await self._update_terminal(command, error_output, False)
+            return self.fail_response(error_output)
 
     @tool_schema({
         "name": "submit",

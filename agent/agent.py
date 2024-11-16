@@ -75,7 +75,41 @@ The issue description:
 {problem_statement}
 </issue_description>
 
-IMPORTANT: All test files have been properly configured - DO NOT modify any test files. Focus only on minimal changes to source files.
+CRITICAL REQUIREMENTS FOR ALL SCRIPTS:
+1. VERBOSE LOGGING IS MANDATORY:
+   - EVERY script MUST include detailed logging
+   - Print step-by-step execution progress
+   - Show input values and parameters
+   - Display intermediate results
+   - Report all operations and their outcomes
+   - Include debugging information
+   - NEVER return empty output
+   - Use logging format:
+     ```
+     [STEP] Description of current step
+     [INPUT] Show input values
+     [DEBUG] Show intermediate values
+     [RESULT] Show operation result
+     [STATUS] Success/Failure indication
+     ```
+
+2. ERROR HANDLING:
+   - ALL errors must be caught and logged
+   - Show full error traces
+   - Explain error context
+   - Provide debugging hints
+
+3. VALIDATION:
+   - Verify all inputs
+   - Check all outputs
+   - Validate results
+   - Report validation status
+
+IMPORTANT: 
+- All test files have been properly configured - DO NOT modify any test files
+- Focus only on minimal changes to source files
+- NEVER accept scripts that return empty output
+- ALL scripts MUST include verbose logging
 
 REQUIRED WORKFLOW:
 1. EXPLORE AND UNDERSTAND:
@@ -89,7 +123,7 @@ REQUIRED WORKFLOW:
    - Document your findings
 
 2. REPRODUCE THE ERROR:
-   - Create a minimal script to reproduce the issue
+   - Create a minimal script with VERBOSE logging to reproduce the issue
    - Run it to verify the exact error
    - Compare with issue description
    - Verify against existing test patterns
@@ -109,6 +143,7 @@ REQUIRED WORKFLOW:
    - Document changes
 
 5. VERIFY THOROUGHLY:
+   - Create verification scripts with VERBOSE logging
    - Rerun reproduction script
    - Confirm error is fixed
    - Test edge cases
@@ -122,6 +157,7 @@ REQUIRED WORKFLOW:
    - Document verification
 
 NEVER submit until ALL steps are complete and verified!
+NEVER accept scripts that return empty output!
 
 Start by exploring the repository to understand its structure.
 """
@@ -155,7 +191,7 @@ Start by exploring the repository to understand its structure.
 
         print(f"Iteration {iteration}/{max_iterations}:")
 
-        # await after_iteration()
+        await after_iteration()
 
         # Check for 'submit' tool call in the assistant's last message
         assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
