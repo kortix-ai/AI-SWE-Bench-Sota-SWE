@@ -47,6 +47,8 @@ def main():
     parser.add_argument("--only-eval", action="store_true", default=False,
                         help="Only run evaluation step, skip inference")
     parser.add_argument("--input-file", help="Path to the input file for evaluation")
+    parser.add_argument("--execute-file", default="agent/agent.py",
+                        help="Path to the script to execute (default: agent/agent.py)")
     
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
@@ -106,6 +108,7 @@ def main():
         inference_cmd += ["--max-iterations", str(args.max_iterations)]
         inference_cmd += ["--model-name", args.model_name]
         inference_cmd += ["--num-workers", str(args.num_workers)]
+        inference_cmd += ["--execute-file", args.execute_file]
         subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:

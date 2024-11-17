@@ -197,6 +197,8 @@ def main():
                         help="Model name to use (choices: sonnet, haiku, deepseek)")
     parser.add_argument('--num-workers', type=int, default=1,
                         help='Number of parallel workers')
+    parser.add_argument("--execute-file", default="agent/agent.py",
+                        help="Path to the script to execute (default: agent/agent.py)")
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -292,7 +294,7 @@ def process_instance(args_instance_tuple):
             json.dump([instance], f)
 
         cmd = [
-            sys.executable, 'agent/agent.py',
+            sys.executable, args.execute_file,
             '--problem-file', problem_file,
             '--container-name', container_name,
             '--threads-dir', os.path.join(instance_output_dir, 'threads'),
