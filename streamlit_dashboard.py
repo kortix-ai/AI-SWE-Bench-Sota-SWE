@@ -88,6 +88,16 @@ def format_message_content(content):
         return "\n".join(formatted_content)
     return str(content)
 
+def truncate_text(text: str, max_lines: int = 10) -> str:
+    """Truncate text to show first and last n lines."""
+    lines = text.splitlines()
+    if len(lines) <= max_lines * 2:
+        return text
+    
+    first_part = lines[:max_lines]
+    last_part = lines[-max_lines:]
+    return '\n'.join(first_part) + '\n...\n' + '\n'.join(last_part)
+
 def display_run_details(run_data: List[Dict]):
     """Display the details of a selected run."""
     if not run_data:
@@ -119,6 +129,8 @@ def display_run_details(run_data: List[Dict]):
                 if role == "tool":
                     name = message.get("name", "")
                     output = content
+                    if st.session_state.get('truncate_tool', False):
+                        output = truncate_text(output)
                     icon = "✅" 
                     label = f"{name} {icon}"
                     
@@ -278,6 +290,8 @@ def main():
 
         st.markdown("---")
 
+        st.subheader("Performance")
+
         if st.checkbox("Show Log"):
             st.session_state.show_log = True
         else:
@@ -292,6 +306,11 @@ def main():
             st.session_state.expanded_tool = True
         else:
             st.session_state.expanded_tool = False
+
+        if st.checkbox("Truncate tool", value=True):
+            st.session_state.truncate_tool = True
+        else:
+            st.session_state.truncate_tool = False
 
         st.markdown("---")
         successful_runs, total_runs, passed_tests, total_tests = calculate_test_statistics(runs, output_dir)
