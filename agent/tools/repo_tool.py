@@ -295,7 +295,7 @@ if __name__ == '__main__':
 
     @tool_schema({
         "name": "create_file",
-        "description": "Create a new file w ith specified content.",
+        "description": "Create a new file with specified content.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -338,7 +338,12 @@ if __name__ == '__main__':
 
     @tool_schema({
         "name": "replace_string",
-        "description": "Replace a specific string in a file with another string.",
+        "description": """Replace a specific string in a file with another string.
+Notes for using the `str_replace` command:
+* The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!
+* If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context in `old_str` to make it unique\n
+* The `new_str` parameter should contain the edited lines that should replace the `old_str`
+IMPORTANT: Use the `bash` command tool after this to execute the script immediately.""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -440,7 +445,8 @@ else:
 
     @tool_schema({
         "name": "bash",
-        "description": "Execute a shell command in the repository environment with explanatory output.",
+        "description": """Execute a shell command in the repository environment with explanatory output. 
+        IMPORTANT: Use the `bash` command tool after this to execute the script immediately.""",
         "parameters": {
             "type": "object",
             "properties": {

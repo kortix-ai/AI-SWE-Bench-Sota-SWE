@@ -6,7 +6,7 @@ from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import uuid
-from prompts import system_prompt, continue_instructions  # Fixed import
+from prompts import system_prompt, continue_instructions 
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
@@ -49,8 +49,13 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
-    from tools.repo_tool import RepositoryTools
-    thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
+    # from tools.repo_tool import RepositoryTools
+    # thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
+
+    from tools.edit_tool import EditTool
+    from tools.bash_tool import BashTool
+    thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
+    thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
 
     # Format the system prompt with the problem statement
     system = system_prompt.format(problem_statement=problem_statement)
@@ -235,7 +240,7 @@ Start by exploring the repository to understand its structure.
             model_name=model_name_full,
             temperature=0.0,
             max_tokens=8192,
-            tool_choice="auto",
+            tool_choice="any",
             execute_tools_async=False,
             use_tools=True,
             execute_model_tool_calls=True
