@@ -3,6 +3,7 @@ import subprocess
 import os
 import sys
 import time
+from inference import convert_outputs_to_jsonl  # Add this import
 
 def main():
     parser = argparse.ArgumentParser(description='SWE Runner')
@@ -16,6 +17,8 @@ def main():
                                       help="Run tests from START to END index (inclusive)")
     test_selection_group.add_argument("--instance-id", type=str,
                                       help="Choose a specific instance by instance_id")
+    test_selection_group.add_argument("--instances-file", type=str,
+                                      help="JSON file containing list of instance IDs to run")
     
     parser.add_argument("--split", default="test",
                         help="Dataset split to use (default: test)")
@@ -85,7 +88,9 @@ def main():
         inference_cmd = [sys.executable, "inference.py"]
         if args.instance_id:
             inference_cmd += ["--instance-id", args.instance_id]
-        if args.test_index:
+        elif args.instances_file:
+            inference_cmd += ["--instances-file", args.instances_file]
+        elif args.test_index:
             inference_cmd += ["--test-index", str(args.test_index)]
         elif args.range:
             inference_cmd += ["--range", str(args.range[0]), str(args.range[1])]
@@ -100,6 +105,7 @@ def main():
             inference_cmd += ["--join-only"]
         inference_cmd += ["--max-iterations", str(args.max_iterations)]
         inference_cmd += ["--model-name", args.model_name]
+        inference_cmd += ["--num-workers", str(args.num_workers)]
         subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:
@@ -108,12 +114,21 @@ def main():
         if args.input_file:
             input_file = args.input_file
         else:
-            combined_output_files = [f for f in os.listdir(args.output_dir) if f.startswith('__combined_agentpress_output_') and f.endswith('.jsonl')]
+            # Ensure outputs are combined before evaluation
+            convert_outputs_to_jsonl(args.output_dir)
+            # Find all combined output files and sort by timestamp (newest first)
+            combined_output_files = [f for f in os.listdir(args.output_dir) 
+                                   if f.startswith('__combined_agentpress_output_') 
+                                   and f.endswith('.jsonl')]
+            combined_output_files.sort(reverse=True)  # Newest first based on file name
+            
             if combined_output_files:
                 input_file = os.path.join(args.output_dir, combined_output_files[0])
+                print(f"Using latest combined output file: {input_file}")
             else:
-                print("No combined output file found.")
+                print("No combined output file found. Please run inference first.")
                 sys.exit(1)
+
         evaluation_cmd = [
             sys.executable, "evaluation.py",
             "--input-file", input_file,

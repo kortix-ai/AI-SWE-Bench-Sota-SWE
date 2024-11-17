@@ -3,13 +3,141 @@ import base64
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 import os
-from typing import List
+from typing import List, Optional
+from datetime import datetime
+
+class BashExecutor:
+    """Executes bash commands in Docker container using individual exec calls."""
+    
+    def __init__(self, container_name: str):
+        self.container_name = container_name
+        
+    async def execute(self, command: str) -> tuple[str, str, int]:
+        """Execute a command in the container using docker exec."""
+        try:
+            # Ensure we're in /testbed and have conda environment
+            wrapped_command = (
+                f'. /opt/miniconda3/etc/profile.d/conda.sh && '
+                f'conda activate testbed && '
+                f'cd /testbed && '
+                f'set -o pipefail && '
+                f'{command}'
+            )
+            
+            # Use docker exec directly for each command
+            cmd = [
+                'docker', 'exec',
+                '-i',  # Interactive mode
+                self.container_name,
+                '/bin/bash', '-c', wrapped_command
+            ]
+            
+            # Execute the command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Wait for command completion with timeout
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=300  # 5 minute timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    process.terminate()
+                except:
+                    pass
+                return '', 'Command execution timed out after 5 minutes', 1
+                
+            # Decode outputs
+            stdout_str = stdout.decode().strip() if stdout else ''
+            stderr_str = stderr.decode().strip() if stderr else ''
+            
+            # Handle empty output
+            if not stdout_str and not stderr_str and process.returncode == 0:
+                stdout_str = "Command completed successfully but produced no output"
+                
+            return stdout_str, stderr_str, process.returncode
+            
+        except Exception as e:
+            return '', f"Error executing command: {str(e)}", 1
 
 class RepositoryTools(Tool):
-    def __init__(self, container_name: str):
+    def __init__(self, container_name: str, state_file: str):
         super().__init__()
-        self.state_manager = StateManager(store_file="state.json")
+        self.state_manager = StateManager(store_file=state_file)
         self.container_name = container_name
+        self._bash_executor = BashExecutor(container_name)
+        # Initialize workspace state
+        asyncio.create_task(self._init_workspace_state())
+
+    async def _init_workspace_state(self):
+        """Initialize the workspace state with empty structures."""
+        workspace_state = {
+            "file_tree": {},           # Current directory structure
+            "open_files": {},          # Currently open files and their contents
+            "terminal_session": [],    # Current terminal session output (last N commands)
+        }
+        await self.state_manager.set("workspace", workspace_state)
+
+    async def _parse_directory_listing(self, output: str) -> dict:
+        """Parse directory listing output into a tree structure."""
+        file_tree = {}
+        
+        for line in output.strip().split('\n'):
+            if line.startswith('<directory') or line.startswith('</directory'):
+                continue
+                
+            # Clean and normalize path
+            path = line.strip()
+            if path.startswith('/testbed/'):
+                path = path[9:]  # Remove /testbed/ prefix
+            if not path:
+                continue
+                
+            # Build tree structure
+            parts = path.split('/')
+            current = file_tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    current[part] = "file"
+                else:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+        
+        return file_tree
+
+    async def _update_file_tree(self, file_tree: dict):
+        """Update the file tree in workspace state."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["file_tree"] = file_tree
+        await self.state_manager.set("workspace", workspace)
+
+    async def _update_open_file(self, path: str, content: str):
+        """Update or add a file in the open files list."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["open_files"][path] = {
+            "content": content,
+            "last_modified": datetime.now().isoformat()
+        }
+        await self.state_manager.set("workspace", workspace)
+
+    async def _update_terminal(self, command: str, output: str, success: bool):
+        """Update terminal session with new output."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["terminal_session"].append({
+            "command": command,
+            "output": output,
+            "success": success,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep only last 5 commands
+        workspace["terminal_session"] = workspace["terminal_session"][-5:]
+        await self.state_manager.set("workspace", workspace)
 
     async def execute_command_in_container(self, command: str):
         """
@@ -35,6 +163,23 @@ class RepositoryTools(Tool):
         stdout, stderr = await process.communicate()
         return stdout.decode(), stderr.decode(), process.returncode
 
+    async def _extract_file_content(self, output: str) -> str:
+        """Extract file content from view output."""
+        content_lines = []
+        in_file_content = False
+        
+        for line in output.strip().split('\n'):
+            if line.startswith('<file'):
+                in_file_content = True
+                continue
+            elif line.startswith('</file'):
+                in_file_content = False
+                continue
+            if in_file_content and '\t' in line:
+                content_lines.append(line.split('\t', 1)[1])
+        
+        return '\n'.join(content_lines)
+
     @tool_schema({
         "name": "view",
         "description": "View the contents of a file or list the contents of a directory in the repository with detailed explanations.",
@@ -46,11 +191,6 @@ class RepositoryTools(Tool):
                     "items": {"type": "string"},
                     "description": "The file or directory paths to view."
                 },
-                "exclude_patterns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Patterns of files to exclude from directory listings."
-                },
                 "depth": {
                     "type": "integer",
                     "description": "The maximum directory depth to search for contents.",
@@ -60,9 +200,8 @@ class RepositoryTools(Tool):
             "required": ["paths"]
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.pyc'], depth: int = 2) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
         try:
-            # Python script to handle file/directory operations
             python_code = '''
 import os
 import fnmatch
@@ -135,24 +274,18 @@ if __name__ == '__main__':
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            results = [{
-                "path": path,
-                "output": stdout.strip(),
-                "error": stderr.strip(),
-                "success": success,
-            } for path in paths]
-
-            # Update history
-            history_key = "view_history"
-            history = await self.state_manager.get(history_key) or []
-            history.append({
-                "paths": paths,
-                "exclude_patterns": exclude_patterns,
-                "results": results,
-            })
-            await self.state_manager.set(history_key, history)
-
             if success and not stderr.strip():
+                for path in paths:
+                    if os.path.isdir(path):
+                        # Update file tree from directory listing
+                        file_tree = await self._parse_directory_listing(stdout)
+                        await self._update_file_tree(file_tree)
+                    else:
+                        # For files, extract content and add to open_files
+                        content = await self._extract_file_content(stdout)
+                        if content:
+                            await self._update_open_file(path, content)
+                
                 return self.success_response(str(stdout.strip()))
             else:
                 return self.fail_response(f"View command failed: {stderr.strip()}")
@@ -161,62 +294,47 @@ if __name__ == '__main__':
             return self.fail_response(f"Error executing view command: {str(e)}")
 
     @tool_schema({
-        "name": "create_and_run",
-        "description": "Create a new file with specified content and optionally run a command after creation.",
+        "name": "create_file",
+        "description": "Create a new file w ith specified content.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "The file path to create."},
                 "content": {"type": "string", "description": "The content to write to the file."},
-                "command": {"type": "string", "description": "Optional command to run after file creation.", "default": None},
             },
             "required": ["path", "content"]
         }
     })
-    async def create_and_run(self, path: str, content: str, command: str = None) -> ToolResult:
-        """
-        Creates a new file with the specified content and optionally runs a command.
-        
-        Parameters:
-            path (str): The file path to create.
-            content (str): The content to write to the file.
-            command (str): Optional command to run after file creation.
-        
-        Returns:
-            ToolResult: The result of the create and run operation.
-        """
+    async def create_file(self, path: str, content: str) -> ToolResult:
+        """Creates a new file with the specified content."""
         try:
+            # Create directory if it doesn't exist
+            directory = os.path.dirname(path)
+            mkdir_command = f'mkdir -p "{directory}"'
+            await self.execute_command_in_container(mkdir_command)
+
             # Create file with proper escaping and content
             escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
             create_command = f'printf "%s" "{escaped_content}" > "{path}"'
             
-            if command:
-                # If command is provided, chain it after file creation
-                full_command = f'{create_command} && {command}'
-            else:
-                full_command = f'{create_command} && echo "File created at {path}"'
-
-            stdout, stderr, returncode = await self.execute_command_in_container(full_command)
+            stdout, stderr, returncode = await self.execute_command_in_container(create_command)
             success = returncode == 0
 
-            history = await self.state_manager.get("create_and_run_history") or []
-            history.append({
-                "path": path,
-                "content": content,
-                "command": command,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set("create_and_run_history", history)
-
             if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"File created at {path}"
-                return self.success_response(message)
+                # Update workspace state
+                await self._update_file_tree(path)
+                await self._update_open_file(path, content)
+                
+                return self.success_response(f"File created at {path}")
             else:
-                return self.fail_response(f"Create and run command failed: {stderr.strip()}")
+                error_msg = stderr.strip() if stderr.strip() else "Unknown error occurred"
+                return self.fail_response(f"Create file failed: {error_msg}")
         
         except Exception as e:
-            return self.fail_response(f"Error in create and run: {str(e)}")
+            return self.fail_response(f"Error creating file: {str(e)}")
+
+        except Exception as e:
+            return self.fail_response(f"Error reading file: {str(e)}")
 
     @tool_schema({
         "name": "replace_string",
@@ -307,21 +425,15 @@ else:
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            history = await self.state_manager.get("replace_string_history") or []
-            history.append({
-                "path": path,
-                "old_str": old_str,
-                "new_str": new_str,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set("replace_string_history", history)
-
             if success and not stderr.strip():
-                message = stdout.strip() if stdout else f"Replaced '{old_str}' with '{new_str}' in {path}"
-                return self.success_response(message)            
+                # Update workspace state by reading the new content
+                read_cmd = f'cat "{path}"'
+                new_content, _, _ = await self.execute_command_in_container(read_cmd)
+                await self._update_open_file(path, new_content.strip())
+                
+                return self.success_response(stdout.strip())
             else:
-                return self.fail_response(f"Replace string command failed: {stderr.strip()}")
+                return self.fail_response(f"Replace string failed: {stderr.strip()}")
 
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
@@ -348,30 +460,74 @@ else:
             ToolResult: The result of the bash command execution.
         """
         try:
-            # Single command execution with descriptive output
-            full_command = (
-                f'echo "Here\'s the result of running `{command}`:"; '
-                f'{command}'
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            
+            # Format the output with execution context
+            output_parts = [
+                f"Command executed: {command}",
+                f"Working directory: /testbed",
+                f"Return code: {returncode}"
+            ]
+            
+            # Process stdout if present
+            if stdout:
+                output_parts.append("Standard output:")
+                output_parts.append(stdout)
+            
+            # Process stderr and determine if it contains only warnings
+            has_warnings = False
+            has_errors = False
+            if stderr:
+                stderr_lines = stderr.split('\n')
+                warning_lines = []
+                error_lines = []
+                
+                for line in stderr_lines:
+                    line = line.lower()
+                    if 'warning' in line or 'warn' in line:
+                        has_warnings = True
+                        warning_lines.append(line)
+                    else:
+                        has_errors = True
+                        error_lines.append(line)
+                
+                if has_warnings:
+                    output_parts.append("Warnings:")
+                    output_parts.extend(warning_lines)
+                    
+                if has_errors:
+                    output_parts.append("Errors:")
+                    output_parts.extend(error_lines)
+            
+            full_output = '\n'.join(output_parts)
+            
+            # Consider success if:
+            # 1. returncode is 0, OR
+            # 2. there are only warnings (no errors), OR
+            # 3. stderr contains only warnings
+            success = (
+                returncode == 0 or
+                (has_warnings and not has_errors) or
+                (stderr and not has_errors and 'warning' in stderr.lower())
             )
-            stdout, stderr, returncode = await self.execute_command_in_container(full_command)
-            success = returncode == 0
-
-            history_key = "bash_history"
-            history = await self.state_manager.get(history_key) or []
-            history.append({
-                "command": command,
-                "output": stdout + stderr,
-                "success": success,
-            })
-            await self.state_manager.set(history_key, history)
-
-            if success and not stderr.strip():
-                return self.success_response(str(stdout.strip())[:2000])
+            
+            # Always update terminal session
+            await self._update_terminal(command, full_output, success)
+            
+            # Return success response even with warnings
+            if success:
+                return self.success_response(full_output[:2000])
             else:
-                return self.fail_response(f"Bash command failed: {stderr.strip()}")
+                return self.fail_response(full_output[:2000])
         
         except Exception as e:
-            return self.fail_response(f"Error executing bash command: {str(e)}")
+            error_output = (
+                f"Error executing bash command:\n"
+                f"Command: {command}\n"
+                f"Exception: {str(e)}"
+            )
+            await self._update_terminal(command, error_output, False)
+            return self.fail_response(error_output)
 
     @tool_schema({
         "name": "submit",

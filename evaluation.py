@@ -87,7 +87,9 @@ def run_evaluation(
 
     if num_workers > 1:
         with Pool(num_workers) as pool:
-            results = pool.imap_unordered(process_instance_func, [row for _, row in dataset.iterrows()])
+            # Convert instances to (instance, output_dir) tuples
+            instance_tuples = [(row, output_dir) for _, row in dataset.iterrows()]
+            results = pool.imap_unordered(process_instance_wrapper, instance_tuples)
             for result in results:
                 update_progress(result)
     else:
@@ -326,25 +328,39 @@ def main():
     args = parser.parse_args()
 
     # Load predictions
-    with open(args.input_file, 'r') as f:
-        predictions = [json.loads(line) for line in f]
-
-    # Convert predictions to DataFrame
+    predictions = []
+    with open(args.input_file) as f:
+        for line in f:
+            predictions.append(json.loads(line))
+    
+    # Create DataFrame with predictions
     df_predictions = pd.DataFrame(predictions)
-
-    # Ensure required columns are present
-    required_columns = {'instance_id', 'model_patch'}
-    if not required_columns.issubset(df_predictions.columns):
-        raise ValueError(f"Input file must contain the following columns: {required_columns}")
-
+    
     # Load dataset
-    print(f"Loading dataset {args.dataset} ({args.split})...")
-    dataset = load_swebench_dataset(args.dataset, args.split)
-    instance_id_to_instance = {instance['instance_id']: instance for instance in dataset}
+    print(f"Loading dataset {args.dataset} (test)...")
+    dataset = load_dataset(args.dataset, split="test")
     print(f"Loaded {len(dataset)} instances from the dataset.")
+    
+    # Create a mapping of instance_id to dataset instance
+    instance_map = {instance['instance_id']: instance for instance in dataset}
+    
+    # Match predictions with dataset instances and handle nested instance data
+    def get_instance(row):
+        # First check if instance is already in the correct format
+        if isinstance(row.get('instance'), dict) and 'instance_id' in row['instance']:
+            return row['instance']
+        # Otherwise look up in dataset
+        return instance_map.get(row['instance_id'])
+    
+    df_predictions['instance'] = df_predictions.apply(get_instance, axis=1)
+    
+    # Verify we have valid instances
+    invalid_predictions = df_predictions['instance'].isna()
+    if invalid_predictions.any():
+        missing_ids = df_predictions.loc[invalid_predictions, 'instance_id'].tolist()
+        print(f"Warning: Could not find dataset instances for the following IDs: {missing_ids}")
+        raise ValueError("Some predictions could not be matched to dataset instances")
 
-    # Merge predictions with dataset
-    df_predictions['instance'] = df_predictions['instance_id'].apply(lambda x: instance_id_to_instance.get(x))
     df_predictions['test_spec'] = df_predictions['instance'].apply(make_test_spec)
 
     # Filter out any instances not found in the dataset
@@ -358,19 +374,21 @@ def main():
     # Prepare dataset
     instances = prepare_dataset(df_predictions, output_file)
 
-    def process_instance_wrapper(instance):
-        return process_instance(instance, args.output_dir)
-
-    # Run evaluation
+    # Move process_instance_wrapper outside of main() to make it pickleable
     run_evaluation(
         dataset=instances,
         output_file=output_file,
         output_dir=args.output_dir,
         num_workers=args.num_workers,
-        process_instance_func=process_instance_wrapper,
+        process_instance_func=lambda instance: process_instance(instance, args.output_dir),
     )
 
     print("\nEvaluation completed.")
+
+# Move process_instance_wrapper outside main() as a standalone function
+def process_instance_wrapper(instance_and_output_dir):
+    instance, output_dir = instance_and_output_dir
+    return process_instance(instance, output_dir)
 
 if __name__ == '__main__':
     main()
