@@ -37,7 +37,7 @@ class RepositoryTools(Tool):
 
     @tool_schema({
         "name": "view",
-        "description": "View the contents of a file or list the contents of a directory in the repository with detailed explanations.",
+        "description": "View the contents of multiple files or folders structure .",
         "parameters": {
             "type": "object",
             "properties": {

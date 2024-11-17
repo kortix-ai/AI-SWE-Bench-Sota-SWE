@@ -9,13 +9,13 @@ class SubmitWithSummaryTool(Tool):
 
     @tool_schema({
         "name": "submit_with_summary",
-        "description": "Submit the task along with a summary of your discoveries.",
+        "description": "Submit the task only include information that relevant and useful for sovling the issue.",
         "parameters": {
             "type": "object",
             "properties": {
                 "shared_knowledge": {
                     "type": "string",
-                    "description": """A summary of your discoveries, in JSON format, with the following schema:
+                    "description": """Relevant informatiion in JSON format, with the following schema:
                     {
                             'files_to_edit': [],
                             'related_files': [],
