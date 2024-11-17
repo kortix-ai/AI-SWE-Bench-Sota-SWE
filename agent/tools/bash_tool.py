@@ -13,6 +13,8 @@ class BashTool(Tool):
             f'. /opt/miniconda3/etc/profile.d/conda.sh && '
             f'conda activate testbed && '
             f'cd /testbed && '
+            f'git config --global --add safe.directory /testbed && '
+            f'git config --global core.pager cat && '
         )
 
     async def execute_command_in_container(self, command: str):
@@ -69,9 +71,9 @@ class BashTool(Tool):
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             if returncode == 0:
                 output = stdout.strip() if stdout.strip() else "Command executed successfully but produced no output."
-                return self.success_response(output)
+                return self.success_response(f"Command executed: `{command}`\nOutput:\n{output}")
             else:
                 error_output = stderr.strip() if stderr.strip() else "Unknown error occurred."
-                return self.fail_response(f"Command failed with error: {error_output}")
+                return self.fail_response(f"Command executed: `{command}`\nCommand failed with error: {error_output}")
         except Exception as e:
-            return self.fail_response(f"Error executing bash command: {str(e)}")
+            return self.fail_response(f"Command executed: `{command}`\n\nError executing bash command: {str(e)}")

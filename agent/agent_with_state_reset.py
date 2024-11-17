@@ -26,11 +26,6 @@ I've uploaded a python code repository in the directory /testbed/. Consider the 
 {problem_statement}
 </pr_description>
 
-And here's the current workspace state:
-<workspace_state>
-{workspace_state}
-</workspace_state>
-
 Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met? 
 I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way! 
 Your task is to make the minimal changes to non-tests files in the /repo directory to ensure the <pr_description> is satisfied. 
@@ -39,9 +34,10 @@ Follow these steps to resolve the issue:
 2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error 
 3. Edit the sourcecode of the repo to resolve the issue 
 4. Rerun your reproduce script and confirm that the error is fixed! 
-5. Think about edgecases and make sure your fix handles them as well 
+5. Think about edgecases and write edge cases test script to test the edge cases. Make sure your fix handles them as well!
 
 After editing or creating files, always use bash tool immediately, as they are working sequentially. Use <thoughts> and <actions> tags before using any tools. Your thinking should be thorough and so it's fine if it's very long.
+
 """
 
 @observe()
@@ -104,9 +100,15 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         })
 
         if total_iterations != 0:
+            await thread_manager.add_message(thread_id, {
+                "role": "user",
+                "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>""".format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
+            })
+
+
             await thread_manager.add_message_and_run_tools(thread_id, {
                 "role": "user",
-                'content': "Here's the content of opening files in the current workspace",
+                'content': "Here's the content of opening files in the current workspace and changes made:",
                 "tool_calls": [
                     {
                         "id": str(uuid.uuid4()),
@@ -127,6 +129,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                                 "paths": workspace_state.get('open_files_in_code_editor', [])
                             })
                         }
+                    },
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "function",
+                        "function": {
+                            "name": "bash_command",
+                            "arguments": json.dumps({
+                                "command": f"(git add -N . && git diff -- {' '.join(workspace_state.get('open_files_in_code_editor', []))}) || echo 'No changes in open files'"
+                            })
+                        }
                     }
                 ]
             })
@@ -140,7 +152,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 thread_manager.add_tool(SummaryTool, state_file=state_file)
                 await thread_manager.add_message(thread_id, {
                     "role": "user",
-                    "content": "Time's up! If you solved the issue, please submit. Otherwise, let's summarize the current state of the workspace and give instructions for the next iteration using SummaryTool."
+                    "content": "Time's up! 1. Have you fixed the issue? 2. Is the reproduce error test file fully functional? 3. Have you considered all possible edge cases by writing and running edge cases test script?\nIf you're confident that the issue is solved, please submit. Otherwise, you **MUST summarize** the current state of the workspace without doing anything else and provide instructions for the next iteration using SummaryTool."
                 })
 
             model_mapping = {

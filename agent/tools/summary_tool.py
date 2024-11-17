@@ -29,7 +29,7 @@ class SummaryTool(Tool):
                         },
                         "thinking_logs": {
                             "type": "array",
-                            "description": "Recent actions, trials, and thought process notes",
+                            "description": "Recent actions, trials, and thought process notes, what are suggestions for next steps (remember custom edge cases)",
                             "items": {"type": "string"}
                         },
                         "terminal_session": {
