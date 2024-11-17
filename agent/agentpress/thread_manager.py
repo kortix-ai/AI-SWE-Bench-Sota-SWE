@@ -502,21 +502,38 @@ class ThreadManager:
     async def add_message_and_run_tools(self, thread_id: str, message_data: Dict[str, Any]) -> None:
         """
         Add a message to the thread and execute its tool calls immediately.
+        For user messages, append tool results to the message content.
+        For other roles, add tool results as separate messages.
         
         Args:
             thread_id: The ID of the thread
             message_data: The message data containing tool calls to execute
         """
-        # Add the message first
-        await self.add_message(thread_id, message_data)
-        
-        # Execute tool calls if present
-        if 'tool_calls' in message_data:
+        if message_data.get('role') == 'user' and 'tool_calls' in message_data:
+            # Execute tools first
             available_functions = self.get_available_functions()
             tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
             
-            for result in tool_results:
-                await self.add_message(thread_id, result)
+            # Append tool results to user message content
+            original_content = message_data['content']
+            tool_outputs = "\n".join([f"\nTool {result['name']} output: {result['content']}" for result in tool_results])
+            message_data['content'] = f"{original_content}{tool_outputs}"
+            
+            # Remove tool_calls since they're now part of content
+            del message_data['tool_calls']
+            
+            # Add the modified user message
+            await self.add_message(thread_id, message_data)
+        else:
+            # For non-user messages, keep original behavior
+            await self.add_message(thread_id, message_data)
+            
+            if 'tool_calls' in message_data:
+                available_functions = self.get_available_functions()
+                tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
+                
+                for result in tool_results:
+                    await self.add_message(thread_id, result)
     
 
 if __name__ == "__main__":

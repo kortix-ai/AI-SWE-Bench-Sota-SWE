@@ -136,7 +136,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             total_iterations += 1
 
             # Add SummaryTool and reset at iteration 5
-            if total_iterations == reset_interval:
+            if inner_iteration == reset_interval:
                 thread_manager.add_tool(SummaryTool, state_file=state_file)
                 await thread_manager.add_message(thread_id, {
                     "role": "user",
@@ -176,15 +176,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                         print("Task completed via submit tool, stopping...")
                         return
         
-        await thread_manager.add_to_history_only(thread_id, {
-            "role": "switch",
-            "content": "--- Resetting workspace state ---"
-        })
+        if total_iterations < max_iterations:
+            await thread_manager.add_to_history_only(thread_id, {
+                "role": "switch",
+                "content": "--- Resetting workspace state ---"
+            })
 
-        # Reset thread messages
-        messages = await thread_manager.list_messages(thread_id)
-        for i in range(len(messages) - 1, -1, -1):
-            await thread_manager.remove_message(thread_id, i)
+            # Reset thread messages
+            messages = await thread_manager.list_messages(thread_id)
+            for i in range(len(messages) - 1, -1, -1):
+                await thread_manager.remove_message(thread_id, i)
 
         
 
