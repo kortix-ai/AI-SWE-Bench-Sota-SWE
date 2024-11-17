@@ -30,13 +30,17 @@ class ThreadManager:
     async def create_thread(self) -> str:
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
         with open(thread_path, 'w') as f:
+            json.dump({"messages": []}, f, indent=2)
+        with open(history_path, 'w') as f:
             json.dump({"messages": []}, f, indent=2)
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
         
         try:
             with open(thread_path, 'r') as f:
@@ -80,7 +84,17 @@ class ThreadManager:
             with open(thread_path, 'w') as f:
                 json.dump(thread_data, f, indent=2)
             
-            logging.info(f"Message added to thread {thread_id}: {message_data}")
+            try:
+                with open(history_path, 'r') as f:
+                    history_data = json.load(f)
+            except FileNotFoundError:
+                history_data = {"messages": []}
+            
+            history_data["messages"].append(message_data)
+            with open(history_path, 'w') as f:
+                json.dump(history_data, f, indent=2)
+            
+            logging.info(f"Message added to thread {thread_id} and history")
             
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
@@ -361,7 +375,7 @@ class ThreadManager:
         await self.add_message(thread_id, tool_message)
         return function_response
 
-    async def process_last_assistant_message(self, thread_id: str, execute_tools_async: bool = True):
+    async def process_last_assistant_message(self, thread_id: str, execute_tools_async: bool = False):
         messages = await self.list_messages(thread_id)
         last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant'), None)
         
@@ -452,6 +466,58 @@ class ThreadManager:
         except Exception as e:
             logging.error(f"Failed to remove message from thread {thread_id}: {e}")
             raise e
+
+    async def add_to_history_only(self, thread_id: str, message_data: Dict[str, Any]):
+        """Add a message only to the history file without affecting the main thread.
+        
+        Args:
+            thread_id (str): The ID of the thread
+            message_data (Dict[str, Any]): The message data to add to history
+        """
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
+        
+        try:
+            try:
+                with open(history_path, 'r') as f:
+                    history_data = json.load(f)
+            except FileNotFoundError:
+                history_data = {"messages": []}
+            
+            # Process ToolResult instances
+            for key, value in message_data.items():
+                if isinstance(value, ToolResult):
+                    message_data[key] = str(value)
+            
+            history_data["messages"].append(message_data)
+            
+            with open(history_path, 'w') as f:
+                json.dump(history_data, f, indent=2)
+            
+            logging.info(f"Message added to history of thread {thread_id}")
+            
+        except Exception as e:
+            logging.error(f"Failed to add message to history of thread {thread_id}: {e}")
+            raise e
+
+    async def add_message_and_run_tools(self, thread_id: str, message_data: Dict[str, Any]) -> None:
+        """
+        Add a message to the thread and execute its tool calls immediately.
+        
+        Args:
+            thread_id: The ID of the thread
+            message_data: The message data containing tool calls to execute
+        """
+        # Add the message first
+        await self.add_message(thread_id, message_data)
+        
+        # Execute tool calls if present
+        if 'tool_calls' in message_data:
+            available_functions = self.get_available_functions()
+            tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
+            
+            for result in tool_results:
+                await self.add_message(thread_id, result)
+    
 
 if __name__ == "__main__":
     import asyncio

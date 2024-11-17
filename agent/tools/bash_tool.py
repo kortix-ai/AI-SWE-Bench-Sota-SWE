@@ -52,9 +52,7 @@ class BashTool(Tool):
         "name": "bash_command",
         "description": (
             "Execute a bash shell command in the repository environment with explanatory output.\n"
-            "This tool allows you to run shell commands directly within the repository environment.\n"
             "**Notes:**\n"
-            "- Always ensure that commands are safe and necessary.\n"
             "- The working directory is `/testbed`.\n"
             "- The environment is set up with `conda activate testbed`.\n"
         ),

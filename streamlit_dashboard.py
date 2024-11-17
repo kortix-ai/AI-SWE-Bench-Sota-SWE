@@ -49,13 +49,25 @@ def load_thread_data(run_dir: str) -> List[Dict]:
     threads_dir = os.path.join(run_dir, 'threads')
     thread_data = []
     if os.path.exists(threads_dir):
-        for file in sorted(os.listdir(threads_dir)):
-            if file.endswith('.json'):
+        # First look for history files
+        history_files = [f for f in os.listdir(threads_dir) if f.endswith('_history.json')]
+        if history_files:
+            # Sort history files to maintain order
+            for file in sorted(history_files):
                 try:
                     with open(os.path.join(threads_dir, file), 'r') as f:
                         thread_data.append(json.load(f))
                 except json.JSONDecodeError:
                     st.warning(f"Failed to decode JSON from {file}")
+        else:
+            # Fall back to regular thread files for backward compatibility
+            for file in sorted(os.listdir(threads_dir)):
+                if file.endswith('.json') and not file.endswith('_history.json'):
+                    try:
+                        with open(os.path.join(threads_dir, file), 'r') as f:
+                            thread_data.append(json.load(f))
+                    except json.JSONDecodeError:
+                        st.warning(f"Failed to decode JSON from {file}")
     return thread_data
 
 def load_diff_file(run_dir: str, run_name: str) -> str:
@@ -88,7 +100,7 @@ def format_message_content(content):
         return "\n".join(formatted_content)
     return str(content)
 
-def truncate_text(text: str, max_lines: int = 10) -> str:
+def truncate_text(text: str, max_lines: int = 20) -> str:
     """Truncate text to show first and last n lines."""
     lines = text.splitlines()
     if len(lines) <= max_lines * 2:
