@@ -9,67 +9,116 @@ import uuid
 # from prompts import system_prompt, continue_instructions 
 from tools.summary_tool import SummaryTool
 
-system_prompt = """
-You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues.
-<IMPORTANT>\n*After using a tool to make changes to a file, immediately run a bash command to run script.\n</IMPORTANT>\n
+
+
+system_prompt = """You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues.
+
+<IMPORTANT>
+- Before modifying any files, thoroughly analyze the problem by observing and reasoning about the issue.
+- Use the following tags to structure your thought process and actions:
+  - <OBSERVE>: To note observations about the codebase, files, or errors.
+  - <REASON>: To analyze the issue, consider possible causes, and evaluate potential solutions.
+  - <PLAN>: To outline your intended approach before implementing changes.
+  - <ACTION>: To document the actions you take, such as modifying files or running commands.
+  - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
+  - <CRITICAL>: To evaluate the overall quality of your work and ensure minimal concise changes, no regressions.
+- Maintain a checklist of tasks to track your progress, marking each as completed when done.
+- Ensure that your changes are minimal and do not affect existing test cases. You cannot run existing test files; you can only read them. Instead, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
+- Think deeply about edge cases and how your changes might impact other parts of the system.
+</IMPORTANT>
 """
 
 user_prompt = """
-<uploaded_files>
-/testbed/
-</uploaded_files>
-I've uploaded a python code repository in the directory /testbed/. Consider the following PR description:
+I've uploaded a Python code repository in the directory `/testbed/`. Consider the following PR description:
 
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met? 
-I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way! 
-Your task is to make the minimal changes to non-tests files in the /repo directory to ensure the <pr_description> is satisfied. 
-Follow these steps to resolve the issue: 
-1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure. 
-2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error 
-3. Edit the sourcecode of the repo to resolve the issue 
-4. Rerun your reproduce script and confirm that the error is fixed! 
-5. Think about edgecases and write edge cases test script to test the edge cases. Make sure your fix handles them as well!
+Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
 
-After editing or creating files, always use bash tool immediately, as they are working sequentially. Use <thoughts> and <actions> tags before using any tools. Your thinking should be thorough and so it's fine if it's very long.
+**Important Notes:**
 
+- Your task is to make minimal changes to the non-test files in the `/testbed` directory to ensure the <pr_description> is satisfied.
+- Focus on analyzing the issue thoroughly before making any changes.
+- Ensure that your changes do not affect existing test cases. You cannot run existing test files; you can only read them. Instead, you can create a `reproduce_error.py` script to test the error and an `edge_cases.py` script to test edge cases.
+- Use the following tags to structure your work:
+  - <OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>
+- Keep a **checklist of tasks** and track your progress as you complete each step.
+
+**Suggested Steps:**
+
+1. Explore and find relevant files related to the issue.
+2. Analyze the PR description and understand the issue in detail.
+3. Identify the root cause by examining the related files.
+4. Check related existing test files.
+5. Consider all possible ways to fix the issue without affecting existing test cases.
+6. Decide on the best solution that can work.
+7. Reproduce the error to confirm the issue.
+8. Implement the fix, ensuring it does not affect other test cases.
+9. Handle edge cases by writing and running additional tests.
+10. Use <CRITICAL> to evaluate your changes for minimal concise impact and absence of regressions.
+11. Review existing tests to ensure your changes do not introduce regressions. Summarize your findings or submit the fix.
+
+**Current Workspace State:**
+<workspace_state>
+{workspace_state}
+</workspace_state>
+
+Remember to use the tags appropriately to structure your response and thought process.
 """
 
-# Add new continuation prompt
 continuation_prompt = """
-This is a continuation of the previous task. You are trying to implement the necessary changes to the repository so that the requirements specified in the PR description are met.
+This is a continuation of the previous task. You are working on implementing the necessary changes to the repository so that the requirements specified in the PR description are met.
 
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Here are the normal steps to solve the issue:
-1. Edit the sourcecode of the repo to resolve the issue 
-2. Rerun your reproduce script and confirm that the error is fixed! 
-3. Think about edgecases and write edge cases test script to test the edge cases. Make sure the fix handles them as well!
+**Please proceed with the following steps, using the tags to structure your work:**
 
-Please check the current state of the workspace, some steps are probably done, and you should continue working working from there. Consider what has been accomplished so far and proceed accordingly. Remember to test your changes thoroughly and handle any edge cases.
+1. Review the current workspace state and note what has been accomplished so far.
+2. Re-evaluate the issue in light of the work done and consider if the approach needs adjustment.
+3. Update your plan based on your observations and reasoning.
+4. Continue implementing the fix, ensuring minimal changes and no impact on existing tests.
+5. Run your reproduction script to confirm that the error is fixed.
+6. Handle edge cases by writing and running additional tests.
+7. Use <CRITICAL> to evaluate whether your solution adheres to minimal changes, handles all edge cases, and does not introduce regressions.
+8. Check all existing tests without running them, and use `git diff` on edited files to ensure your changes do not introduce regressions.
+
+**Current Workspace State:**
+<workspace_state>
+{workspace_state}
+</workspace_state>
+
+Remember to use the tags (<OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) and to update your checklist of tasks as you progress.
 """
+
+#------------------------------------------------------------
 
 @observe()
-async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 3, model_name: str = "sonnet"):
+async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 8, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
     use_xml = False
 
-    # Initialize workspace state
-    initial_workspace = {
-        "explorer_folders": [],
-        "open_files_in_code_editor": [],
-        "thinking_logs": [],
-        "test_commands": []
+    workspace_state = {
+        "checklist_of_tasks": """Status of tasks:
+1. [ ] Explore and find relevant files
+2. [ ] Analyze PR description and issue details
+3. [ ] Analyze root cause with related files
+4. [ ] View existing tests without running them
+5. [ ] Consider multiple possible fixes that don't affect existing tests
+6. [ ] Choose the best solution which is minimal and precise
+7. [ ] Reproduce the error
+8. [ ] Implement the fix without affecting other test cases
+9. [ ] Handle edge cases
+10. [ ] Review existing tests without running them to check for potential regressions
+11. [ ] Summarize findings or submit the fix"""
     }
-    await state_manager.set('workspace_state', initial_workspace)
+    await state_manager.set('workspace_state', workspace_state)
 
     with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
@@ -99,7 +148,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         #     }
         #     await thread_manager.execute_tool_and_add_message(thread_id, 'view', folder_view_arguments)
 
-        files = workspace_state.get('open_files_in_code_editor', [])
+        files = workspace_state.get('open_folders_and_files_in_code_editor', [])
         if files:
             file_view_arguments = {
                 "paths": list(set(files)),
@@ -114,7 +163,10 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         for i in range(len(messages) - 1, -1, -1):
             await thread_manager.remove_message(thread_id, i)
 
-        system = system_prompt.format(problem_statement=problem_statement)
+        system = system_prompt.format(
+            problem_statement=problem_statement,
+            workspace_state=summary_tool.format_workspace_summary(workspace_state)
+            )
         system_message = {
             "role": "system",
             "content": system
@@ -126,20 +178,26 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         if total_iterations == 0:
             await thread_manager.add_message(thread_id, {
                 "role": "user", 
-                "content": user_prompt.format(problem_statement=problem_statement)
+                "content": user_prompt.format(
+                    problem_statement=problem_statement,
+                    workspace_state=summary_tool.format_workspace_summary(workspace_state)
+                    )
             })
         else:
             await thread_manager.add_message(thread_id, {
                 "role": "user",
-                "content": continuation_prompt.format(problem_statement=problem_statement)
+                "content": continuation_prompt.format(
+                    problem_statement=problem_statement,
+                    workspace_state=summary_tool.format_workspace_summary(workspace_state)
+                )
             })
 
-            await thread_manager.add_message(thread_id, {
-                "role": "user",
-                "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>
-                You can find below the current ACTUAL CONTENT of editing files and folders in the explorer. Continue working from here. Do not view these files again.
-                """.format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
-            })
+            # await thread_manager.add_message(thread_id, {
+            #     "role": "user",
+            #     "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>
+            #     You can find below the current ACTUAL CONTENT of editing files and folders in the explorer. Continue working from here. Do not view these files again.
+            #     """.format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
+            # })
 
             await execute_view_commands(thread_manager, thread_id, workspace_state)
 
@@ -178,9 +236,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 thread_manager.add_tool(SummaryTool, state_file=state_file)
                 await thread_manager.add_message(thread_id, {
                     "role": "user",
-                    "content": "Time's up! 1. Have you fixed the issue? 2. Is the reproduce error test file fully functional? 3. Have you considered all possible edge cases by writing and running edge cases test script?\nIf you're confident that the issue is solved, please submit. Otherwise, you **MUST summarize** the current state of the workspace without doing anything else and provide instructions for the next iteration using SummaryTool."
+                    "content": (
+                        "Time's up! Please review your checklist of tasks and indicate which tasks have been completed. "
+                        "Have you met all the requirements specified in the PR description? Ensure that you have followed all the steps, "
+                        "including analyzing the issue, implementing minimal changes without affecting existing tests, and handling edge cases. "
+                        "If you have completed all tasks and are confident that the issue is resolved, please submit your fix. "
+                        "Otherwise, you must summarize the current state of the workspace without doing anything else and provide instructions "
+                        "for the next iteration using SummaryTool."
+                    )
                 })
-                tool_choice={"type": "function", "function": {"name": "summarize"}},
+                tool_choice={"type": "function", "function": {"name": "summarize"}}
             else:
                 tool_choice="any"
 

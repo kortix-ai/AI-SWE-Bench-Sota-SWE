@@ -264,3 +264,136 @@ OUTPUT YOUR ANALYSIS:
 """
 #   - DO NOT create entire new test suites
 #   - DO NOT duplicate existing test coverage
+
+
+
+# -----------------------------------
+# old working prompt
+
+# system_prompt = """
+# You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues.
+# <IMPORTANT>\n*After using a tool to make changes to a file, immediately run a bash command to run script.\n</IMPORTANT>\n
+# """
+
+# user_prompt = """
+# <uploaded_files>
+# /testbed/
+# </uploaded_files>
+# I've uploaded a python code repository in the directory /testbed/. Consider the following PR description:
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met? 
+# I've already taken care of all changes to any of the test files described in the <pr_description>. This means you DON'T have to modify the testing logic or any of the tests in any way! 
+# Your task is to make the minimal changes to non-tests files in the /repo directory to ensure the <pr_description> is satisfied. 
+# Follow these steps to resolve the issue: 
+# 1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure. 
+# 2. Create a script to reproduce the error and execute it with `python <filename.py>` using the BashTool, to confirm the error 
+# 3. Edit the sourcecode of the repo to resolve the issue 
+# 4. Rerun your reproduce script and confirm that the error is fixed! 
+# 5. Think about edgecases and write edge cases test script to test the edge cases. Make sure your fix handles them as well!
+
+# After editing or creating files, always use bash tool immediately, as they are working sequentially. Use <thoughts> and <actions> tags before using any tools. Your thinking should be thorough and so it's fine if it's very long.
+
+# """
+
+# continuation_prompt = """
+# This is a continuation of the previous task. You are trying to implement the necessary changes to the repository so that the requirements specified in the PR description are met.
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Here are the normal steps to solve the issue:
+# 1. Edit the sourcecode of the repo to resolve the issue 
+# 2. Rerun your reproduce script and confirm that the error is fixed! 
+# 3. Think about edgecases and write edge cases test script to test the edge cases. Make sure the fix handles them as well!
+
+# Please check the current state of the workspace, some steps are probably done, and you should continue working working from there. Consider what has been accomplished so far and proceed accordingly. Remember to test your changes thoroughly and handle any edge cases.
+# """
+
+
+# -----------------------------------
+
+# system_prompt = """You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues.
+
+# <IMPORTANT>
+# - Before modifying any files, thoroughly analyze the problem by observing and reasoning about the issue.
+# - Use the following tags to structure your thought process and actions:
+#   - <OBSERVE>: To note observations about the codebase, files, or errors.
+#   - <REASON>: To analyze the issue, consider possible causes, and evaluate potential solutions.
+#   - <PLAN>: To outline your intended approach before implementing changes.
+#   - <ACTION>: To document the actions you take, such as modifying files or running commands.
+#   - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
+# - Maintain a checklist of tasks to track your progress, marking each as completed when done.
+# - Ensure that your changes are minimal and do not affect existing test cases. Always run tests before and after your changes.
+# - Think deeply about edge cases and how your changes might impact other parts of the system.
+# </IMPORTANT>"""
+
+# user_prompt = """
+# I've uploaded a Python code repository in the directory /testbed/. Consider the following PR description:
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
+
+# **Important Notes:**
+
+# - Your task is to make minimal changes to the non-test files in the /testbed directory to ensure the <pr_description> is satisfied.
+# - Focus on analyzing the issue thoroughly before making any changes.
+# - Ensure that your changes do not affect existing test cases. You can only read test files but can not run them. Instead, you can create a reproduce_error.py script to test the error and edge_cases.py to test edge cases.
+# - Use the following tags to structure your work:
+#   - <OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>
+# - Keep a **checklist of tasks** and track your progress as you complete each step.
+
+# **Suggested Steps:**
+
+# 1. Explore and find relevant files related to the issue.
+# 2. Analyze the PR description and understand the issue in detail.
+# 3. Identify the root cause by examining the related files.
+# 4. Check related existing test files.
+# 5. Consider all possible ways to fix the issue without affecting existing test cases.
+# 6. Decide on the best solution that can work.
+# 7. Reproduce the error to confirm the issue.
+# 8. Implement the fix, ensuring it does not affect other test cases.
+# 9. Handle edge cases by writing and running additional tests.
+# 10. Run existing tests to check for regressions. Summarize your findings or submit the fix.
+
+# **Current Workspace State:**
+# <workspace_state>
+# {workspace_state}
+# </workspace_state>
+
+# Remember to use the tags appropriately to structure your response and thought process.
+# """
+
+# continuation_prompt = """
+# This is a continuation of the previous task. You are working on implementing the necessary changes to the repository so that the requirements specified in the PR description are met.
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# **Please proceed with the following steps, using the tags to structure your work:**
+
+# 1. Review the current workspace state and note what has been accomplished so far.
+# 2. Re-evaluate the issue in light of the work done and consider if the approach needs adjustment.
+# 3. Update your plan based on your observations and reasoning.
+# 4. Continue implementing the fix, ensuring minimal changes and no impact on existing tests.
+# 5. Run your reproduction script to confirm that the error is fixed.
+# 6. Handle edge cases by writing and running additional tests.
+# 7. Check all existing tests without running them, and use git diff edited files to ensure your changes do not introduce regressions.
+
+# **Current Workspace State:**
+# <workspace_state>
+# {workspace_state}
+# </workspace_state>
+
+# Content of files and output of tests are provided below. 
+
+# Remember to use the tags (<OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>) and to update your checklist of tasks as you progress.
+# """
