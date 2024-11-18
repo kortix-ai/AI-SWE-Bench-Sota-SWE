@@ -18,6 +18,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Use the following tags to structure your thought process and actions:
   - <OBSERVE>: To note observations about the codebase, files, or errors.
   - <REASON>: To analyze the issue, consider possible causes, and evaluate potential solutions.
+  - <FIX>: To propose multiple fix solutions. 
   - <PLAN>: To outline your intended approach before implementing changes.
   - <ACTION>: To document the actions you take, such as modifying files or running commands.
   - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
@@ -43,22 +44,23 @@ Can you help me implement the necessary changes to the repository so that the re
 - Focus on analyzing the issue thoroughly before making any changes.
 - Ensure that your changes do not affect existing test cases. You cannot run existing test files; you can only read them. Instead, you can create a `reproduce_error.py` script to test the error and an `edge_cases.py` script to test edge cases.
 - Use the following tags to structure your work:
-  - <OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>
+  - <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>
 - Keep a **checklist of tasks** and track your progress as you complete each step.
 
 **Suggested Steps:**
 
-1. Explore and find relevant files related to the issue.
-2. Analyze the PR description and understand the issue in detail.
-3. Identify the root cause by examining the related files.
-4. Check related existing test files.
-5. Consider all possible ways to fix the issue without affecting existing test cases.
-6. Decide on the best solution that can work.
-7. Reproduce the error to confirm the issue.
-8. Implement the fix, ensuring it does not affect other test cases.
-9. Handle edge cases by writing and running additional tests.
-10. Use <CRITICAL> to evaluate your changes for minimal concise impact and absence of regressions.
-11. Review existing tests to ensure your changes do not introduce regressions. Summarize your findings or submit the fix.
+1. Explore and find files related to the issue.
+2. Expand the search scope to related files.
+3. Analyze the PR description and understand the issue in detail.
+4. Identify the root cause by examining the related files.
+5. Check related existing test files.
+6. User <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
+7. Decide on the minimal solution that can work to pass pull request requirements.
+8. Reproduce the error to confirm the issue.
+9. Implement the fix, ensuring it does not affect other test cases.
+10. Handle edge cases by writing and running additional tests.
+11. Use <CRITICAL> to evaluate your changes for minimal concise impact and absence of regressions.
+12. Review existing tests to ensure your changes do not introduce regressions. Summarize your findings or submit the fix.
 
 **Current Workspace State:**
 <workspace_state>
@@ -84,14 +86,13 @@ This is a continuation of the previous task. You are working on implementing the
 5. Run your reproduction script to confirm that the error is fixed.
 6. Handle edge cases by writing and running additional tests.
 7. Use <CRITICAL> to evaluate whether your solution adheres to minimal changes, handles all edge cases, and does not introduce regressions.
-8. Check all existing tests without running them, and use `git diff` on edited files to ensure your changes do not introduce regressions.
 
 **Current Workspace State:**
 <workspace_state>
 {workspace_state}
 </workspace_state>
 
-Remember to use the tags (<OBSERVE>, <REASON>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) and to update your checklist of tasks as you progress.
+Remember to use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) and to update your checklist of tasks as you progress.
 """
 
 #------------------------------------------------------------
@@ -140,15 +141,15 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     total_iterations = 0
 
     async def execute_view_commands(thread_manager, thread_id, workspace_state):
-        # folders = workspace_state.get('explorer_folders', [])
-        # if folders:
-        #     folder_view_arguments = {
-        #         "paths": list(set(folders)),
-        #         "depth": 1
-        #     }
-        #     await thread_manager.execute_tool_and_add_message(thread_id, 'view', folder_view_arguments)
+        folders = workspace_state.get('open_folders', [])
+        if folders:
+            folder_view_arguments = {
+                "paths": list(set(folders)),
+                "depth": 1
+            }
+            await thread_manager.execute_tool_and_add_message(thread_id, 'view', folder_view_arguments)
 
-        files = workspace_state.get('open_folders_and_files_in_code_editor', [])
+        files = workspace_state.get('open_files_in_code_editor', [])
         if files:
             file_view_arguments = {
                 "paths": list(set(files)),

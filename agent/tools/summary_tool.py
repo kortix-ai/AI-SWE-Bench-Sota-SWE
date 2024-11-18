@@ -19,25 +19,31 @@ class SummaryTool(Tool):
                         "type": "object",
                         "description": "Current workspace state information",
                         "properties": {
+                            "open_folders" : {
+                                "type": "array",
+                                "description": "List of important folders related to the issue",
+                                "items": {"type": "string"}
+                            },
                             "checklist_of_tasks": {
                                 "type": "array",
                                 "description": """Status of tasks:
-1. [ ] Explore and find relevant files
-2. [ ] Analyze PR description and issue details
-3. [ ] Analyze root cause with related files
-4. [ ] View existing tests without running them
-5. [ ] Consider multiple possible fixes that don't affect existing tests
-6. [ ] Choose the best solution which is minimal and precise
-7. [ ] Reproduce the error
-8. [ ] Implement the fix without affecting other test cases
-9. [ ] Handle edge cases
-10. [ ] Review existing tests without running them to check for potential regressions
-11. [ ] Summarize findings or submit the fix""",
+1. [ ] Explore and find the root cause
+2. [ ] Expand the search scope to related files 
+3. [ ] Analyze PR description and issue details
+4. [ ] Analyze root cause with related files
+5. [ ] View existing tests without running them
+6. [ ] Consider multiple possible fixes that don't affect existing tests
+7. [ ] Choose the best solution which is minimal and precise
+8. [ ] Reproduce the error
+9. [ ] Implement the fix without affecting other test cases
+10. [ ] Handle edge cases
+11. [ ] Review existing tests without running them to check for potential regressions
+12. [ ] Submit the fix if all tasks are completed, otherwise summarize findings""",
                                 "items": {"type": "string"}
                             },
-                            "open_folders_and_files_in_code_editor": {
+                            "open_files_in_code_editor": {
                                 "type": "array",
-                                "description": "List of important folders, files currently open in editor, including relevant read-only files, edited files and related existing test files",
+                                "description": "List of important files currently open in editor, including relevant read-only files, edited files and related existing test files",
                                 "items": {"type": "string"}
                             },
                             "issue_analysis": {
