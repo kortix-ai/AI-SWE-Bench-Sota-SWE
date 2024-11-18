@@ -1,4 +1,3 @@
-
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 import json
@@ -80,14 +79,27 @@ class ReportTool(Tool):
     )
     async def report(self, workspace_state) -> ToolResult:
         try:
+            # Handle string input by parsing as JSON
             if isinstance(workspace_state, str):
                 workspace_state = json.loads(workspace_state)
+            
+            # If there's a nested workspace_state, use that instead
+            if isinstance(workspace_state, dict) and 'workspace_state' in workspace_state:
+                workspace_state = workspace_state['workspace_state']
+            
+            # Validate the workspace state structure
+            if not isinstance(workspace_state, dict):
+                return self.fail_response("Workspace state must be a dictionary")
+
+            # Update the state
             await self.state_manager.set('workspace_state', workspace_state)
             workspace_report = self.format_workspace_report(workspace_state)
             
             return self.success_response(
-                f"""Workspace state updated:\n<workspace_state>\n{workspace_report}\n<workspace_state>"""
+                f"""Workspace state updated:\n<workspace_state>\n{workspace_report}\n</workspace_state>"""
             )
+        except json.JSONDecodeError as e:
+            return self.fail_response(f"Invalid JSON format: {str(e)}")
         except Exception as e:
             return self.fail_response(f"Failed to update workspace state: {str(e)}")
 
