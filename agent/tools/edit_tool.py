@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional, Literal
@@ -54,37 +54,72 @@ class EditTool(Tool):
         "undo_edit",
     ]
 
-    @tool_schema({
-        "name": "edit_file",
-        "description": (
-            "Edit files with commands: 'view', 'create', 'str_replace', 'insert', 'undo_edit'.\n"
-            "Available commands:\n"
-            "- **view**: View the contents of a file or directory. Optionally specify a line range.\n"
-            "- **create**: Create a new file with specified content.\n"
-            "- **insert**: Insert text into a file at a specified line number.\n"
-            "- **undo_edit**: Undo the last edit made to a file.\n"
-            "**Note**: All file paths should be absolute paths starting from the root directory."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The command to execute. One of 'view', 'create', 'str_replace', 'insert', 'undo_edit'.",
-                    "enum": ["view", "create", "str_replace", "insert", "undo_edit"]
+    @xml_schema(
+        tag_name="edit-file",
+        mappings=[
+            {"param_name": "command", "node_type": "attribute", "path": "."},
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "file_text", "node_type": "element", "path": "file_text"},
+            {"param_name": "view_range", "node_type": "element", "path": "view_range"},
+            {"param_name": "old_str", "node_type": "element", "path": "old_str"},
+            {"param_name": "new_str", "node_type": "element", "path": "new_str"},
+            {"param_name": "insert_line", "node_type": "element", "path": "insert_line"}
+        ],
+        example='''
+        <edit-file command="create" path="/testbed/example.txt">
+            <file_text>Hello World!</file_text>
+        </edit-file>
+        '''
+    )
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": (
+                "Edit files with commands: 'view', 'create', 'str_replace', 'insert', 'undo_edit'.\n"
+                "Available commands:\n"
+                "- **view**: View the contents of a file or directory. Optionally specify a line range.\n"
+                "- **create**: Create a new file with specified content.\n"
+                "- **insert**: Insert text into a file at a specified line number.\n"
+                "- **undo_edit**: Undo the last edit made to a file.\n"
+                "**Note**: All file paths should be absolute paths starting from the root directory."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command to execute. One of 'view', 'create', 'str_replace', 'insert', 'undo_edit'.",
+                        "enum": ["view", "create", "str_replace", "insert", "undo_edit"]
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute file path to operate on."
+                    },
+                    "file_text": {
+                        "type": ["string", "null"],
+                        "description": "The text content for the 'create' command."
+                    },
+                    "view_range": {
+                        "type": ["array", "null"],
+                        "items": {"type": "integer"},
+                        "description": "Line range to view for the 'view' command. Should be a list of two integers: [start_line, end_line]."
+                    },
+                    "old_str": {
+                        "type": ["string", "null"],
+                        "description": "The old string to be replaced in 'str_replace' command."
+                    },
+                    "new_str": {
+                        "type": ["string", "null"],
+                        "description": "The new string to replace with in 'str_replace' and 'insert' commands."
+                    },
+                    "insert_line": {
+                        "type": ["integer", "null"],
+                        "description": "Line number to insert at for 'insert' command (starting from 1)."
+                    }
                 },
-                "path": {"type": "string", "description": "The absolute file path to operate on."},
-                "file_text": {"type": ["string", "null"], "description": "The text content for the 'create' command."},
-                "view_range": {
-                    "type": ["array", "null"],
-                    "items": {"type": "integer"},
-                    "description": "Line range to view for the 'view' command. Should be a list of two integers: [start_line, end_line]."
-                },
-                "old_str": {"type": ["string", "null"], "description": "The old string to be replaced in 'str_replace' command."},
-                "new_str": {"type": ["string", "null"], "description": "The new string to replace with in 'str_replace' and 'insert' commands."},
-                "insert_line": {"type": ["integer", "null"], "description": "Line number to insert at for 'insert' command (starting from 1)."}
-            },
-            "required": ["command", "path"]
+                "required": ["command", "path"]
+            }
         }
     })
     async def edit_file(self, command: str, path: str, file_text: Optional[str] = None,

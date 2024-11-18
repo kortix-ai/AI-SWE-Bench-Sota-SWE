@@ -1,43 +1,114 @@
+"""
+Conversation thread management system for AgentPress.
+
+This module provides comprehensive conversation management, including:
+- Thread creation and persistence
+- Message handling with support for text and images
+- Tool registration and execution
+- LLM interaction with streaming support
+- Error handling and cleanup
+"""
+
 import json
 import logging
-import asyncio
 import os
-from typing import List, Dict, Any, Optional, Callable, Type
+import uuid
+from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
+import uuid
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-import uuid
+from agentpress.llm_response_processor import LLMResponseProcessor
+from agentpress.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+
+from agentpress.xml_tool_parser import XMLToolParser
+from agentpress.xml_tool_executor import XMLToolExecutor
+from agentpress.xml_results_adder import XMLResultsAdder
+from agentpress.standard_tool_parser import StandardToolParser
+from agentpress.standard_tool_executor import StandardToolExecutor
+from agentpress.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
-    def __init__(self, threads_dir: str = 'threads'):
+    """Manages conversation threads with LLM models and tool execution.
+    
+    Provides comprehensive conversation management, handling message threading,
+    tool registration, and LLM interactions with support for both standard and
+    XML-based tool execution patterns.
+    
+    Attributes:
+        threads_dir (str): Directory for storing thread files
+        tool_registry (ToolRegistry): Registry for managing available tools
+        
+    Methods:
+        add_tool: Register a tool with optional function filtering
+        create_thread: Create a new conversation thread
+        add_message: Add a message to a thread
+        list_messages: Retrieve messages from a thread
+        run_thread: Execute a conversation thread with LLM
+    """
+
+    def __init__(self, threads_dir: str = "/home/nightfury/projects/test/new_agent_version/threads"):
+        """Initialize ThreadManager.
+        
+        Args:
+            threads_dir: Directory to store thread files
+            
+        Notes:
+            Creates the threads directory if it doesn't exist
+        """
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
         os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
-        """
-        Add a tool to the ThreadManager.
-        If function_names is provided, only register those specific functions.
-        If function_names is None, register all functions from the tool.
+        """Add a tool to the ThreadManager.
         
         Args:
             tool_class: The tool class to register
-            function_names: Optional list of function names to register
-            **kwargs: Additional keyword arguments passed to tool initialization
+            function_names: Optional list of specific functions to register
+            **kwargs: Additional arguments passed to tool initialization
+            
+        Notes:
+            - If function_names is None, all functions are registered
+            - Tool instances are created with provided kwargs
         """
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
+        """Create a new conversation thread.
+        
+        Returns:
+            str: Unique thread ID for the created thread
+            
+        Raises:
+            IOError: If thread file creation fails
+            
+        Notes:
+            Creates a new thread file with an empty messages list
+        """
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
         with open(thread_path, 'w') as f:
-            json.dump({"messages": []}, f, indent=2)
-        with open(history_path, 'w') as f:
-            json.dump({"messages": []}, f, indent=2)
+            json.dump({"messages": []}, f)
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
+        """Add a message to an existing thread.
+        
+        Args:
+            thread_id: ID of the target thread
+            message_data: Message content and metadata
+            images: Optional list of image data dictionaries
+            
+        Raises:
+            FileNotFoundError: If thread doesn't exist
+            Exception: For other operation failures
+            
+        Notes:
+            - Handles cleanup of incomplete tool calls
+            - Supports both text and image content
+            - Converts ToolResult instances to strings
+        """
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
@@ -48,20 +119,25 @@ class ThreadManager:
             
             messages = thread_data["messages"]
             
+            # Handle cleanup of incomplete tool calls
             if message_data['role'] == 'user':
-                last_assistant_index = next((i for i in reversed(range(len(messages))) if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+                last_assistant_index = next((i for i in reversed(range(len(messages))) 
+                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
                 
                 if last_assistant_index is not None:
                     tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] if msg['role'] == 'tool')
+                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
+                                           if msg['role'] == 'tool')
                     
                     if tool_call_count != tool_response_count:
                         await self.cleanup_incomplete_tool_calls(thread_id)
 
+            # Convert ToolResult instances to strings
             for key, value in message_data.items():
                 if isinstance(value, ToolResult):
                     message_data[key] = str(value)
 
+            # Handle image attachments
             if images:
                 if isinstance(message_data['content'], str):
                     message_data['content'] = [{"type": "text", "text": message_data['content']}]
@@ -82,25 +158,45 @@ class ThreadManager:
             thread_data["messages"] = messages
             
             with open(thread_path, 'w') as f:
-                json.dump(thread_data, f, indent=2)
-            
+                json.dump(thread_data, f)
+
+            # Write to history file
             try:
                 with open(history_path, 'r') as f:
                     history_data = json.load(f)
             except FileNotFoundError:
                 history_data = {"messages": []}
-            
             history_data["messages"].append(message_data)
             with open(history_path, 'w') as f:
-                json.dump(history_data, f, indent=2)
+                json.dump(history_data, f)
             
-            logging.info(f"Message added to thread {thread_id} and history")
-            
+            logging.info(f"Message added to thread {thread_id} and history: {message_data}")
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise e
 
-    async def list_messages(self, thread_id: str, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
+    async def list_messages(
+        self, 
+        thread_id: str, 
+        hide_tool_msgs: bool = False, 
+        only_latest_assistant: bool = False, 
+        regular_list: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Retrieve messages from a thread with optional filtering.
+        
+        Args:
+            thread_id: ID of the thread to retrieve messages from
+            hide_tool_msgs: If True, excludes tool messages and tool calls
+            only_latest_assistant: If True, returns only the most recent assistant message
+            regular_list: If True, only includes standard message types
+            
+        Returns:
+            List of messages matching the filter criteria
+            
+        Notes:
+            - Returns empty list if thread doesn't exist
+            - Filters can be combined for different views of the conversation
+        """
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
         try:
@@ -134,12 +230,26 @@ class ThreadManager:
             return []
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
+        """Clean up incomplete tool calls in a thread.
+        
+        Args:
+            thread_id: ID of the thread to clean up
+            
+        Returns:
+            bool: True if cleanup was performed, False otherwise
+            
+        Notes:
+            - Adds failure results for incomplete tool calls
+            - Maintains thread consistency after interruptions
+        """
         messages = await self.list_messages(thread_id)
-        last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant' and 'tool_calls' in m), None)
+        last_assistant_message = next((m for m in reversed(messages) 
+            if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
         if last_assistant_message:
             tool_calls = last_assistant_message.get('tool_calls', [])
-            tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] if m['role'] == 'tool']
+            tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
+                            if m['role'] == 'tool']
 
             if len(tool_calls) != len(tool_responses):
                 failed_tool_results = []
@@ -157,434 +267,398 @@ class ThreadManager:
 
                 thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
                 with open(thread_path, 'w') as f:
-                    json.dump({"messages": messages}, f, indent=2)
+                    json.dump({"messages": messages}, f)
 
                 return True
         return False
 
     async def run_thread(
-        self, 
-        thread_id: str, 
-        system_message: Optional[Dict[str, Any]] = None, 
-        model_name: str = "claude-3-5-sonnet-latest", 
-        temperature: float = 0, 
-        max_tokens: Optional[int] = None, 
-        tool_choice: str = "auto", 
-        additional_message: Optional[Dict[str, Any]] = None, 
-        execute_tools_async: bool = True, 
-        execute_model_tool_calls: bool = True, 
-        use_tools: bool = False
-    ) -> Dict[str, Any]:
-        
-        messages = await self.list_messages(thread_id)
-        prepared_messages = [system_message] + messages if system_message else messages
-        
-        if additional_message:
-            prepared_messages.append(additional_message)
-        
-        tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
-
-        try:
-            llm_response = await make_llm_api_call(
-                prepared_messages, 
-                model_name, 
-                temperature=temperature, 
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_choice=tool_choice if use_tools else None,
-                stream=False
-            )
-        except Exception as e:
-            logging.error(f"Error in API call: {str(e)}")
-            return {
-                "status": "error",
-                "message": str(e),
-                "run_thread_params": {
-                    "thread_id": thread_id,
-                    "system_message": system_message,
-                    "model_name": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tool_choice": tool_choice,
-                    "additional_message": additional_message,
-                    "execute_tools_async": execute_tools_async,
-                    "execute_model_tool_calls": execute_model_tool_calls,
-                    "use_tools": use_tools
-                }
-            }
-
-        if use_tools and execute_model_tool_calls:
-            await self.handle_response_with_tools(thread_id, llm_response, execute_tools_async)
-        else:
-            await self.handle_response_without_tools(thread_id, llm_response)
-
-        return {
-            "llm_response": llm_response,
-            "run_thread_params": {
-                "thread_id": thread_id,
-                "system_message": system_message,
-                "model_name": model_name,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "tool_choice": tool_choice,
-                "additional_message": additional_message,
-                "execute_tools_async": execute_tools_async,
-                "execute_model_tool_calls": execute_model_tool_calls,
-                "use_tools": use_tools
-            }
-        }
-
-    async def handle_response_without_tools(self, thread_id: str, response: Any):
-        response_content = response.choices[0].message['content']
-        await self.add_message(thread_id, {"role": "assistant", "content": response_content})
-
-    async def handle_response_with_tools(self, thread_id: str, response: Any, execute_tools_async: bool):
-        try:
-            response_message = response.choices[0].message
-            tool_calls = response_message.get('tool_calls', [])
-            
-            assistant_message = self.create_assistant_message_with_tools(response_message)
-            await self.add_message(thread_id, assistant_message)
-
-            available_functions = self.get_available_functions()
-            
-            if tool_calls:
-                if execute_tools_async:
-                    tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
-                else:
-                    tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
-                
-                for result in tool_results:
-                    await self.add_message(thread_id, result)
-        
-        except AttributeError as e:
-            logging.error(f"AttributeError: {e}")
-            response_content = response.choices[0].message['content']
-            await self.add_message(thread_id, {"role": "assistant", "content": response_content or ""})
-
-    def create_assistant_message_with_tools(self, response_message: Any) -> Dict[str, Any]:
-        message = {
-            "role": "assistant",
-            "content": response_message.get('content') or "",
-        }
-        tool_calls = response_message.get('tool_calls')
-        if tool_calls:
-            message["tool_calls"] = [
-                {
-                    "id": tool_call.get('id'),
-                    "type": "function",
-                    "function": {
-                        "name": tool_call.get('function', {}).get('name'),
-                        "arguments": tool_call.get('function', {}).get('arguments')
-                    }
-                } for tool_call in tool_calls
-            ]
-        return message
-    
-    def get_available_functions(self) -> Dict[str, Callable]:
-        available_functions = {}
-        for tool_name, tool_info in self.tool_registry.get_all_tools().items():
-            tool_instance = tool_info['instance']
-            for func_name, func in tool_instance.__class__.__dict__.items():
-                if callable(func) and not func_name.startswith("__"):
-                    available_functions[func_name] = getattr(tool_instance, func_name)
-        return available_functions
-
-    async def execute_tools_async(self, tool_calls, available_functions, thread_id):
-        async def execute_single_tool(tool_call):
-            function_name = tool_call['function']['name']
-            function_args = json.loads(tool_call['function']['arguments'])
-            tool_call_id = tool_call['id']
-
-            function_to_call = available_functions.get(function_name)
-            if function_to_call:
-                return await self.execute_tool(function_to_call, function_args, function_name, tool_call_id)
-            else:
-                logging.warning(f"Function {function_name} not found in available functions")
-                return None
-
-        tool_results = await asyncio.gather(*[execute_single_tool(tool_call) for tool_call in tool_calls])
-        return [result for result in tool_results if result]
-
-    async def execute_tools_sync(self, tool_calls, available_functions, thread_id):
-        tool_results = []
-        for tool_call in tool_calls:
-            function_name = tool_call['function']['name']
-            function_args = json.loads(tool_call['function']['arguments'])
-            tool_call_id = tool_call['id']
-
-            function_to_call = available_functions.get(function_name)
-            if function_to_call:
-                result = await self.execute_tool(function_to_call, function_args, function_name, tool_call_id)
-                if result:
-                    tool_results.append(result)
-            else:
-                logging.warning(f"Function {function_name} not found in available functions")
-        
-        return tool_results
-
-    async def execute_tool(self, function_to_call, function_args, function_name, tool_call_id):
-        try:
-            function_response = await function_to_call(**function_args)
-        except Exception as e:
-            error_message = f"Error in {function_name}: {str(e)}"
-            function_response = ToolResult(success=False, output=error_message)
-        
-        return {
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": function_name,
-            "content": str(function_response),
-        }
-
-    async def get_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        try:
-            with open(thread_path, 'r') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            return None
-
-    async def run_tool(self, thread_id: str, tool_name: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        tool_info = self.tool_registry.get_tool(tool_name)
-        if not tool_info:
-            logging.error(f"Tool '{tool_name}' not found.")
-            return None
-
-        function_to_call = getattr(tool_info['instance'], tool_name, None)
-        if not function_to_call:
-            logging.error(f"Function '{tool_name}' not found in tool '{tool_name}'.")
-            return None
-
-        tool_call_id = str(uuid.uuid4())
-        try:
-            function_response = await function_to_call(**params)
-        except Exception as e:
-            error_message = f"Error in {tool_name}: {str(e)}"
-            function_response = ToolResult(success=False, output=error_message)
-
-        # Create a tool message consistent with other tool executions
-        tool_message = {
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": tool_name,
-            "content": str(function_response),
-        }
-
-        # Add the tool message to the thread
-        await self.add_message(thread_id, tool_message)
-        return function_response
-
-    async def process_last_assistant_message(self, thread_id: str, execute_tools_async: bool = False):
-        messages = await self.list_messages(thread_id)
-        last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant'), None)
-        
-        if last_assistant_message:
-            tool_calls = last_assistant_message.get('tool_calls', [])
-            if tool_calls:
-                available_functions = self.get_available_functions()
-                if execute_tools_async:
-                    tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
-                else:
-                    tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
-                
-                for result in tool_results:
-                    await self.add_message(thread_id, result)
-            else:
-                logging.info("No tool calls found in the last assistant message.")
-        else:
-            logging.info("No assistant messages found in the thread.")
-    
-    async def process_tool_calls_from_message(self, thread_id: str, message_data: Dict[str, Any], execute_tools_async: bool = True):
-        tool_calls = message_data.get('tool_calls', [])
-        if tool_calls:
-            available_functions = self.get_available_functions()
-            if execute_tools_async:
-                tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
-            else:
-                tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
-            for result in tool_results:
-                await self.add_message(thread_id, result)
-
-    async def modify_message(self, thread_id: str, message_index: int, new_message: Dict[str, Any]):
-        """
-        Modify a specific message in the thread by its index.
+        self,
+        thread_id: str,
+        system_message: Dict[str, Any],
+        model_name: str,
+        temperature: float = 0,
+        max_tokens: Optional[int] = None,
+        tool_choice: str = "auto",
+        temporary_message: Optional[Dict[str, Any]] = None,
+        native_tool_calling: bool = False,
+        xml_tool_calling: bool = False,
+        execute_tools: bool = True,
+        stream: bool = False,
+        execute_tools_on_stream: bool = False,
+        parallel_tool_execution: bool = False,
+        tool_parser: Optional[ToolParserBase] = None,
+        tool_executor: Optional[ToolExecutorBase] = None,
+        results_adder: Optional[ResultsAdderBase] = None
+    ) -> Union[Dict[str, Any], AsyncGenerator]:
+        """Run a conversation thread with specified parameters.
         
         Args:
-            thread_id (str): The ID of the thread
-            message_index (int): The index of the message to modify
-            new_message (Dict[str, Any]): The new message data
+            thread_id: ID of the thread to run
+            system_message: System message for the conversation
+            model_name: Name of the LLM model to use
+            temperature: Model temperature (0-1)
+            max_tokens: Maximum tokens in response
+            tool_choice: Tool selection strategy ("auto" or "none")
+            temporary_message: Optional message to include temporarily
+            native_tool_calling: Whether to use native LLM function calling
+            xml_tool_calling: Whether to use XML-based tool calling
+            execute_tools: Whether to execute tool calls
+            stream: Whether to stream the response
+            execute_tools_on_stream: Whether to execute tools during streaming
+            parallel_tool_execution: Whether to execute tools in parallel
+            tool_parser: Custom tool parser implementation
+            tool_executor: Custom tool executor implementation
+            results_adder: Custom results adder implementation
+            
+        Returns:
+            Union[Dict[str, Any], AsyncGenerator]: Response or stream
+            
+        Raises:
+            ValueError: If incompatible tool calling options are specified
+            Exception: For other execution failures
+            
+        Notes:
+            - Cannot use both native and XML tool calling simultaneously
+            - Streaming responses include both content and tool results
+        """
+        # Validate tool calling configuration
+        if native_tool_calling and xml_tool_calling:
+            raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
+
+        # Initialize tool components if any tool calling is enabled
+        if native_tool_calling or xml_tool_calling:
+            if tool_parser is None:
+                tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
+            
+            if tool_executor is None:
+                tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
+            
+            if results_adder is None:
+                results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
+
+        try:
+            messages = await self.list_messages(thread_id)
+            prepared_messages = [system_message] + messages
+            if temporary_message:
+                prepared_messages.append(temporary_message)
+
+            openapi_tool_schemas = None
+            if native_tool_calling:
+                openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
+                available_functions = self.tool_registry.get_available_functions()
+            elif xml_tool_calling:
+                available_functions = self.tool_registry.get_available_functions()
+            else:
+                available_functions = {}
+
+            response_processor = LLMResponseProcessor(
+                thread_id=thread_id,
+                available_functions=available_functions,
+                add_message_callback=self.add_message,
+                update_message_callback=self._update_message,
+                list_messages_callback=self.list_messages,
+                parallel_tool_execution=parallel_tool_execution,
+                threads_dir=self.threads_dir,
+                tool_parser=tool_parser,
+                tool_executor=tool_executor,
+                results_adder=results_adder
+            )
+
+            llm_response = await self._run_thread_completion(
+                messages=prepared_messages,
+                model_name=model_name,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=openapi_tool_schemas,
+                tool_choice=tool_choice if native_tool_calling else None,
+                stream=stream
+            )
+
+            if stream:
+                return response_processor.process_stream(
+                    response_stream=llm_response,
+                    execute_tools=execute_tools,
+                    execute_tools_on_stream=execute_tools_on_stream
+                )
+
+            await response_processor.process_response(
+                response=llm_response,
+                execute_tools=execute_tools
+            )
+
+            return llm_response
+
+        except Exception as e:
+            logging.error(f"Error in run_thread: {str(e)}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    async def _run_thread_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        model_name: str,
+        temperature: float,
+        max_tokens: Optional[int],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Optional[str],
+        stream: bool
+    ) -> Union[Any, AsyncGenerator]:
+        """Get completion from LLM API."""
+        return await make_llm_api_call(
+            messages,
+            model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
+            stream=stream
+        )
+
+    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
+        """Update an existing message in the thread."""
+
+    async def modify_message(self, thread_id: str, message_index: int, new_message: Dict[str, Any]):
+        """Modify a specific message in the thread by its index.
+
+        Args:
+            thread_id: The ID of the thread
+            message_index: The index of the message to modify
+            new_message: The new message data
         """
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        
         try:
             with open(thread_path, 'r') as f:
                 thread_data = json.load(f)
-            
+
             messages = thread_data["messages"]
             if 0 <= message_index < len(messages):
                 messages[message_index] = new_message
                 thread_data["messages"] = messages
-                
+
                 with open(thread_path, 'w') as f:
-                    json.dump(thread_data, f, indent=2)
-                
+                    json.dump(thread_data, f)
+
                 logging.info(f"Modified message at index {message_index} in thread {thread_id}")
             else:
                 logging.error(f"Message index {message_index} out of range for thread {thread_id}")
-                
+
         except Exception as e:
             logging.error(f"Failed to modify message in thread {thread_id}: {e}")
             raise e
-        
+
     async def remove_message(self, thread_id: str, message_index: int):
-        """
-        Remove a specific message from the thread by its index.
-        
+        """Remove a specific message from the thread by its index.
+
         Args:
-            thread_id (str): The ID of the thread
-            message_index (int): The index of the message to remove
+            thread_id: The ID of the thread
+            message_index: The index of the message to remove
         """
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        
         try:
             with open(thread_path, 'r') as f:
                 thread_data = json.load(f)
-            
+
             messages = thread_data["messages"]
             if 0 <= message_index < len(messages):
                 messages.pop(message_index)
                 thread_data["messages"] = messages
-                
+
                 with open(thread_path, 'w') as f:
-                    json.dump(thread_data, f, indent=2)
-                
+                    json.dump(thread_data, f)
+
                 logging.info(f"Removed message at index {message_index} from thread {thread_id}")
             else:
                 logging.error(f"Message index {message_index} out of range for thread {thread_id}")
-                
+
         except Exception as e:
             logging.error(f"Failed to remove message from thread {thread_id}: {e}")
             raise e
 
-    async def add_to_history_only(self, thread_id: str, message_data: Dict[str, Any]):
-        """Add a message only to the history file without affecting the main thread.
-        
-        Args:
-            thread_id (str): The ID of the thread
-            message_data (Dict[str, Any]): The message data to add to history
-        """
-        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
-        
-        try:
-            try:
-                with open(history_path, 'r') as f:
-                    history_data = json.load(f)
-            except FileNotFoundError:
-                history_data = {"messages": []}
-            
-            # Process ToolResult instances
-            for key, value in message_data.items():
-                if isinstance(value, ToolResult):
-                    message_data[key] = str(value)
-            
-            history_data["messages"].append(message_data)
-            
-            with open(history_path, 'w') as f:
-                json.dump(history_data, f, indent=2)
-            
-            logging.info(f"Message added to history of thread {thread_id}")
-            
-        except Exception as e:
-            logging.error(f"Failed to add message to history of thread {thread_id}: {e}")
-            raise e
-
     async def add_message_and_run_tools(self, thread_id: str, message_data: Dict[str, Any]) -> None:
-        """
-        Add a message to the thread and execute its tool calls immediately.
+        """Add a message to the thread and execute its tool calls immediately.
+
         For user messages, append tool results to the message content.
         For other roles, add tool results as separate messages.
-        
+
         Args:
             thread_id: The ID of the thread
             message_data: The message data containing tool calls to execute
         """
         if message_data.get('role') == 'user' and 'tool_calls' in message_data:
             # Execute tools first
-            available_functions = self.get_available_functions()
-            tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
-            
+            available_functions = self.tool_registry.get_available_functions()
+            tool_results = await self.tool_executor.execute_tool_calls(
+                tool_calls=message_data['tool_calls'],
+                available_functions=available_functions,
+                thread_id=thread_id,
+                executed_tool_calls=set()
+            )
+
             # Append tool results to user message content
             original_content = message_data['content']
-            tool_outputs = "\n".join([f"\nTool {result['name']} output: {result['content']}" for result in tool_results])
+            tool_outputs = "\n".join([
+                f"\nTool {result['name']} output: {result['content']}"
+                for result in tool_results
+            ])
             message_data['content'] = f"{original_content}{tool_outputs}"
-            
+
             # Remove tool_calls since they're now part of content
             del message_data['tool_calls']
-            
+
             # Add the modified user message
             await self.add_message(thread_id, message_data)
         else:
             # For non-user messages, keep original behavior
             await self.add_message(thread_id, message_data)
-            
+
             if 'tool_calls' in message_data:
-                available_functions = self.get_available_functions()
-                tool_results = await self.execute_tools_sync(message_data['tool_calls'], available_functions, thread_id)
-                
+                available_functions = self.tool_registry.get_available_functions()
+                tool_results = await self.tool_executor.execute_tool_calls(
+                    tool_calls=message_data['tool_calls'],
+                    available_functions=available_functions,
+                    thread_id=thread_id,
+                    executed_tool_calls=set()
+                )
+
                 for result in tool_results:
                     await self.add_message(thread_id, result)
-    
+
+    async def add_to_history_only(self, thread_id: str, message_data: Dict[str, Any]):
+        """Add a message only to the history file without affecting the main thread.
+
+        Args:
+            thread_id: The ID of the thread
+            message_data: The message data to add to history
+        """
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
+
+        try:
+            try:
+                with open(history_path, 'r') as f:
+                    history_data = json.load(f)
+            except FileNotFoundError:
+                history_data = {"messages": []}
+
+            # Process ToolResult instances
+            for key, value in message_data.items():
+                if isinstance(value, ToolResult):
+                    message_data[key] = str(value)
+
+            history_data["messages"].append(message_data)
+
+            with open(history_path, 'w') as f:
+                json.dump(history_data, f)
+
+            logging.info(f"Message added to history of thread {thread_id}")
+
+        except Exception as e:
+            logging.error(f"Failed to add message to history of thread {thread_id}: {e}")
+            raise e
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            # Find and update the last assistant message
+            for i in reversed(range(len(thread_data["messages"]))):
+                if thread_data["messages"][i]["role"] == "assistant":
+                    thread_data["messages"][i] = new_message
+                    break
+            
+            with open(thread_path, 'w') as f:
+                json.dump(thread_data, f)
+        except Exception as e:
+            logging.error(f"Error updating message in thread {thread_id}: {e}")
+            raise e
 
 if __name__ == "__main__":
     import asyncio
-    from tools.files_tool import FilesTool
+    from agentpress.examples.example_agent.tools.files_tool import FilesTool
 
     async def main():
-        manager = ThreadManager()
-
-        manager.add_tool(FilesTool, ['create_file', 'read_file'])
-
-        thread_id = await manager.create_thread()
-
-        await manager.add_message(thread_id, {"role": "user", "content": "Please create a file with a random name with the content 'Hello, world!'"})
-
-        system_message = {"role": "system", "content": "You are a helpful assistant that can create, read, update, and delete files."}
-        model_name = "gpt-4o"
+        # Initialize managers
+        thread_manager = ThreadManager()
         
-        # Test with tools
-        response_with_tools = await manager.run_thread(
+        # Register available tools
+        thread_manager.add_tool(FilesTool)
+        
+        # Create a new thread
+        thread_id = await thread_manager.create_thread()
+        
+        # Add a test message
+        await thread_manager.add_message(thread_id, {
+            "role": "user", 
+            "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics.."
+        })
+
+        # Define system message
+        system_message = {
+            "role": "system", 
+            "content": "You are a helpful assistant that can create, read, update, and delete files."
+        }
+
+        # Test with streaming response and tool execution
+        print("\n🤖 Testing streaming response with tools:")
+        response = await thread_manager.run_thread(
             thread_id=thread_id,
             system_message=system_message,
-            model_name=model_name,
+            model_name="anthropic/claude-3-5-haiku-latest", 
             temperature=0.7,
-            max_tokens=150,
-            tool_choice="auto",
-            additional_message=None,            
-            execute_tools_async=True,
-            execute_model_tool_calls=True,
-            use_tools=True
+            max_tokens=4096,
+            stream=True,
+            native_tool_calling=True,
+            execute_tools=True,
+            execute_tools_on_stream=True,
+            parallel_tool_execution=True
         )
 
-        print("Response with tools:", response_with_tools)
+        # Handle streaming response
+        if isinstance(response, AsyncGenerator):
+            print("\nAssistant is responding:")
+            content_buffer = ""
+            try:
+                async for chunk in response:
+                    if hasattr(chunk.choices[0], 'delta'):
+                        delta = chunk.choices[0].delta
+                        
+                        # Handle content streaming
+                        if hasattr(delta, 'content') and delta.content is not None:
+                            content_buffer += delta.content
+                            if delta.content.endswith((' ', '\n')):
+                                print(content_buffer, end='', flush=True)
+                                content_buffer = ""
+                        
+                        # Handle tool calls
+                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                # Print tool name when it first appears
+                                if tool_call.function and tool_call.function.name:
+                                    print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
+                                
+                                # Print arguments as they stream in
+                                if tool_call.function and tool_call.function.arguments:
+                                    print(f"   {tool_call.function.arguments}", end='', flush=True)
+                
+                # Print any remaining content
+                if content_buffer:
+                    print(content_buffer, flush=True)
+                print("\n✨ Response completed\n")
+                
+            except Exception as e:
+                print(f"\n❌ Error processing stream: {e}")
+        else:
+            print("\n✨ Response completed\n")
 
-        # Test without tools
-        response_without_tools = await manager.run_thread(
-            thread_id=thread_id,
-            model_name=model_name,
-            temperature=0.7,
-            max_tokens=150,
-            additional_message={"role": "user", "content": "What's the capital of France?"},
-            use_tools=False
-        )
-
-        print("Response without tools:", response_without_tools)
-
-        # List messages in the thread
-        messages = await manager.list_messages(thread_id)
-        print("\nMessages in the thread:")
+        # Display final thread state
+        messages = await thread_manager.list_messages(thread_id)
+        print("\n📝 Final Thread State:")
         for msg in messages:
-            print(f"{msg['role'].capitalize()}: {msg['content']}")
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            print(f"\n{role.upper()}: {content[:100]}...")
 
-    # Run the async main function
     asyncio.run(main())
+

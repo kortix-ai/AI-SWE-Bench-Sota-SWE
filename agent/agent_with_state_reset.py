@@ -41,15 +41,16 @@ After editing or creating files, always use bash tool immediately, as they are w
 """
 
 @observe()
-async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 6, model_name: str = "sonnet"):
+async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 8, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
+    use_xml = False
 
     # Initialize workspace state
     initial_workspace = {
-        "explorer": [],
+        "explorer_folders": [],
         "open_files_in_code_editor": [],
         "thinking_logs": [],
         "terminal_session": []
@@ -89,7 +90,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
         await thread_manager.add_message(thread_id, system_message)
         workspace_state = await state_manager.get('workspace_state')
-        # format it here 
         
         await thread_manager.add_message(thread_id, {
             "role": "user", 
@@ -116,17 +116,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                         "function": {
                             "name": "view",
                             "arguments": json.dumps({
-                                "paths": workspace_state.get('explorer_folders', [])
-                            })
-                        }
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "function",
-                        "function": {
-                            "name": "view",
-                            "arguments": json.dumps({
-                                "paths": workspace_state.get('open_files_in_code_editor', [])
+                                "paths": list(set(workspace_state.get('explorer_folders', []) + workspace_state.get('open_files_in_code_editor', [])))
                             })
                         }
                     },
@@ -173,9 +163,13 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 temperature=0.0,
                 max_tokens=8192,
                 tool_choice="any",
-                execute_tools_async=False,
-                use_tools=True,
-                execute_model_tool_calls=True
+                native_tool_calling=not use_xml,
+                xml_tool_calling=use_xml,
+                # temporary_message=messages,
+                # execute_tools_async=False,
+                # use_tool=True,
+                execute_tools_on_stream=True,
+                parallel_tool_execution=False,
             )
 
             # Check for 'submit' tool call
@@ -213,7 +207,7 @@ if __name__ == "__main__":
         parser.add_argument("--max-iterations", type=int, default=10, help="Maximum number of iterations")
         parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                             help="Model name to use (choices: sonnet, haiku, deepseek)")
-        parser.add_argument("--reset-interval", type=int, default=6, help="Number of iterations before state reset")
+        parser.add_argument("--reset-interval", type=int, default=8, help="Number of iterations before state reset")
         args = parser.parse_args()
 
         thread_manager = ThreadManager(threads_dir=args.threads_dir)

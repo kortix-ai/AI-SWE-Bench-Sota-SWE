@@ -1,109 +1,134 @@
 """
-This module provides the foundation for creating and managing tools in the AgentPress system.
+Core tool system providing the foundation for creating and managing tools.
 
-The tool system allows for easy creation of function-like tools that can be used by AI models.
-It provides a way to define OpenAPI schemas for these tools, which can then be used to generate
-appropriate function calls in the AI model's context.
-
-Key components:
-- ToolResult: A dataclass representing the result of a tool execution.
-- Tool: An abstract base class that all tools should inherit from.
-- tool_schema: A decorator for easily defining OpenAPI schemas for tool methods.
-
-Usage:
-1. Create a new tool by subclassing Tool.
-2. Define methods in your tool class and decorate them with @tool_schema.
-3. The Tool class will automatically register these schemas.
-4. Use the tool in your ThreadManager by adding it with add_tool method.
-
-Example:
-    class CalculatorTool(Tool):
-        @tool_schema({
-            "name": "divide",
-            "description": "Divide two numbers",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "a": {"type": "number", "description": "Numerator"},
-                    "b": {"type": "number", "description": "Denominator"}
-                },
-                "required": ["a", "b"]
-            }
-        })
-        async def divide(self, a: float, b: float) -> ToolResult:
-            if b == 0:
-                return self.fail_response("Cannot divide by zero")
-            result = a / b
-            return self.success_response(f"The result of {a} ÷ {b} = {result}")
-
-    # In your thread manager:
-    manager.add_tool(CalculatorTool)
-    
-    # Example usage:
-    # Success case: divide(10, 2) -> ToolResult(success=True, output="The result of 10 ÷ 2 = 5")
-    # Failure case: divide(10, 0) -> ToolResult(success=False, output="Cannot divide by zero")
+This module defines the base classes and decorators for creating tools in AgentPress:
+- Tool base class for implementing tool functionality
+- Schema decorators for OpenAPI and XML tool definitions
+- Result containers for standardized tool outputs
 """
 
-from typing import Dict, Any, Union
-from dataclasses import dataclass
+from typing import Dict, Any, Union, Optional, List, Type
+from dataclasses import dataclass, field
 from abc import ABC
 import json
 import inspect
+from enum import Enum
+
+class SchemaType(Enum):
+    """Enumeration of supported schema types for tool definitions."""
+    OPENAPI = "openapi"
+    XML = "xml"
+    CUSTOM = "custom"
+
+@dataclass
+class XMLNodeMapping:
+    """Maps an XML node to a function parameter.
+    
+    Attributes:
+        param_name (str): Name of the function parameter
+        node_type (str): Type of node ("element", "attribute", or "content")
+        path (str): XPath-like path to the node ("." means root element)
+    """
+    param_name: str
+    node_type: str = "element"
+    path: str = "."
+
+@dataclass
+class XMLTagSchema:
+    """Schema definition for XML tool tags.
+    
+    Attributes:
+        tag_name (str): Root tag name for the tool
+        mappings (List[XMLNodeMapping]): Parameter mappings for the tag
+        example (str, optional): Example showing tag usage
+        
+    Methods:
+        add_mapping: Add a new parameter mapping to the schema
+    """
+    tag_name: str
+    mappings: List[XMLNodeMapping] = field(default_factory=list)
+    example: Optional[str] = None
+    
+    def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".") -> None:
+        """Add a new node mapping to the schema.
+        
+        Args:
+            param_name: Name of the function parameter
+            node_type: Type of node ("element", "attribute", or "content")
+            path: XPath-like path to the node
+        """
+        self.mappings.append(XMLNodeMapping(
+            param_name=param_name,
+            node_type=node_type, 
+            path=path
+        ))
+
+@dataclass
+class ToolSchema:
+    """Container for tool schemas with type information.
+    
+    Attributes:
+        schema_type (SchemaType): Type of schema (OpenAPI, XML, or Custom)
+        schema (Dict[str, Any]): The actual schema definition
+        xml_schema (XMLTagSchema, optional): XML-specific schema if applicable
+    """
+    schema_type: SchemaType
+    schema: Dict[str, Any]
+    xml_schema: Optional[XMLTagSchema] = None
 
 @dataclass
 class ToolResult:
-    """
-    Represents the result of a tool execution.
-
+    """Container for tool execution results.
+    
     Attributes:
-        success (bool): Whether the tool execution was successful.
-        output (str): The output of the tool execution.
+        success (bool): Whether the tool execution succeeded
+        output (str): Output message or error description
     """
     success: bool
     output: str
 
-    def __str__(self) -> str:
-        return f'<OBSERVATION>{self.output}</OBSERVATION>'
-
 class Tool(ABC):
-    """
-    Abstract base class for all tools.
-
-    This class provides the basic structure and functionality for tools.
-    Subclasses should implement specific tool methods decorated with @tool_schema.
-
+    """Abstract base class for all tools.
+    
+    Provides the foundation for implementing tools with schema registration
+    and result handling capabilities.
+    
+    Attributes:
+        _schemas (Dict[str, List[ToolSchema]]): Registered schemas for tool methods
+        
     Methods:
-        get_schemas(): Returns a dictionary of all registered tool schemas.
-        success_response(data): Creates a successful ToolResult.
-        fail_response(msg): Creates a failed ToolResult.
+        get_schemas: Get all registered tool schemas
+        success_response: Create a successful result
+        fail_response: Create a failed result
     """
+    
     def __init__(self):
-        self._schemas = {}
+        """Initialize tool with empty schema registry."""
+        self._schemas: Dict[str, List[ToolSchema]] = {}
         self._register_schemas()
 
     def _register_schemas(self):
-        """
-        Automatically registers schemas for all methods decorated with @tool_schema.
-        """
+        """Register schemas from all decorated methods."""
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
-            if hasattr(method, 'schema'):
-                self._schemas[name] = method.schema
+            if hasattr(method, 'tool_schemas'):
+                self._schemas[name] = method.tool_schemas
 
-    def get_schemas(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Returns a dictionary of all registered tool schemas, formatted for use with AI models.
+    def get_schemas(self) -> Dict[str, List[ToolSchema]]:
+        """Get all registered tool schemas.
+        
+        Returns:
+            Dict mapping method names to their schema definitions
         """
         return self._schemas
 
     def success_response(self, data: Union[Dict[str, Any], str]) -> ToolResult:
-        """
-        Creates a successful ToolResult with the given data.
-
+        """Create a successful tool result.
+        
         Args:
-            data: The data to include in the success response.
-
+            data: Result data (dictionary or string)
+            
         Returns:
-            A ToolResult indicating success.
+            ToolResult with success=True and formatted output
         """
         if isinstance(data, str):
             text = data
@@ -112,50 +137,88 @@ class Tool(ABC):
         return ToolResult(success=True, output=text)
 
     def fail_response(self, msg: str) -> ToolResult:
-        """
-        Creates a failed ToolResult with the given error message.
-
+        """Create a failed tool result.
+        
         Args:
-            msg: The error message to include in the failure response.
-
+            msg: Error message describing the failure
+            
         Returns:
-            A ToolResult indicating failure.
+            ToolResult with success=False and error message
         """
         return ToolResult(success=False, output=msg)
 
-def tool_schema(schema: Dict[str, Any]):
+def _add_schema(func, schema: ToolSchema):
+    """Helper to add schema to a function."""
+    if not hasattr(func, 'tool_schemas'):
+        func.tool_schemas = []
+    func.tool_schemas.append(schema)
+    return func
+
+def openapi_schema(schema: Dict[str, Any]):
+    """Decorator for OpenAPI schema tools."""
+    def decorator(func):
+        return _add_schema(func, ToolSchema(
+            schema_type=SchemaType.OPENAPI,
+            schema=schema
+        ))
+    return decorator
+
+def xml_schema(
+    tag_name: str,
+    mappings: List[Dict[str, str]] = None,
+    example: str = None  # Changed from description to example
+):
     """
-    A decorator for easily defining OpenAPI schemas for tool methods.
-
-    This decorator allows you to define the schema for a tool method inline with the method definition.
-    It attaches the provided schema directly to the method.
-
+    Decorator for XML schema tools with improved node mapping.
+    
     Args:
-        schema (Dict[str, Any]): An OpenAPI schema describing the tool.
-
+        tag_name: Name of the root XML tag
+        mappings: List of mapping definitions, each containing:
+            - param_name: Name of the function parameter
+            - node_type: "element", "attribute", or "content" 
+            - path: Path to the node (default "." for root)
+        example: Optional example showing how to use the XML tag
+    
     Example:
-        @tool_schema({
-            "name": "divide",
-            "description": "Divide two numbers",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "a": {"type": "number", "description": "Numerator"},
-                    "b": {"type": "number", "description": "Denominator"}
-                },
-                "required": ["a", "b"]
-            }
-        })
-        async def divide(self, a: float, b: float) -> ToolResult:
-            if b == 0:
-                return self.fail_response("Cannot divide by zero")
-            result = a / b
-            return self.success_response(f"The result of {a} ÷ {b} = {result}")
+        @xml_schema(
+            tag_name="str-replace",
+            mappings=[
+                {"param_name": "file_path", "node_type": "attribute", "path": "."},
+                {"param_name": "old_str", "node_type": "element", "path": "old_str"},
+                {"param_name": "new_str", "node_type": "element", "path": "new_str"}
+            ],
+            example='''
+            <str-replace file_path="path/to/file">
+                <old_str>text to replace</old_str>
+                <new_str>replacement text</new_str>
+            </str-replace>
+            '''
+        )
     """
     def decorator(func):
-        func.schema = {
-            "type": "function",
-            "function": schema
-        }
-        return func
+        xml_schema = XMLTagSchema(tag_name=tag_name, example=example)
+        
+        # Add mappings
+        if mappings:
+            for mapping in mappings:
+                xml_schema.add_mapping(
+                    param_name=mapping["param_name"],
+                    node_type=mapping.get("node_type", "element"),
+                    path=mapping.get("path", ".")
+                )
+                
+        return _add_schema(func, ToolSchema(
+            schema_type=SchemaType.XML,
+            schema={},  # OpenAPI schema could be added here if needed
+            xml_schema=xml_schema
+        ))
+    return decorator
+
+def custom_schema(schema: Dict[str, Any]):
+    """Decorator for custom schema tools."""
+    def decorator(func):
+        return _add_schema(func, ToolSchema(
+            schema_type=SchemaType.CUSTOM,
+            schema=schema
+        ))
     return decorator

@@ -6,26 +6,12 @@ from asyncio import Lock
 from contextlib import asynccontextmanager
 
 class StateManager:
-    """
-    Manages persistent state storage for AgentPress components.
-    
-    The StateManager provides thread-safe access to a JSON-based state store,
-    allowing components to save and retrieve data across sessions. It handles
-    concurrent access using asyncio locks and provides atomic operations for
-    state modifications.
-    
-    Attributes:
-        lock (Lock): Asyncio lock for thread-safe state access
-        store_file (str): Path to the JSON file storing the state
-    """
-
-    def __init__(self, store_file: str = "/home/nightfury/projects/test/new_agent_version/state.json"):
+    def __init__(self, store_file: str = "state.json"):
         """
         Initialize StateManager with custom store file name.
         
         Args:
-            store_file (str): Path to the JSON file to store state.
-                Defaults to "state.json" in the current directory.
+            store_file: Name of the JSON file to store state (default: "state.json")
         """
         self.lock = Lock()
         self.store_file = store_file
@@ -33,19 +19,6 @@ class StateManager:
 
     @asynccontextmanager
     async def store_scope(self):
-        """
-        Context manager for atomic state operations.
-        
-        Provides thread-safe access to the state store, handling file I/O
-        and ensuring proper cleanup. Automatically loads the current state
-        and saves changes when the context exits.
-        
-        Yields:
-            dict: The current state store contents
-            
-        Raises:
-            Exception: If there are errors reading from or writing to the store file
-        """
         try:
             # Read current state
             if os.path.exists(self.store_file):
@@ -69,14 +42,8 @@ class StateManager:
         Store any JSON-serializable data with a simple key.
         
         Args:
-            key (str): Simple string key like "config" or "settings"
-            data (Any): Any JSON-serializable data (dict, list, str, int, bool, etc)
-            
-        Returns:
-            Any: The stored data
-            
-        Raises:
-            Exception: If there are errors during storage operation
+            key: Simple string key like "config" or "settings"
+            data: Any JSON-serializable data (dict, list, str, int, bool, etc)
         """
         async with self.lock:
             async with self.store_scope() as store:
@@ -93,13 +60,7 @@ class StateManager:
         Get data for a key.
         
         Args:
-            key (str): Simple string key like "config" or "settings"
-            
-        Returns:
-            Any: The stored data for the key, or None if key not found
-            
-        Note:
-            This operation is read-only and doesn't require locking
+            key: Simple string key like "config" or "settings"
         """
         async with self.store_scope() as store:
             if key in store:
@@ -110,15 +71,7 @@ class StateManager:
             return None
 
     async def delete(self, key: str):
-        """
-        Delete data for a key.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-            
-        Note:
-            No error is raised if the key doesn't exist
-        """
+        """Delete data for a key"""
         async with self.lock:
             async with self.store_scope() as store:
                 if key in store:
@@ -128,26 +81,13 @@ class StateManager:
                     logging.info(f"Key not found for deletion: {key}")
 
     async def export_store(self) -> dict:
-        """
-        Export entire store.
-        
-        Returns:
-            dict: Complete contents of the state store
-            
-        Note:
-            This operation is read-only and returns a copy of the store
-        """
+        """Export entire store"""
         async with self.store_scope() as store:
             logging.info(f"Store content: {store}")
             return store
 
     async def clear_store(self):
-        """
-        Clear entire store.
-        
-        Removes all data from the store, resetting it to an empty state.
-        This operation is atomic and thread-safe.
-        """
+        """Clear entire store"""
         async with self.lock:
             async with self.store_scope() as store:
                 store.clear()

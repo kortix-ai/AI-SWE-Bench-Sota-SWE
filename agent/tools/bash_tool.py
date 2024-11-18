@@ -1,7 +1,7 @@
 # agent/tools/bash_tool.py
 
 import asyncio
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 
 class BashTool(Tool):
@@ -50,22 +50,35 @@ class BashTool(Tool):
             return '', 'Command execution timed out after 5 minutes', 1
         return stdout.decode(), stderr.decode(), process.returncode
 
-    @tool_schema({
-        "name": "bash_command",
-        "description": (
-            "Execute a bash shell command in the repository environment with explanatory output.\n"
-            "**Notes:**\n"
-            "- The working directory is `/testbed`.\n"
-            "- The environment is set up with `conda activate testbed`.\n"
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "The bash command to execute."},
-            },
-            "required": ["command"]
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "bash_command",
+            "description": (
+                "Execute a bash shell command in the repository environment with explanatory output.\n"
+                "**Notes:**\n"
+                "- The working directory is `/testbed`.\n"
+                "- The environment is set up with `conda activate testbed`.\n"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The bash command to execute."
+                    }
+                },
+                "required": ["command"]
+            }
         }
     })
+    @xml_schema(
+        tag_name="bash-command",
+        mappings=[
+            {"param_name": "command", "node_type": "content", "path": "."}
+        ],
+        example='''<bash-command>ls -la</bash-command>'''
+    )
     async def bash_command(self, command: str) -> ToolResult:
         try:
             stdout, stderr, returncode = await self.execute_command_in_container(command)

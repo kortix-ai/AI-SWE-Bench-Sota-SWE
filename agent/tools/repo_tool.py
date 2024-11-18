@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional
@@ -180,26 +180,38 @@ class RepositoryTools(Tool):
         
         return '\n'.join(content_lines)
 
-    @tool_schema({
-        "name": "view",
-        "description": "View the contents of a file or list the contents of a directory in the repository with detailed explanations.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "paths": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "The file or directory paths to view."
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "view",
+            "description": (
+                "View the contents of a file or list the contents of a directory in the repository with detailed explanations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "The file or directory paths to view."
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "The maximum directory depth to search for contents.",
+                        "default": 2
+                    },
                 },
-                "depth": {
-                    "type": "integer",
-                    "description": "The maximum directory depth to search for contents.",
-                    "default": 2
-                },
-            },
-            "required": ["paths"]
+                "required": ["paths"]
+            }
         }
     })
+    @xml_schema(
+        tag_name="view",
+        mappings=[
+            {"param_name": "paths", "node_type": "attribute", "path": ".", "is_list": True},
+            {"param_name": "depth", "node_type": "attribute", "path": "."}
+        ]
+    )
     async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
         try:
             python_code = '''
@@ -535,15 +547,22 @@ if __name__ == '__main__':
 #             await self._update_terminal(command, error_output, False)
 #             return self.fail_response(error_output)
 
-    @tool_schema({
-        "name": "submit",
-        "description": "If you are confident that the issue is resolve, submit the fix",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "submit",
+            "description": "If you are confident that the issue is resolve, submit the fix",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         }
     })
+    @xml_schema(
+        tag_name="submit",
+        mappings=[]
+    )
     async def submit(self) -> ToolResult:
         """
         Signals that the task is completed.
