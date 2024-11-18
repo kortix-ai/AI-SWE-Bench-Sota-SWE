@@ -243,21 +243,27 @@ def list_directory(root_path: str, depth: int, exclude_patterns: List[str], curr
         print(f"Error accessing {root_path}: {str(e)}", file=sys.stderr)
     return results
 
-def view_path(path: str, depth: int, exclude_patterns: List[str]):
+def view_path(path: str, depth: int, exclude_patterns: List[str], document_index: int):
     if os.path.isdir(path):
-        print(f'<directory path="{path}">')
+        print(f'<directory index="{document_index}">')
+        print(f'<source>{path}</source>')
+        print('<contents>')
         for item in list_directory(path, depth, exclude_patterns):
             print(item)
-        print("</directory>")
+        print('</contents>')
+        print('</directory>')
     elif os.path.isfile(path):
-        print(f'<file path="{path}">')
+        print(f'<document index="{document_index}">')
+        print(f'<source>{path}</source>')
+        print('<document_content>')
         try:
             with open(path, 'r') as f:
                 for i, line in enumerate(f, 1):
                     print(f"{i:6d}\t{line}", end='')
         except Exception as e:
             print(f"Error reading file {path}: {str(e)}", file=sys.stderr)
-        print("</file>")
+        print('</document_content>')
+        print('</document>')
     else:
         print(f"The path '{path}' is neither a file nor a directory.", file=sys.stderr)
 
@@ -265,9 +271,10 @@ def main():
     paths = sys.argv[1].split(',')
     exclude_patterns = sys.argv[2].split(',')
     depth = int(sys.argv[3])
-    
-    for path in paths:
-        view_path(path.strip(), depth, exclude_patterns)
+    print('<documents>')
+    for idx, path in enumerate(paths, 1):
+        view_path(path.strip(), depth, exclude_patterns, idx)
+    print('</documents>')
 
 if __name__ == '__main__':
     main()
