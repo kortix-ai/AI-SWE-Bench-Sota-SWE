@@ -53,6 +53,7 @@ class EditTool(Tool):
         "str_replace",
         "insert",
         "undo_edit",
+        "reset",    # Add reset command
     ]
 
     @xml_schema(
@@ -78,13 +79,14 @@ class EditTool(Tool):
         "function": {
             "name": "edit_file_and_run",
             "description": (
-                "Edit files with commands: 'create', 'str_replace', 'insert', 'undo_edit'. "
+                "Edit files with commands: 'create', 'str_replace', 'insert', 'undo_edit', 'reset'. "
                 "Then, run a bash command after editing.\n"
                 "Available commands:\n"
                 "- **create**: Create a new file with specified content.\n"
                 "- **str_replace**: Replace a unique string in a file.\n"
                 "- **insert**: Insert text into a file at a specified line number.\n"
                 "- **undo_edit**: Undo the last edit made to a file.\n"
+                "- **reset**: Reset file to its state in git HEAD.\n"
                 "**Note**: All file paths should be absolute paths starting from the root directory."
             ),
             "parameters": {
@@ -92,8 +94,8 @@ class EditTool(Tool):
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The command to execute. One of 'create', 'str_replace', 'insert', 'undo_edit'.",
-                        "enum": ["create", "str_replace", "insert", "undo_edit"]
+                        "description": "The command to execute. One of 'create', 'str_replace', 'insert', 'undo_edit', 'reset'.",
+                        "enum": ["create", "str_replace", "insert", "undo_edit", "reset"]
                     },
                     "path": {
                         "type": "string",
@@ -133,7 +135,7 @@ class EditTool(Tool):
         This tool allows you to perform various file editing operations within the repository environment.
 
         **Parameters:**
-        - `command` (str): The command to execute. Must be one of 'create', 'str_replace', 'insert', 'undo_edit'.
+        - `command` (str): The command to execute. Must be one of 'create', 'str_replace', 'insert', 'undo_edit', 'reset'.
         - `path` (str): The absolute file path to operate on.
         - `file_text` (Optional[str]): The text content for 'create' command.
         - `old_str` (Optional[str]): The old string to be replaced in 'str_replace' command.
@@ -179,6 +181,14 @@ class EditTool(Tool):
               "bash_command": "python reproduce_error.py"
           }
           ```
+        - Reset file to its state in git HEAD:
+          ```json
+          {
+              "command": "reset",
+              "path": "/testbed/reproduce_error.py",
+              "bash_command": "cat reproduce_error.py"
+          }
+          ```
 
         **Notes:**
         - All file paths should be absolute paths starting from the root directory.
@@ -200,6 +210,8 @@ class EditTool(Tool):
                 result = await self.insert_into_file(path, insert_line, new_str)
             elif command == "undo_edit":
                 result = await self.undo_edit(path)
+            elif command == "reset":
+                result = await self.reset_file(path)
             else:
                 return self.fail_response(f"Invalid command: {command}")
 
@@ -363,4 +375,25 @@ class EditTool(Tool):
             return self.success_response(f"Undo successful for {path}.")
         except Exception as e:
             return self.fail_response(f"Error undoing edit: {str(e)}")
+
+    async def reset_file(self, path: str) -> ToolResult:
+        """
+        Reset a file to its state in git HEAD.
+
+        Parameters:
+            - `path` (str): The absolute file path to reset.
+
+        Returns:
+            - `ToolResult`: The result indicating success or failure.
+        """
+        try:
+            relative_path = path.replace('/testbed/', '', 1)
+            command = f'git checkout HEAD -- "{relative_path}"'
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            if returncode != 0:
+                return self.fail_response(f"Failed to reset file: {stderr.strip()}")
+
+            return self.success_response(f"success reset {path}")
+        except Exception as e:
+            return self.fail_response(f"Error resetting file: {str(e)}")
 

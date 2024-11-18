@@ -141,7 +141,7 @@ def display_run_details(run_data: List[Dict]):
                 if role == "tool" or role == "tool_result":
                     name = message.get("name", "")
                     output = content
-                    if st.session_state.get('truncate_tool', False) and name != "summarize":
+                    if st.session_state.get('truncate_tool', False) and name != "report":
                         output = truncate_text(output)
                     icon = "✅" 
                     label = f"{name} {icon}"

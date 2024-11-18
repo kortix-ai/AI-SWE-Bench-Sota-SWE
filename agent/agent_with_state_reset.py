@@ -7,7 +7,8 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
 import uuid
 # from prompts import system_prompt, continue_instructions 
-from tools.summary_tool import SummaryTool
+# from tools.summary_tool import SummaryTool
+from tools.report_tool import ReportTool
 
 
 
@@ -60,7 +61,7 @@ Can you help me implement the necessary changes to the repository so that the re
 9. Implement the fix, ensuring it does not affect other test cases.
 10. Handle edge cases by writing and running additional tests.
 11. Use <CRITICAL> to evaluate your changes for minimal concise impact and absence of regressions.
-12. Review existing tests to ensure your changes do not introduce regressions. Summarize your findings or submit the fix.
+12. Review existing tests to ensure your changes do not introduce regressions. Report your findings or submit the fix.
 
 **Current Workspace State:**
 <workspace_state>
@@ -117,7 +118,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 8. [ ] Implement the fix without affecting other test cases
 9. [ ] Handle edge cases
 10. [ ] Review existing tests without running them to check for potential regressions
-11. [ ] Summarize findings or submit the fix"""
+11. [ ] Report findings or submit the fix"""
     }
     await state_manager.set('workspace_state', workspace_state)
 
@@ -135,7 +136,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
     from tools.edit_and_run_tool import EditTool
     thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
-    summary_tool = SummaryTool(state_file=state_file)
+    # summary_tool = SummaryTool(state_file=state_file)
+    report_tool = ReportTool(state_file=state_file)
 
     outer_iteration = 0
     total_iterations = 0
@@ -166,7 +168,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
         system = system_prompt.format(
             problem_statement=problem_statement,
-            workspace_state=summary_tool.format_workspace_summary(workspace_state)
+            workspace_state=report_tool.format_workspace_report(workspace_state)
             )
         system_message = {
             "role": "system",
@@ -181,7 +183,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 "role": "user", 
                 "content": user_prompt.format(
                     problem_statement=problem_statement,
-                    workspace_state=summary_tool.format_workspace_summary(workspace_state)
+                    workspace_state=report_tool.format_workspace_report(workspace_state)
                     )
             })
         else:
@@ -189,7 +191,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 "role": "user",
                 "content": continuation_prompt.format(
                     problem_statement=problem_statement,
-                    workspace_state=summary_tool.format_workspace_summary(workspace_state)
+                    workspace_state=report_tool.format_workspace_report(workspace_state)
                 )
             })
 
@@ -234,7 +236,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             # Add SummaryTool and reset at iteration 5
             if inner_iteration == reset_interval:
-                thread_manager.add_tool(SummaryTool, state_file=state_file)
+                # thread_manager.add_tool(SummaryTool, state_file=state_file)
+                thread_manager.add_tool(ReportTool, state_file=state_file)
                 await thread_manager.add_message(thread_id, {
                     "role": "user",
                     "content": (
@@ -242,11 +245,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                         "Have you met all the requirements specified in the PR description? Ensure that you have followed all the steps, "
                         "including analyzing the issue, implementing minimal changes without affecting existing tests, and handling edge cases. "
                         "If you have completed all tasks and are confident that the issue is resolved, please submit your fix. "
-                        "Otherwise, you must summarize the current state of the workspace without doing anything else and provide instructions "
-                        "for the next iteration using SummaryTool."
+                        "Otherwise, you must report the current state of the workspace without doing anything else and provide instructions "
+                        "for the next iteration using ReportTool."
                     )
                 })
-                tool_choice={"type": "function", "function": {"name": "summarize"}}
+                tool_choice={"type": "function", "function": {"name": "report"}}
             else:
                 tool_choice="any"
 
@@ -297,7 +300,7 @@ if __name__ == "__main__":
         parser.add_argument("--max-iterations", type=int, default=10, help="Maximum number of iterations")
         parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                             help="Model name to use (choices: sonnet, haiku, deepseek)")
-        parser.add_argument("--reset-interval", type=int, default=8, help="Number of iterations before state reset")
+        parser.add_argument("--reset-interval", type=int, default=10, help="Number of iterations before state reset")
         args = parser.parse_args()
 
         thread_manager = ThreadManager(threads_dir=args.threads_dir)
