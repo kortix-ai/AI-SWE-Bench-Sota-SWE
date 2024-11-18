@@ -31,12 +31,12 @@ class SummaryTool(Tool):
                             },
                             "thinking_logs": {
                                 "type": "array",
-                                "description": "Recent actions, trials, and thought process notes",
+                                "description": "Detail of recent actions, trials, and thought process notes",
                                 "items": {"type": "string"}
                             },
-                            "terminal_session": {
+                            "test_commands": {
                                 "type": "array",
-                                "description": "Recent commands and their results or outputs",
+                                "description": "List of test commands to execute (e.g ['python reproduce_error.py'])",
                                 "items": {"type": "string"}
                             }
                         }
@@ -68,5 +68,5 @@ class SummaryTool(Tool):
             "<explorer_folders>\n" + ', '.join(workspace_state.get('explorer_folders', [])) + "\n</explorer_folders>\n"
             "<open_files_in_code_editor>\n" + '\n'.join(workspace_state.get('open_files_in_code_editor', [])) + "\n</open_files_in_code_editor>\n\n"
             "<thinking_logs>\n" + '\n'.join(workspace_state.get('thinking_logs', [])) + "\n</thinking_logs>\n\n"
-            "<terminal_session>\n" + '\n'.join(workspace_state.get('terminal_session', [])) + "\n</terminal_session>\n\n"
+            "<test_commands>\n" + '\n'.join(workspace_state.get('test_commands', [])) + "\n</test_commands>\n\n"
         )

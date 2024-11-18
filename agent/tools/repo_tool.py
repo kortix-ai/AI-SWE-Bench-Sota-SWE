@@ -208,7 +208,7 @@ class RepositoryTools(Tool):
     @xml_schema(
         tag_name="view",
         mappings=[
-            {"param_name": "paths", "node_type": "attribute", "path": ".", "is_list": True},
+            {"param_name": "paths", "node_type": "attribute", "path": "."},
             {"param_name": "depth", "node_type": "attribute", "path": "."}
         ]
     )

@@ -105,33 +105,17 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>""".format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
             })
 
+            # Execute 'view' tool and add its output as a message
+            view_arguments = {
+                "paths": list(set(workspace_state.get('explorer_folders', []) + workspace_state.get('open_files_in_code_editor', [])))
+            }
+            await thread_manager.execute_tool_and_add_message(thread_id, 'view', view_arguments)
 
-            await thread_manager.add_message_and_run_tools(thread_id, {
-                "role": "user",
-                'content': "Here's the content of opening files in the current workspace and changes made:",
-                "tool_calls": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "function",
-                        "function": {
-                            "name": "view",
-                            "arguments": json.dumps({
-                                "paths": list(set(workspace_state.get('explorer_folders', []) + workspace_state.get('open_files_in_code_editor', [])))
-                            })
-                        }
-                    },
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "function",
-                        "function": {
-                            "name": "bash_command",
-                            "arguments": json.dumps({
-                                "command": f"(git add -N . && git diff -- {' '.join(workspace_state.get('open_files_in_code_editor', []))}) || echo 'No changes in open files'"
-                            })
-                        }
-                    }
-                ]
-            })
+            # Execute 'bash_command' tool and add its output as a message
+            bash_command_arguments = {
+                "command": f"(git add -N . && git diff -- {' '.join(workspace_state.get('open_files_in_code_editor', []))}) || echo 'No changes in open files'"
+            }
+            await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_command_arguments)
 
         while inner_iteration < reset_interval and total_iterations < max_iterations:
             inner_iteration += 1

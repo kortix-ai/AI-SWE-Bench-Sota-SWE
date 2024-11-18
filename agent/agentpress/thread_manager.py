@@ -59,6 +59,7 @@ class ThreadManager:
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
         os.makedirs(self.threads_dir, exist_ok=True)
+        self.tool_executor = StandardToolExecutor(parallel=False)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
         """Add a tool to the ThreadManager.
@@ -84,12 +85,20 @@ class ThreadManager:
             IOError: If thread file creation fails
             
         Notes:
-            Creates a new thread file with an empty messages list
+            Creates new thread file and history file with empty messages lists
         """
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        history_path = os.path.join(self.threads_dir, f"{thread_id}_history.json")
+        
+        empty_data = {"messages": []}
+        
+        # Create both files with empty message lists
         with open(thread_path, 'w') as f:
-            json.dump({"messages": []}, f)
+            json.dump(empty_data, f)
+        with open(history_path, 'w') as f:
+            json.dump(empty_data, f)
+            
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
@@ -557,4 +566,24 @@ class ThreadManager:
         except Exception as e:
             logging.error(f"Failed to add message to history of thread {thread_id}: {e}")
             raise e
+
+    async def execute_tool_and_add_message(self, thread_id: str, tool_name: str, arguments: Dict[str, Any]):
+        """Execute a tool and add its output as a message with role 'tool'."""
+        available_functions = self.tool_registry.get_available_functions()
+        if tool_name not in available_functions:
+            raise ValueError(f"Tool {tool_name} is not registered.")
+
+        # Execute the tool
+        tool_function = available_functions[tool_name]
+        tool_result = await tool_function(**arguments)
+
+        # Prepare the tool message
+        tool_message = {
+            "role": "tool",
+            "name": tool_name,
+            "content": str(tool_result)
+        }
+
+        # Add the tool message to the thread
+        await self.add_message(thread_id, tool_message)
 
