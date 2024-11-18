@@ -64,7 +64,7 @@ class EditTool(Tool):
             {"param_name": "old_str", "node_type": "element", "path": "old_str"},
             {"param_name": "new_str", "node_type": "element", "path": "new_str"},
             {"param_name": "insert_line", "node_type": "element", "path": "insert_line"},
-            {"param_name": "bash_command", "node_type": "element", "path": "bash_command"}  # Add bash_command
+            {"param_name": "bash_command", "node_type": "element", "path": "bash_command"}
         ],
         example='''
         <edit-file command="create" path="/testbed/example.txt">
@@ -76,10 +76,10 @@ class EditTool(Tool):
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "edit_file",
+            "name": "edit_file_and_run",
             "description": (
                 "Edit files with commands: 'create', 'str_replace', 'insert', 'undo_edit'. "
-                "Optionally, run a bash command after editing.\n"
+                "Then, run a bash command after editing.\n"
                 "Available commands:\n"
                 "- **create**: Create a new file with specified content.\n"
                 "- **str_replace**: Replace a unique string in a file.\n"
@@ -117,14 +117,14 @@ class EditTool(Tool):
                     },
                     "bash_command": {
                         "type": ["string", "null"],
-                        "description": "Optional bash command to run after editing."
+                        "description": "Bash command to run the file after editing e.g (python reproduce_error.py)."
                     },
                 },
-                "required": ["command", "path"]
+                "required": ["command", "path", "bash_command"]
             }
         }
     })
-    async def edit_file(self, command: str, path: str, file_text: Optional[str] = None,
+    async def edit_file_and_run(self, command: str, path: str, file_text: Optional[str] = None,
                         old_str: Optional[str] = None, new_str: Optional[str] = None,
                         insert_line: Optional[int] = None, bash_command: Optional[str] = None) -> ToolResult:
         """

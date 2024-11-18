@@ -19,4 +19,7 @@ python evaluation.py --input-file ./outputs/__combined_agentpress_output_2024111
 
 
 # lite 
-python swe_runner.py --instances-file repo/lite_6_astropy.json --dataset-type lite --max-iterations 25 --run-eval --num-worker 3 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py
+python swe_runner.py --instances-file repo/lite_4.json --dataset-type lite --max-iterations 32 --run-eval --num-worker 3 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py
+
+
+python swe_runner.py --instance-id astropy__astropy-12907 --dataset-type lite --max-iterations 32 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval

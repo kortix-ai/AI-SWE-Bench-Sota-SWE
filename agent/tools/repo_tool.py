@@ -551,7 +551,7 @@ if __name__ == '__main__':
         "type": "function",
         "function": {
             "name": "submit",
-            "description": "If you are confident that the issue is resolve, submit the fix",
+            "description": "If all test files is working including edge cases and you are confident that the issue is resolve, submit the fix.",
             "parameters": {
                 "type": "object",
                 "properties": {},

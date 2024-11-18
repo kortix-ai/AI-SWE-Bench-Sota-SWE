@@ -55,7 +55,7 @@ Please check the current state of the workspace, some steps are probably done, a
 """
 
 @observe()
-async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 8, model_name: str = "sonnet"):
+async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 3, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
@@ -162,14 +162,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             inner_iteration += 1
             total_iterations += 1
 
-            # Add SummaryTool and reset at iteration 5
-            if inner_iteration == reset_interval:
-                thread_manager.add_tool(SummaryTool, state_file=state_file)
-                await thread_manager.add_message(thread_id, {
-                    "role": "user",
-                    "content": "Time's up! 1. Have you fixed the issue? 2. Is the reproduce error test file fully functional? 3. Have you considered all possible edge cases by writing and running edge cases test script?\nIf you're confident that the issue is solved, please submit. Otherwise, you **MUST summarize** the current state of the workspace without doing anything else and provide instructions for the next iteration using SummaryTool."
-                })
-
             model_mapping = {
                 "sonnet": "anthropic/claude-3-5-sonnet-latest",
                 "haiku": "anthropic/claude-3-5-haiku-latest",
@@ -181,23 +173,30 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             print(f"Iteration {total_iterations}/{max_iterations} (Reset cycle {outer_iteration}, Step {inner_iteration})")
 
+            # Add SummaryTool and reset at iteration 5
+            if inner_iteration == reset_interval:
+                thread_manager.add_tool(SummaryTool, state_file=state_file)
+                await thread_manager.add_message(thread_id, {
+                    "role": "user",
+                    "content": "Time's up! 1. Have you fixed the issue? 2. Is the reproduce error test file fully functional? 3. Have you considered all possible edge cases by writing and running edge cases test script?\nIf you're confident that the issue is solved, please submit. Otherwise, you **MUST summarize** the current state of the workspace without doing anything else and provide instructions for the next iteration using SummaryTool."
+                })
+                tool_choice={"type": "function", "function": {"name": "summarize"}},
+            else:
+                tool_choice="any"
+
             response = await thread_manager.run_thread(
                 thread_id=thread_id,
                 system_message=system_message,
                 model_name=model_name_full,
                 temperature=0.0,
                 max_tokens=8192,
-                tool_choice="any",
+                tool_choice=tool_choice,
                 native_tool_calling=not use_xml,
                 xml_tool_calling=use_xml,
-                # temporary_message=messages,
-                # execute_tools_async=False,
-                # use_tool=True,
                 execute_tools_on_stream=True,
                 parallel_tool_execution=False,
             )
 
-            # Check for 'submit' tool call
             assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
             if assistant_messages:
                 last_assistant = assistant_messages[0]
