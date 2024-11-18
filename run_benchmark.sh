@@ -14,6 +14,8 @@ python swe_runner.py --range 1 6 --dataset-type lite --num-workers 6 --max-itera
 
 python swe_runner.py --instances-file utils/diff_claude_openhands.json --dataset-type verified --max-iterations 35 --run-eval --no-archive --num-worker 5 --model-name "sonnet" #--num-worker 3 #--no-archive
 
+python swe_runner.py --instances-file repo/swing_test_10.json  --dataset-type verified --max-iterations 25 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --num-worker 5
+
 python swe_runner.py --join-only --disable-streamlit --no-archive
 python evaluation.py --input-file ./outputs/__combined_agentpress_output_20241117_002326_4.jsonl --dataset princeton-nlp/SWE-bench_Lite
 
