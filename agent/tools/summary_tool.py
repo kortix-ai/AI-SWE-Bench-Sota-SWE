@@ -65,8 +65,8 @@ class SummaryTool(Tool):
 
     def format_workspace_summary(self, workspace_state: dict) -> str:
         return (
-            "<explorer_folders>\n" + ', '.join(workspace_state.get('explorer_folders', [])) + "\n</explorer_folders>\n"
+            "<explorer_folders>\n" + ', '.join(workspace_state.get('explorer_folders', [])) + "\n</explorer_folders>\n\n"
             "<open_files_in_code_editor>\n" + '\n'.join(workspace_state.get('open_files_in_code_editor', [])) + "\n</open_files_in_code_editor>\n\n"
             "<thinking_logs>\n" + '\n'.join(workspace_state.get('thinking_logs', [])) + "\n</thinking_logs>\n\n"
-            "<test_commands>\n" + '\n'.join(workspace_state.get('test_commands', [])) + "\n</test_commands>\n\n"
+            "<test_commands>\n" + '\n'.join(workspace_state.get('test_commands', [])) + "\n</test_commands>"
         )

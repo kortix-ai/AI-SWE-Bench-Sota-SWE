@@ -14,8 +14,6 @@ You are an autonomous expert software engineer focused on implementing precise, 
 <IMPORTANT>\n*After using a tool to make changes to a file, immediately run a bash command to run script.\n</IMPORTANT>\n
 """
 
-
-
 user_prompt = """
 <uploaded_files>
 /testbed/
@@ -40,6 +38,22 @@ After editing or creating files, always use bash tool immediately, as they are w
 
 """
 
+# Add new continuation prompt
+continuation_prompt = """
+This is a continuation of the previous task. You are trying to implement the necessary changes to the repository so that the requirements specified in the PR description are met.
+
+<pr_description>
+{problem_statement}
+</pr_description>
+
+Here are the normal steps to solve the issue:
+1. Edit the sourcecode of the repo to resolve the issue 
+2. Rerun your reproduce script and confirm that the error is fixed! 
+3. Think about edgecases and write edge cases test script to test the edge cases. Make sure the fix handles them as well!
+
+Please check the current state of the workspace, some steps are probably done, and you should continue working working from there. Consider what has been accomplished so far and proceed accordingly. Remember to test your changes thoroughly and handle any edge cases.
+"""
+
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 8, model_name: str = "sonnet"):
     thread_manager = ThreadManager(threads_dir=threads_dir)
@@ -53,7 +67,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         "explorer_folders": [],
         "open_files_in_code_editor": [],
         "thinking_logs": [],
-        "terminal_session": []
+        "test_commands": []
     }
     await state_manager.set('workspace_state', initial_workspace)
 
@@ -65,14 +79,32 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
 
-    from tools.edit_tool import EditTool
+    # from tools.edit_tool import EditTool
+    # thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     from tools.bash_tool import BashTool
-    thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
+    from tools.edit_and_run_tool import EditTool
+    thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     summary_tool = SummaryTool(state_file=state_file)
 
     outer_iteration = 0
     total_iterations = 0
+
+    async def execute_view_commands(thread_manager, thread_id, workspace_state):
+        # folders = workspace_state.get('explorer_folders', [])
+        # if folders:
+        #     folder_view_arguments = {
+        #         "paths": list(set(folders)),
+        #         "depth": 1
+        #     }
+        #     await thread_manager.execute_tool_and_add_message(thread_id, 'view', folder_view_arguments)
+
+        files = workspace_state.get('open_files_in_code_editor', [])
+        if files:
+            file_view_arguments = {
+                "paths": list(set(files)),
+            }
+            await thread_manager.execute_tool_and_add_message(thread_id, 'view', file_view_arguments)
 
     while total_iterations < max_iterations:
         outer_iteration += 1
@@ -91,31 +123,40 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         await thread_manager.add_message(thread_id, system_message)
         workspace_state = await state_manager.get('workspace_state')
         
-        await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": user_prompt.format(
-                problem_statement=problem_statement,
-                workspace_state=summary_tool.format_workspace_summary(workspace_state)
-            )
-        })
-
-        if total_iterations != 0:
+        if total_iterations == 0:
+            await thread_manager.add_message(thread_id, {
+                "role": "user", 
+                "content": user_prompt.format(problem_statement=problem_statement)
+            })
+        else:
             await thread_manager.add_message(thread_id, {
                 "role": "user",
-                "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>""".format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
+                "content": continuation_prompt.format(problem_statement=problem_statement)
             })
 
-            # Execute 'view' tool and add its output as a message
-            view_arguments = {
-                "paths": list(set(workspace_state.get('explorer_folders', []) + workspace_state.get('open_files_in_code_editor', [])))
-            }
-            await thread_manager.execute_tool_and_add_message(thread_id, 'view', view_arguments)
+            await thread_manager.add_message(thread_id, {
+                "role": "user",
+                "content": """Here's the current workspace state, what we have so far: <workspace_state>\n{workspace_state}\n</workspace_state>
+                You can find below the current ACTUAL CONTENT of editing files and folders in the explorer. Continue working from here. Do not view these files again.
+                """.format(workspace_state=summary_tool.format_workspace_summary(workspace_state))
+            })
 
-            # Execute 'bash_command' tool and add its output as a message
-            bash_command_arguments = {
-                "command": f"(git add -N . && git diff -- {' '.join(workspace_state.get('open_files_in_code_editor', []))}) || echo 'No changes in open files'"
-            }
-            await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_command_arguments)
+            await execute_view_commands(thread_manager, thread_id, workspace_state)
+
+            # files = workspace_state.get('open_files_in_code_editor', [])
+            # if files:
+            #     bash_command_arguments = {
+            #         "command": f"(git add -N . && git diff -- {' '.join(files)}) || echo 'No changes in open files'"
+            #     }
+            #     await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_command_arguments)
+
+            # Execute test commands
+            test_commands = workspace_state.get('test_commands', [])
+            for cmd in test_commands:
+                bash_test_arguments = {
+                    "command": cmd
+                }
+                await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_test_arguments)
 
         while inner_iteration < reset_interval and total_iterations < max_iterations:
             inner_iteration += 1

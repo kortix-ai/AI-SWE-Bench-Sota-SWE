@@ -5,7 +5,7 @@ from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional, Literal
 from pathlib import Path
-from agent.tools.bash_tool import BashTool  # Import BashTool
+from tools.bash_tool import BashTool 
 
 class EditTool(Tool):
     def __init__(self, container_name: str, state_file: str):

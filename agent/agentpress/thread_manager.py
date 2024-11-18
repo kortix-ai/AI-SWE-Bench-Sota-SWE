@@ -579,7 +579,7 @@ class ThreadManager:
 
         # Prepare the tool message
         tool_message = {
-            "role": "tool",
+            "role": "user",
             "name": tool_name,
             "content": str(tool_result)
         }

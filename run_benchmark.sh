@@ -16,3 +16,7 @@ python swe_runner.py --instances-file utils/diff_claude_openhands.json --dataset
 
 python swe_runner.py --join-only --disable-streamlit --no-archive
 python evaluation.py --input-file ./outputs/__combined_agentpress_output_20241117_002326_4.jsonl --dataset princeton-nlp/SWE-bench_Lite
+
+
+# lite 
+python swe_runner.py --instances-file repo/lite_6_astropy.json --dataset-type lite --max-iterations 25 --run-eval --num-worker 3 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py

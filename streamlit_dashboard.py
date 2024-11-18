@@ -100,7 +100,7 @@ def format_message_content(content):
         return "\n".join(formatted_content)
     return str(content)
 
-def truncate_text(text: str, max_lines: int = 20) -> str:
+def truncate_text(text: str, max_lines: int = 10) -> str:
     """Truncate text to show first and last n lines."""
     lines = text.splitlines()
     if len(lines) <= max_lines * 2:
@@ -131,14 +131,14 @@ def display_run_details(run_data: List[Dict]):
                 avatar = "👤"
             elif role == "system":
                 avatar = "⚙️"
-            elif role == "tool":
+            elif role == "tool" or role == "tool_result":
                 avatar = "🔧"
             else:
                 avatar = "❓"
             
             with st.chat_message(role, avatar=avatar):
                 formatted_content = format_message_content(content)
-                if role == "tool":
+                if role == "tool" or role == "tool_result":
                     name = message.get("name", "")
                     output = content
                     if st.session_state.get('truncate_tool', False):
@@ -150,6 +150,8 @@ def display_run_details(run_data: List[Dict]):
                         st.code(output, language='python')
                 elif role in ["user", "system"]:
                     with st.expander(label=f"{role.title()} Message", expanded=False):
+                        if st.session_state.get('truncate_tool', False):
+                            formatted_content = truncate_text(formatted_content)
                         st.markdown(formatted_content)
                 else:
                     # Add iteration number for assistant messages

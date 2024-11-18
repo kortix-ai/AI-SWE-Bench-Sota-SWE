@@ -87,6 +87,9 @@ class ToolResult:
     success: bool
     output: str
 
+    def __str__(self) -> str:
+        return f'<ToolResult>{self.output}</ToolResult>'
+
 class Tool(ABC):
     """Abstract base class for all tools.
     
