@@ -198,7 +198,7 @@ class RepositoryTools(Tool):
                     "depth": {
                         "type": "integer",
                         "description": "The maximum directory depth to search for contents.",
-                        "default": 2
+                        "default": 3
                     },
                 },
                 "required": ["paths"]
@@ -212,7 +212,7 @@ class RepositoryTools(Tool):
             {"param_name": "depth", "node_type": "attribute", "path": "."}
         ]
     )
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 3) -> ToolResult:
         try:
             python_code = '''
 import os
@@ -311,6 +311,77 @@ if __name__ == '__main__':
         
         except Exception as e:
             return self.fail_response(f"Error executing view command: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "run_pytest",
+            "description": (
+                "Run a existing specified test file using pytest, only relevant to the issue."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "The path to the test file to execute."
+                    }
+                },
+                "required": ["file_path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="run_pytest",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."}
+        ]
+    )
+    async def run_pytest(self, file_path: str) -> ToolResult:
+        """
+        Executes a pytest test file inside the Docker container.
+
+        Parameters:
+            file_path (str): The path to the test file to execute.
+
+        Returns:
+            ToolResult: The result of the test execution.
+        """
+        try:
+            # Construct the command to run the test
+            command = (
+                f"cd /testbed && "
+                f"python -W ignore -m pytest {file_path} "
+                f"-v -rF --failed-first -x --tb=short --no-header --quiet --cache-clear --color=no"
+            )
+
+            # Execute the command in the container
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            success = returncode == 0
+
+            # Update terminal session
+            await self._update_terminal(command, stdout + stderr, success)
+
+            # Format output with command and proper tags
+            formatted_output = (
+                f"<command>{command}</command>\n"
+                f"<test_results>\n{stdout.strip()}\n</test_results>\n"
+            )
+
+            if success:
+                return self.success_response(formatted_output)
+            else:
+                error_output = (
+                    f"<command>{command}</command>\n"
+                    f"<test_results>\n{stdout.strip()}\n</test_results>\n"
+                    f"<errors>\n{stderr.strip()}\n</errors>\n"
+                )
+                return self.fail_response(error_output)
+
+        except Exception as e:
+            return self.fail_response(
+                f"<error>Error executing test: {str(e)}</error>\n"
+            )
 
     @openapi_schema({
         "type": "function",

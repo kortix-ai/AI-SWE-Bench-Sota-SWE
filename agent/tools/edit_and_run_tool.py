@@ -218,7 +218,7 @@ class EditTool(Tool):
             if bash_command:
                 bash_result = await self.bash_tool.bash_command(bash_command)
                 if bash_result.success:
-                    result.output += f"\nBash command executed successfully:\n{bash_result.output}"
+                    result.output += f"{bash_result.output}"
                 else:
                     result.output += f"\nBash command failed:\n{bash_result.output}"
 

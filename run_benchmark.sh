@@ -40,3 +40,6 @@ python swe_runner.py --instances-file repo/swing_test_cases.json --dataset-type 
 
 
 
+python swe_runner.py --instances-file repo/lite_4.json --dataset-type lite --max-iterations 40 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 5 --install-packages
+
+

@@ -83,11 +83,12 @@ class BashTool(Tool):
     async def bash_command(self, command: str) -> ToolResult:
         try:
             stdout, stderr, returncode = await self.execute_command_in_container(command)
+            output = f"Command executed: `{command}`\n"
             if returncode == 0:
-                output = stdout.strip() if stdout.strip() else "Command executed successfully but produced no output."
-                return self.success_response(f"Command executed: `{command}`\nOutput:\n{output}")
+                output += f"<output>{stdout.strip() if stdout.strip() else 'No output.'}</output>"
+                return self.success_response(output)
             else:
-                error_output = stderr.strip() if stderr.strip() else "Unknown error occurred."
-                return self.fail_response(f"Command executed: `{command}`\nCommand failed with error:\n<OUTPUT>{error_output}<OUTPUT>")
+                output += f"<output>{stdout.strip()}\n{stderr.strip()}</output>"
+                return self.fail_response(output)
         except Exception as e:
-            return self.fail_response(f"Command executed: `{command}`\n\nError executing bash command: {str(e)}")
+            return self.fail_response(f"Command executed: `{command}`\nError executing bash command: {str(e)}")
