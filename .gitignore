@@ -29,3 +29,7 @@ prompts/
 
 experiments/
 logs/
+
+submissions/
+
+*.json

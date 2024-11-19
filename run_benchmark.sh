@@ -53,3 +53,6 @@ python -m swebench.harness.run_evaluation \
     --predictions_path outputs/__combined_agentpress_output_20241119_165716_1.jsonl \
     --max_workers 1 \
     --run_id test_eval
+
+
+python swe_runner.py --range 1 1 --dataset-type lite --max-iterations 31 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 1 --install-packages --submission

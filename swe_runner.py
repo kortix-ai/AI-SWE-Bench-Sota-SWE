@@ -53,6 +53,8 @@ def main():
                         help="Install packages inside Docker container (default: False)")
     parser.add_argument("--run_id", default="KortixAI",
                         help="Identifier for the run, replaces YourModelName (default: KortixAI)")
+    parser.add_argument("--submission", action="store_true", default=False,
+                        help="Enable submission mode to generate files in SWE-bench format.")
     
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
@@ -116,6 +118,8 @@ def main():
         inference_cmd += ["--num-workers", str(args.num_workers)]
         inference_cmd += ["--execute-file", args.execute_file]
         inference_cmd += ["--run_id", args.run_id]
+        if args.submission:
+            inference_cmd += ["--submission"]
         subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:

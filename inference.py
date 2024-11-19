@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import tempfile
+import shutil
 from datasets import load_dataset
 import pandas as pd
 from multiprocessing import Pool
@@ -126,7 +127,7 @@ def extract_tracked_files(container_name, track_files, output_dir):
         except subprocess.CalledProcessError:
             print(f"Warning: Failed to copy {file_path} from container", file=sys.stderr)
 
-def convert_outputs_to_jsonl(output_dir: str):
+def convert_outputs_to_jsonl(output_dir: str) -> str:
     """Convert json outputs to SWE-bench jsonl format and combine them, skipping files > 1MB"""
     all_data = []
     MAX_FILE_SIZE = 1 * 1024 * 1024  # 1MB in bytes
@@ -163,8 +164,10 @@ def convert_outputs_to_jsonl(output_dir: str):
             for item in all_data:
                 f.write(json.dumps(item) + '\n')
         print(f'Created combined output file: {combined_output}')
+        return combined_output  # Return the path of the combined output file
     else:
         print("\nNo data found to combine")
+        return ""
 
 def is_instance_id_list(value):
     """Check if a list contains what appears to be instance IDs."""
@@ -228,6 +231,8 @@ def main():
                         help="Install packages inside Docker container (default: False)")
     parser.add_argument("--run_id", default="KortixAI",
                         help="Identifier for the run, name of model (default: KortixAI)")
+    parser.add_argument("--submission", action="store_true", default=False,
+                        help="Enable submission mode to generate files in SWE-bench format")
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -292,7 +297,83 @@ def main():
             process_instance(args_instance)
             pbar.update(1)
 
-    convert_outputs_to_jsonl(args.output_dir)
+    combined_output_file = convert_outputs_to_jsonl(args.output_dir)
+
+    if args.submission:
+        # Step 1 and 2: Create submissions directory and run_id directory
+        submissions_dir = 'submissions'
+        os.makedirs(submissions_dir, exist_ok=True)
+        run_id_dir = os.path.join(submissions_dir, args.run_id)
+        os.makedirs(run_id_dir, exist_ok=True)
+
+        # Step 0: Copy or create README.md and metadata.yml
+        utils_dir = 'utils'
+        for file_name in ['README.md', 'metadata.yml']:
+            src_file = os.path.join(utils_dir, file_name)
+            dest_file = os.path.join(run_id_dir, file_name)
+            
+            if os.path.exists(src_file):
+                shutil.copy(src_file, dest_file)
+                print(f"Copied {file_name} from utils/ to {dest_file}")
+            else:
+                # Create empty file if source doesn't exist
+                with open(dest_file, 'w') as f:
+                    pass
+                print(f"Created empty {file_name} at {dest_file}")
+
+        # Step 4: Copy the combined output file to submissions/run_id as all_preds.jsonl
+        dest_combined_output_file = os.path.join(run_id_dir, 'all_preds.jsonl')
+        if combined_output_file and os.path.exists(combined_output_file):
+            shutil.copy(combined_output_file, dest_combined_output_file)
+            print(f"Copied combined output to {dest_combined_output_file}")
+        else:
+            print("Combined output file not found. Skipping copy.")
+            return
+
+        # Step 5: Create trajs directory
+        trajs_dir = os.path.join(run_id_dir, 'trajs')
+        os.makedirs(trajs_dir, exist_ok=True)
+
+        # Step 6: Copy trajectory files to submissions/run_id/trajs
+        for instance_dir in os.listdir(args.output_dir):
+            threads_dir = os.path.join(args.output_dir, instance_dir, 'threads')
+            if os.path.exists(threads_dir):
+                for file_name in os.listdir(threads_dir):
+                    if file_name.endswith('_history.json'):
+                        src_file = os.path.join(threads_dir, file_name)
+                        dest_file = os.path.join(trajs_dir, f'{instance_dir}.json')
+                        shutil.copy(src_file, dest_file)
+                        print(f"Copied trajectory for instance {instance_dir} to {dest_file}")
+                        break
+            else:
+                print(f"Threads directory for instance {instance_dir} not found.")
+
+        # Step 7: Run evaluation using the specified command
+        evaluation_cmd = [
+            sys.executable, '-m', 'swebench.harness.run_evaluation',
+            '--dataset_name', args.dataset,
+            '--predictions_path', dest_combined_output_file,
+            '--max_workers', str(args.num_workers),
+            '--run_id', args.run_id
+        ]
+        print("Running evaluation...")
+        subprocess.run(evaluation_cmd, check=True)
+        print("Evaluation completed.")
+
+        # Step 8: Copy logs to submissions/run_id/log
+        source_log_dir = os.path.join('logs', 'run_evaluation', args.model_name, args.run_id)
+        dest_log_dir = os.path.join(run_id_dir, 'log')
+        os.makedirs(dest_log_dir, exist_ok=True)
+        if os.path.exists(source_log_dir):
+            for file_name in os.listdir(source_log_dir):
+                src_file = os.path.join(source_log_dir, file_name)
+                dest_file = os.path.join(dest_log_dir, file_name)
+                if os.path.isfile(src_file):
+                    shutil.copy(src_file, dest_file)
+            print(f"Copied logs to {dest_log_dir}")
+        else:
+            print(f"Source log directory {source_log_dir} not found.")
+
 
 def process_instance(args_instance_tuple):
     args, instance = args_instance_tuple
