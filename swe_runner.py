@@ -49,6 +49,8 @@ def main():
     parser.add_argument("--input-file", help="Path to the input file for evaluation")
     parser.add_argument("--execute-file", default="agent/agent.py",
                         help="Path to the script to execute (default: agent/agent.py)")
+    parser.add_argument("--install-packages", action="store_true", default=False,
+                        help="Install packages inside Docker container (default: False)")
     
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
@@ -105,6 +107,8 @@ def main():
             inference_cmd += ["--track-files"] + args.track_files
         if args.join_only:
             inference_cmd += ["--join-only"]
+        if args.install_packages:
+            inference_cmd += ["--install-packages"]
         inference_cmd += ["--max-iterations", str(args.max_iterations)]
         inference_cmd += ["--model-name", args.model_name]
         inference_cmd += ["--num-workers", str(args.num_workers)]

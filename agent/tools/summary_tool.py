@@ -27,18 +27,17 @@ class SummaryTool(Tool):
                             "checklist_of_tasks": {
                                 "type": "array",
                                 "description": """Status of tasks:
-1. [ ] Explore and find the root cause
-2. [ ] Expand the search scope to related files 
-3. [ ] Analyze PR description and issue details
-4. [ ] Analyze root cause with related files
-5. [ ] View existing tests without running them
-6. [ ] Consider multiple possible fixes that don't affect existing tests
-7. [ ] Choose the best solution which is minimal and precise
-8. [ ] Reproduce the error
-9. [ ] Implement the fix without affecting other test cases
-10. [ ] Handle edge cases
-11. [ ] Review existing tests without running them to check for potential regressions
-12. [ ] Submit the fix if all tasks are completed, otherwise summarize findings""",
+1. [ ] Explore `/testbed` and find relevant files.
+2. [ ] Analyze PR description and issue details.
+3. [ ] Analyze root cause with related files.
+4. [ ] Locate, check, and understand existing tests related to the issue.
+5. [ ] Consider multiple possible fixes that don't affect existing tests.
+6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
+7. [ ] Reproduce the error.
+8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
+9. [ ] Handle edge cases comprehensively.
+10. [ ] Review changes with `git diff` and run existing tests to verify no regressions.
+11. [ ] Report findings or submit the fix.""",
                                 "items": {"type": "string"}
                             },
                             "open_files_in_code_editor": {

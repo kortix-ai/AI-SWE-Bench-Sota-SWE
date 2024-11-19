@@ -16,7 +16,7 @@ def get_instance_docker_image(instance_id: str) -> str:
     image_name = image_name.replace('__', '_s_')  # To comply with Docker naming conventions
     return (DOCKER_IMAGE_PREFIX.rstrip('/') + '/' + image_name).lower()
 
-def start_docker_container(instance, track_files):
+def start_docker_container(instance, track_files, install_packages=False):
     """
     Start the Docker container and keep it running.
     Returns the container name.
@@ -55,6 +55,31 @@ def start_docker_container(instance, track_files):
     subprocess.run(cmd, check=True)
 
     print(f"Docker container '{container_name}' started and is running.")
+
+    if install_packages:
+        installation_commands = '''
+source /opt/miniconda3/bin/activate
+conda activate testbed
+cd /testbed
+
+sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen
+locale-gen
+
+export LANG=en_US.UTF-8
+export LANGUAGE=en_US:en
+export LC_ALL=en_US.UTF-8
+
+git config --global --add safe.directory /testbed
+# python -m pip install -e .
+python -m pip install pytest --no-deps
+'''
+        result = execute_command_in_container(container_name, installation_commands)
+        if result.returncode != 0:
+            print(f"Error installing packages in container '{container_name}':\n{result.stderr}")
+            sys.exit(1)
+        else:
+            print(f"Packages installed successfully in container '{container_name}'.")
+
     return container_name
 
 def stop_docker_container(container_name):
@@ -199,6 +224,8 @@ def main():
                         help='Number of parallel workers')
     parser.add_argument("--execute-file", default="agent/agent.py",
                         help="Path to the script to execute (default: agent/agent.py)")
+    parser.add_argument("--install-packages", action="store_true", default=False,
+                        help="Install packages inside Docker container (default: False)")
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -287,7 +314,7 @@ def process_instance(args_instance_tuple):
     with open(ground_truth_file, 'w') as f:
         json.dump({'patch': instance['patch'], 'test_patch': instance['test_patch']}, f, indent=2)
 
-    container_name = start_docker_container(instance, args.track_files or [])
+    container_name = start_docker_container(instance, args.track_files or [], args.install_packages)
     try:
         with tempfile.NamedTemporaryFile('w', delete=False) as f:
             problem_file = f.name

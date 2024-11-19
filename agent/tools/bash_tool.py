@@ -59,6 +59,7 @@ class BashTool(Tool):
                 "**Notes:**\n"
                 "- The working directory is `/testbed`.\n"
                 "- The environment is set up with `conda activate testbed`.\n"
+                "- When running pytest, use `grep` to filter the output and only show failed testcases.\n"
             ),
             "parameters": {
                 "type": "object",
@@ -87,6 +88,6 @@ class BashTool(Tool):
                 return self.success_response(f"Command executed: `{command}`\nOutput:\n{output}")
             else:
                 error_output = stderr.strip() if stderr.strip() else "Unknown error occurred."
-                return self.fail_response(f"Command executed: `{command}`\nCommand failed with error: {error_output}")
+                return self.fail_response(f"Command executed: `{command}`\nCommand failed with error:\n<OUTPUT>{error_output}<OUTPUT>")
         except Exception as e:
             return self.fail_response(f"Command executed: `{command}`\n\nError executing bash command: {str(e)}")
