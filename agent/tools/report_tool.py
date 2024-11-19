@@ -35,9 +35,10 @@ class ReportTool(Tool):
 6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
 7. [ ] Reproduce the error.
 8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
-9. [ ] Handle edge cases comprehensively.
-10. [ ] Review changes and run existing tests by run_pytest tool to verify no regressions.
-11. [ ] Report findings or submit the fix.""",
+9. [ ] Review modified files and identify any dependent code that needs updates.
+10. [ ] Handle edge cases comprehensively.
+11. [ ] Review changes and run existing pytests to verify no regressions.
+12. [ ] Report findings or submit the fix.""",
                                 "items": {"type": "string"}
                             },
                             "open_files_in_code_editor": {
