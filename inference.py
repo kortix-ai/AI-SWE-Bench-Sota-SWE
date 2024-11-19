@@ -360,20 +360,19 @@ def main():
         subprocess.run(evaluation_cmd, check=True)
         print("Evaluation completed.")
 
-        # Step 8: Copy logs to submissions/run_id/log
+        # Step 8: Copy logs to submissions/run_id/logs
         source_log_dir = os.path.join('logs', 'run_evaluation', args.run_id, args.run_id)
         dest_log_dir = os.path.join(run_id_dir, 'logs')
         os.makedirs(dest_log_dir, exist_ok=True)
         if os.path.exists(source_log_dir):
-            for file_name in os.listdir(source_log_dir):
-                src_file = os.path.join(source_log_dir, file_name)
-                dest_file = os.path.join(dest_log_dir, file_name)
-                if os.path.isfile(src_file):
-                    shutil.copy(src_file, dest_file)
+            for instance_dir in os.listdir(source_log_dir):
+                instance_log_dir = os.path.join(source_log_dir, instance_dir)
+                if os.path.isdir(instance_log_dir):
+                    dest_instance_log_dir = os.path.join(dest_log_dir, instance_dir)
+                    shutil.copytree(instance_log_dir, dest_instance_log_dir, dirs_exist_ok=True)
             print(f"Copied logs to {dest_log_dir}")
         else:
             print(f"Source log directory {source_log_dir} not found.")
-
 
 def process_instance(args_instance_tuple):
     args, instance = args_instance_tuple
