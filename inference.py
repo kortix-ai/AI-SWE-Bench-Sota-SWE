@@ -226,6 +226,8 @@ def main():
                         help="Path to the script to execute (default: agent/agent.py)")
     parser.add_argument("--install-packages", action="store_true", default=False,
                         help="Install packages inside Docker container (default: False)")
+    parser.add_argument("--run_id", default="KortixAI",
+                        help="Identifier for the run, name of model (default: KortixAI)")
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -367,7 +369,7 @@ git diff --no-color {instance["base_commit"]} HEAD > /workspace/data/git_patch.d
         output = {
             "instance_id": instance_id,
             "model_patch": git_patch,
-            "model_name_or_path": "YourModelName"  # Replace with actual model name if available
+            "model_name_or_path": args.run_id
         }
 
         # Save the output to JSON file

@@ -45,3 +45,11 @@ python swe_runner.py --instances-file repo/lite_4.json --dataset-type lite --max
 
 
 python swe_runner.py --instances-file repo/swing_test_cases.json --dataset-type verified --max-iterations 21 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 5 --install-packages
+
+
+# evaluation:
+python -m swebench.harness.run_evaluation \
+    --dataset_name princeton-nlp/SWE-bench_Lite \
+    --predictions_path outputs/__combined_agentpress_output_20241119_165716_1.jsonl \
+    --max_workers 1 \
+    --run_id test_eval
