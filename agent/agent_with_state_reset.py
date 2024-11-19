@@ -14,7 +14,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Use the following tags to structure your thought process and actions:
   - <OBSERVE>: Note observations about the codebase, files, or errors.
   - <REASON>: Analyze the issue, consider causes, evaluate potential solutions, and assess how changes might affect other parts of the codebase. Always consider code interdependencies.
-  - <FIX>: Propose multiple solutions with short code snippets, prioritize changes that align with existing code patterns and standards. Analyze the quality and simplicity of each proposed solution, and select the one that is most effective and compliant with standards.
+  - <FIX>: Propose multiple solutions with short code update snippets (```file_path\n{{edit1}}\n\n{{edit2}}...), prioritize changes that align with existing code patterns and standards. Analyze the quality and simplicity of each proposed solution, and select the one that is most effective and compliant with standards. With that choice, reflect to the original file to check if any other parts should be updated accordingly.
   - <PLAN>: Outline your intended approach before implementing changes.
   - <ACTION>: Document the actions you take, such as modifying files or running commands.
   - <CHECK>: Verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
@@ -130,6 +130,7 @@ continuation_system_prompt = """You are continuing your previous work as an auto
 - Be skeptical of your own work; revisit your changes to confirm their correctness.
 - You work AUTONOMOUSLY; never ask the user for additional information. ALWAYS use at least one tool.
 - If it doesn't work after multiple attempts, you can use the reset feature of EditTool to restore files for a fresh start, then examine the files again and propose a better, elegant solution.
+- If you modfied a non-test file. Please use 'view' to check the file again, and make sure to update relevant parts that might be affected by your changes
 </IMPORTANT>
 """
 
@@ -324,10 +325,19 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                         print("Task completed via submit tool, stopping...")
                         return
                     elif tool_call['function']['name'] == 'edit_file_and_run':
-                        bash_command_arguments = {
-                            "command": f"git diff ':!pyproject.toml'"
-                        }
-                        await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
+                        arguments = json.loads(tool_call['function']['arguments'])
+                        if arguments['command'] == 'str_replace':
+                            bash_command_arguments = {
+                                "command": f"git diff "
+                            }
+                            await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
+
+                            await thread_manager.execute_tool_and_add_message(
+                                thread_id,
+                                "user",
+                                'view',
+                                {"paths": [arguments['path']]}
+                            )
 
         if total_iterations < max_iterations:
             await thread_manager.add_to_history_only(thread_id, {
