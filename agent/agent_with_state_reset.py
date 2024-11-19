@@ -18,8 +18,9 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
   - <FIX>: To propose multiple fix solutions with short code snippets, prioritizing changes that align with existing code patterns. A fix may involve changes to one or multiple files.
   - <PLAN>: To outline your intended approach before implementing changes.
   - <ACTION>: To document the actions you take, such as modifying files or running commands.
-  - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
+  - <CHECK>: To verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
   - <CRITICAL>: To evaluate the overall quality of your work, ensuring concise changes with no regressions.
+- Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
 - Aim for solutions that maintain alignment with existing code patterns and adhere to relevant standards.
 - In the <FIX> section, analyze the quality and simplicity of each proposed solution, selecting the one that is most effective and compliant with standards.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
@@ -43,9 +44,9 @@ Can you help me implement the necessary changes to the repository so that the re
 
 - Your task is to make changes to the non-test files in the `/testbed` directory to ensure the <pr_description> is satisfied.
 - Analyze the issue thoroughly before making any changes.
+- After EVERY tool use, use <CHECK> to analyze the output and determine next steps.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** You can create a `reproduce_error.py` script to test errors and an `edge_cases.py` script for edge cases.
 - Use the following tags to structure your work: <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>.
-- Keep a **checklist of tasks** and track your progress as you complete each step.
 
 **Suggested Steps:**
 
@@ -82,8 +83,9 @@ continuation_system_prompt = """You are continuing your previous work as an auto
   - <FIX>: To propose additional fix solutions if necessary, prioritizing effective changes. A fix may involve changes to one or multiple files.
   - <PLAN>: To update your approach before implementing further changes.
   - <ACTION>: To document additional actions you take.
-  - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
+  - <CHECK>: To verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
   - <CRITICAL>: To evaluate the overall quality of your work, ensuring concise changes with no regressions.
+- Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
 - Maintain your checklist of tasks, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
@@ -169,14 +171,14 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 "paths": list(set(folders)),
                 "depth": 1
             }
-            await thread_manager.execute_tool_and_add_message(thread_id, 'view', folder_view_arguments)
+            await thread_manager.execute_tool_and_add_message(thread_id, "user", 'view', folder_view_arguments)
 
         files = workspace_state.get('open_files_in_code_editor', [])
         if files:
             file_view_arguments = {
                 "paths": list(set(files)),
             }
-            await thread_manager.execute_tool_and_add_message(thread_id, 'view', file_view_arguments)
+            await thread_manager.execute_tool_and_add_message(thread_id, "user", 'view', file_view_arguments)
 
     while total_iterations < max_iterations:
         outer_iteration += 1
@@ -221,12 +223,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             await execute_view_commands(thread_manager, thread_id, workspace_state)
 
-            # files = workspace_state.get('open_files_in_code_editor', [])
-            # if files:
-            #     bash_command_arguments = {
-            #         "command": f"(git add -N . && git diff -- {' '.join(files)}) || echo 'No changes in open files'"
-            #     }
-            #     await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_command_arguments)
+
 
             # Execute test commands
             test_commands = workspace_state.get('test_commands', [])
@@ -234,11 +231,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 bash_test_arguments = {
                     "command": cmd
                 }
-                await thread_manager.execute_tool_and_add_message(thread_id, 'bash_command', bash_test_arguments)
+                await thread_manager.execute_tool_and_add_message(thread_id, "user", 'bash_command', bash_test_arguments)
 
         while inner_iteration < reset_interval and total_iterations < max_iterations:
             inner_iteration += 1
             total_iterations += 1
+
+            # bash_command_arguments = {
+            #     "command": f"git diff -- pyproject.toml || echo 'No changes in open files'"
+            # }
+            # await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
 
             model_mapping = {
                 "sonnet": "anthropic/claude-3-5-sonnet-latest",
@@ -290,6 +292,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                     if tool_call['function']['name'] == 'submit':
                         print("Task completed via submit tool, stopping...")
                         return
+                    elif tool_call['function']['name'] == 'edit_file_and_run':
+                        bash_command_arguments = {
+                            "command": f"git diff ':!pyproject.toml' || echo 'No changes in open files'"
+                        }
+                        await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
 
         if total_iterations < max_iterations:
             await thread_manager.add_to_history_only(thread_id, {

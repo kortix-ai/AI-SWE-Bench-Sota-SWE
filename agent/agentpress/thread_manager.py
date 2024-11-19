@@ -567,7 +567,7 @@ class ThreadManager:
             logging.error(f"Failed to add message to history of thread {thread_id}: {e}")
             raise e
 
-    async def execute_tool_and_add_message(self, thread_id: str, tool_name: str, arguments: Dict[str, Any]):
+    async def execute_tool_and_add_message(self, thread_id: str, role: str, tool_name: str, arguments: Dict[str, Any]):
         """Execute a tool and add its output as a message with role 'tool'."""
         available_functions = self.tool_registry.get_available_functions()
         if tool_name not in available_functions:
@@ -579,7 +579,7 @@ class ThreadManager:
 
         # Prepare the tool message
         tool_message = {
-            "role": "user",
+            "role": role,
             "name": tool_name,
             "content": str(tool_result)
         }

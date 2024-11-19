@@ -138,10 +138,10 @@ def display_run_details(run_data: List[Dict]):
             
             with st.chat_message(role, avatar=avatar):
                 formatted_content = format_message_content(content)
-                if role == "tool" or role == "tool_result":
+                if role == "tool" or role == "tool_result" or role == "git diff":
                     name = message.get("name", "")
                     output = content
-                    if st.session_state.get('truncate_tool', False) and name != "report":
+                    if st.session_state.get('truncate_tool', False) and name != "report" and role != "git diff":
                         output = truncate_text(output)
                     icon = "✅" 
                     label = f"{name} {icon}"

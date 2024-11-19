@@ -83,7 +83,7 @@ class BashTool(Tool):
     async def bash_command(self, command: str) -> ToolResult:
         try:
             stdout, stderr, returncode = await self.execute_command_in_container(command)
-            output = f"Command executed: `{command}`\n"
+            output = f"\nCommand executed: `{command}`\n"
             if returncode == 0:
                 output += f"<output>{stdout.strip() if stdout.strip() else 'No output.'}</output>"
                 return self.success_response(output)
