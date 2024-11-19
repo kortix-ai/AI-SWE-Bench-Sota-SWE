@@ -5,7 +5,7 @@ from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional, Literal
 from pathlib import Path
-from tools.bash_tool import BashTool 
+from tools.bash_tool import BashTool
 
 class EditTool(Tool):
     def __init__(self, container_name: str, state_file: str):
@@ -243,22 +243,27 @@ class EditTool(Tool):
             stdout, stderr, returncode = await self.execute_command_in_container(backup_command)
             if returncode == 0:
                 self.file_history.setdefault(path, []).append(stdout)
+                print(f"Backup of existing file at {path} saved for undo.")
+            else:
+                print(f"No existing file at {path} to backup.")
 
             # Create directory if it doesn't exist
             directory = os.path.dirname(path)
             if directory:
                 mkdir_command = f'mkdir -p "{directory}"'
                 await self.execute_command_in_container(mkdir_command)
+                print(f"Directory {directory} created.")
 
-            # Write content to the file
-            escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            command = f'echo "{escaped_content}" > "{path}"'
+            # Encode and write content to file using base64
+            encoded_content = base64.b64encode(content.encode()).decode()
+            command = f'echo "{encoded_content}" | base64 -d > "{path}"'
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             if returncode != 0:
                 return self.fail_response(f"Failed to create file: {stderr.strip()}")
 
             # Save new content for undo
             self.file_history.setdefault(path, []).append(content)
+            print(f"File {path} created with provided content.")
 
             return self.success_response(f"File created at {path}")
         except Exception as e:
@@ -267,45 +272,100 @@ class EditTool(Tool):
     async def str_replace(self, path: str, old_str: str, new_str: str) -> ToolResult:
         """
         Replace a unique occurrence of a string in the specified file with a new string.
-
-        Parameters:
-            - `path` (str): The absolute file path to edit.
-            - `old_str` (str): The string to be replaced (must be unique in the file).
-            - `new_str` (str): The string to replace with.
-
-        Returns:
-            - `ToolResult`: The result indicating success or failure.
+        Executes Python code inside the Docker container for efficiency.
         """
         try:
-            # Read the file content
-            command = f'cat "{path}"'
+            print(f"Starting string replacement in {path}")
+            # Encode the old and new strings to base64 to handle special characters
+            old_str_base64 = base64.b64encode(old_str.encode('utf-8')).decode('ascii')
+            new_str_base64 = base64.b64encode(new_str.encode('utf-8')).decode('ascii')
+
+            # Define the Python code to execute inside the container
+            python_code = '''
+import sys
+import base64
+import difflib
+import os
+
+path = sys.argv[1]
+old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
+new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
+
+# Read the file content
+with open(path, 'r') as f:
+    content = f.read()
+
+occurrences = content.count(old_str)
+if occurrences == 0:
+    print(f"The string '{{old_str}}' was not found in the file.", file=sys.stderr)
+    sys.exit(1)
+elif occurrences > 1:
+    print(f"The string '{{old_str}}' was found multiple times in the file. Please ensure it is unique.", file=sys.stderr)
+    sys.exit(1)
+
+# Save current content for undo
+history_dir = '/tmp/edit_tool_history'
+os.makedirs(history_dir, exist_ok=True)
+history_file = os.path.join(history_dir, base64.b64encode(path.encode()).decode())
+with open(history_file, 'a') as hf:
+    hf.write(base64.b64encode(content.encode()).decode() + '\\n')
+
+# Replace the old string with the new string
+new_content = content.replace(old_str, new_str, 1)
+
+# Write the new content back to the file
+with open(path, 'w') as f:
+    f.write(new_content)
+
+print(f"Successfully replaced string in `" + path + "`.")
+
+# Print the diff for logging
+# diff = difflib.unified_diff(
+#     content.splitlines(),
+#     new_content.splitlines(),
+#     fromfile='original',
+#     tofile='modified',
+#     lineterm=''
+# )
+# print("Changes:")
+# for line in diff:
+#     print(line)
+'''
+
+            # Encode the Python code to base64
+            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
+
+            # Function to safely quote strings in bash
+            def bash_single_quote(s):
+                return "'" + s.replace("'", "'\\''") + "'"
+
+            # Escape the arguments
+            escaped_path = bash_single_quote(path)
+            escaped_old_str_base64 = bash_single_quote(old_str_base64)
+            escaped_new_str_base64 = bash_single_quote(new_str_base64)
+
+            # Build the command to execute inside the container
+            command = (
+                f"echo {bash_single_quote(code_base64)} | base64 -d | "
+                f"python3 - {escaped_path} {escaped_old_str_base64} {escaped_new_str_base64}"
+            )
+
+            print(f"Executing command inside container: {command}")
             stdout, stderr, returncode = await self.execute_command_in_container(command)
-            if returncode != 0:
-                return self.fail_response(f"Failed to read file: {stderr.strip()}")
+            success = returncode == 0
 
-            content = stdout
-            occurrences = content.count(old_str)
-            if occurrences == 0:
-                return self.fail_response(f"The string '{old_str}' was not found in the file.")
-            elif occurrences > 1:
-                return self.fail_response(f"The string '{old_str}' was found multiple times in the file. Please ensure it is unique.")
+            if success and not stderr.strip():
+                print(f"String replacement successful in {path}")
+                print(f"Output:\n{stdout.strip()}")
+                return self.success_response(stdout.strip())
+            else:
+                print(f"String replacement failed in {path}")
+                print(f"Error:\n{stderr.strip()}")
+                return self.fail_response(f"Replace string failed: {stderr.strip()}")
 
-            # Save current content for undo
-            self.file_history.setdefault(path, []).append(content)
-
-            # Replace the old string with the new string
-            new_content = content.replace(old_str, new_str)
-
-            # Write the new content back to the file
-            escaped_content = new_content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            command = f'echo "{escaped_content}" > "{path}"'
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            if returncode != 0:
-                return self.fail_response(f"Failed to write file: {stderr.strip()}")
-
-            return self.success_response(f"String replaced in {path}")
         except Exception as e:
-            return self.fail_response(f"Error replacing string in file: {str(e)}")
+            print(f"Exception during string replacement: {str(e)}")
+            return self.fail_response(f"Error replacing string: {str(e)}")
 
     async def insert_into_file(self, path: str, insert_line: int, new_str: str) -> ToolResult:
         """
@@ -320,6 +380,7 @@ class EditTool(Tool):
             - `ToolResult`: The result indicating success or failure.
         """
         try:
+            print(f"Inserting text into {path} at line {insert_line}")
             # Read the file content
             command = f'cat "{path}"'
             stdout, stderr, returncode = await self.execute_command_in_container(command)
@@ -332,20 +393,23 @@ class EditTool(Tool):
 
             # Save current content for undo
             self.file_history.setdefault(path, []).append(stdout)
+            print(f"Backup of {path} saved for undo.")
 
             # Insert the new string at the specified line
             lines.insert(insert_line - 1, new_str)
             new_content = '\n'.join(lines)
 
-            # Write the new content back to the file
-            escaped_content = new_content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            command = f'echo "{escaped_content}" > "{path}"'
+            # Write using base64 decode
+            encoded_content = base64.b64encode(new_content.encode()).decode()
+            command = f'echo "{encoded_content}" | base64 -d > "{path}"'
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             if returncode != 0:
                 return self.fail_response(f"Failed to write file: {stderr.strip()}")
 
+            print(f"Text inserted into {path} at line {insert_line}")
             return self.success_response(f"Inserted text into {path} at line {insert_line}")
         except Exception as e:
+            print(f"Exception during text insertion: {str(e)}")
             return self.fail_response(f"Error inserting into file: {str(e)}")
 
     async def undo_edit(self, path: str) -> ToolResult:
@@ -359,21 +423,34 @@ class EditTool(Tool):
             - `ToolResult`: The result indicating success or failure.
         """
         try:
-            if path not in self.file_history or not self.file_history[path]:
+            print(f"Attempting to undo last edit on {path}")
+            # Use the history file inside the container
+            history_dir = '/tmp/edit_tool_history'
+            encoded_path = base64.b64encode(path.encode()).decode()
+            history_file = os.path.join(history_dir, encoded_path)
+
+            # Read the history
+            command = f'if [ -f "{history_file}" ]; then tail -n 1 "{history_file}"; else echo ""; fi'
+            stdout, stderr, returncode = await self.execute_command_in_container(command)
+            if stdout.strip() == '':
+                print(f"No edits to undo for {path}")
                 return self.fail_response(f"No edits to undo for {path}.")
 
-            # Get the last content from history
-            previous_content = self.file_history[path].pop()
+            previous_content_base64 = stdout.strip()
+
+            # Remove the last entry from history
+            command = f'sed -i \'$d\' "{history_file}"'
+            await self.execute_command_in_container(command)
+            print(f"Last edit entry removed from history for {path}")
 
             # Write the previous content back to the file
-            escaped_content = previous_content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            command = f'echo "{escaped_content}" > "{path}"'
+            command = f'echo "{previous_content_base64}" | base64 -d > "{path}"'
             stdout, stderr, returncode = await self.execute_command_in_container(command)
-            if returncode != 0:
-                return self.fail_response(f"Failed to undo edit: {stderr.strip()}")
+            print(f"File {path} reverted to previous state.")
 
             return self.success_response(f"Undo successful for {path}.")
         except Exception as e:
+            print(f"Exception during undo: {str(e)}")
             return self.fail_response(f"Error undoing edit: {str(e)}")
 
     async def reset_file(self, path: str) -> ToolResult:
@@ -387,13 +464,16 @@ class EditTool(Tool):
             - `ToolResult`: The result indicating success or failure.
         """
         try:
+            print(f"Resetting {path} to git HEAD")
             relative_path = path.replace('/testbed/', '', 1)
             command = f'git checkout HEAD -- "{relative_path}"'
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             if returncode != 0:
+                print(f"Failed to reset {path}: {stderr.strip()}")
                 return self.fail_response(f"Failed to reset file: {stderr.strip()}")
 
-            return self.success_response(f"success reset {path}")
+            print(f"{path} successfully reset to git HEAD")
+            return self.success_response(f"Successfully reset {path}")
         except Exception as e:
+            print(f"Exception during reset: {str(e)}")
             return self.fail_response(f"Error resetting file: {str(e)}")
-
