@@ -26,6 +26,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** Create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
+- You work AUTONOMOUSLY, never ask user for additional information. ALWAYS use at least a tool.
 </IMPORTANT>
 """
 
@@ -53,15 +54,14 @@ Can you help me implement the necessary changes to the repository so that the re
 2. Expand the search scope to related files; you may view multiple files at once.
 3. Analyze the PR description to understand the issue in detail.
 4. Identify the root cause by examining related files.
-5. Check related existing test files to understand their purpose and expectations.
-6. Use <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
-7. Decide on the solution that is minimal, precise, and standard-compliant.
-8. Reproduce the error to confirm the issue.
-9. Implement the fix, ensuring compliance with standards and no impact on existing functionality.
-10. Handle edge cases comprehensively by writing and running additional tests.
-11. Use <CRITICAL> to evaluate your changes for minimal impact and absence of regressions.
-12. Run existing tests by `pytest` if applicable to verify that your changes do not introduce regressions. 
-13. Report your findings or submit the fix.
+5. Use <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
+6. Decide on the solution that is minimal, precise, and standard-compliant.
+7. Reproduce the error to confirm the issue.
+8. Implement the fix, ensuring compliance with standards and no impact on existing functionality.
+9. Handle edge cases comprehensively by writing and running additional tests.
+10. Use <CRITICAL> to evaluate your changes for minimal impact and absence of regressions.
+11. Check related existing test files, run existing tests by `pytest` if applicable to verify that your changes do not introduce regressions. 
+12. Report your findings or submit the fix.
 
 **Current Workspace State:**
 <workspace_state>
@@ -69,6 +69,28 @@ Can you help me implement the necessary changes to the repository so that the re
 </workspace_state>
 
 Remember to use the tags appropriately to structure your response and thought process.
+"""
+
+continuation_system_prompt = """You are continuing your previous work as an autonomous expert software engineer. Focus on analyzing, evaluating, and continuing the tasks based on your current progress and the workspace state. Do not start from scratch.
+
+<IMPORTANT>
+- Build upon your previous analysis and actions.
+- Review the current workspace state and your checklist of tasks.
+- Continue implementing precise, minimal changes to solve the specific issue described.
+- Use the following tags to structure your thought process and actions:
+  - <OBSERVE>: To note new observations about the codebase, files, or errors.
+  - <REASON>: To analyze the current situation, consider possible causes, and evaluate potential solutions.
+  - <FIX>: To propose additional fix solutions if necessary, prioritizing minimal changes.
+  - <PLAN>: To update your approach before implementing further changes.
+  - <ACTION>: To document additional actions you take.
+  - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
+  - <CRITICAL>: To evaluate the overall quality of your work, ensuring minimal, concise changes with no regressions.
+- Maintain your checklist of tasks, marking each as completed when done.
+- Ensure that your changes do not affect existing test cases.
+- Think deeply about edge cases and how your changes might impact other parts of the system.
+- Always ensure that any changes comply with relevant standards and do not violate existing specifications.
+- You work AUTONOMOUSLY, never ask user for additional information. ALWAYS use at least a tool.
+</IMPORTANT>
 """
 
 continuation_prompt = """
@@ -93,7 +115,7 @@ This is a continuation of the previous task. You are working on implementing the
 {workspace_state}
 </workspace_state>
 
-Remember to use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) and update your checklist of tasks as you progress.
+Remember to asset and build upon your previous work rather than starting over. Use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) to structure your thought process and responses.
 """
 
 #------------------------------------------------------------
@@ -164,19 +186,16 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         for i in range(len(messages) - 1, -1, -1):
             await thread_manager.remove_message(thread_id, i)
 
-        system = system_prompt.format(
-            problem_statement=problem_statement,
-            workspace_state=report_tool.format_workspace_report(workspace_state)
-        )
-        system_message = {
-            "role": "system",
-            "content": system
-        }
-
-        await thread_manager.add_message(thread_id, system_message)
         workspace_state = await state_manager.get('workspace_state')
 
         if total_iterations == 0:
+            # init
+            system_message = {
+                "role": "system",
+                "content": system_prompt
+            }
+            await thread_manager.add_message(thread_id, system_message)
+
             await thread_manager.add_message(thread_id, {
                 "role": "user",
                 "content": user_prompt.format(
@@ -185,6 +204,13 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 )
             })
         else:
+            # continue
+            system_message = {
+                "role": "system",
+                "content": continuation_system_prompt
+            }
+            await thread_manager.add_message(thread_id, system_message)
+
             await thread_manager.add_message(thread_id, {
                 "role": "user",
                 "content": continuation_prompt.format(
