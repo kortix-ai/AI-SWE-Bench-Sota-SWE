@@ -83,7 +83,64 @@ class ReportTool(Tool):
         tag_name="report",
         mappings=[
             {"param_name": "workspace_state", "node_type": "content", "path": "."}
-        ]
+        ],
+        example='''
+        <!-- Report Tool -->
+        <!-- Track and report the current workspace state and actions taken -->
+        
+        <!-- Parameters Description:
+             - workspace_state: Current workspace state information (REQUIRED)
+                              Content should be valid JSON between the tags
+        -->
+
+        <!-- Example Report -->
+        <report>
+        {
+            "open_folders": [
+                "/testbed/src",
+                "/testbed/tests"
+            ],
+            "checklist_of_tasks": [
+                "✓ Explore /testbed and find relevant files",
+                "✓ Analyze PR description and issue details",
+                "□ Examine related files and understand code patterns"
+            ],
+            "open_files_in_code_editor": [
+                "/testbed/src/main.py",
+                "/testbed/tests/test_main.py",
+                "/testbed/reproduce_error.py"
+            ],
+            "issue_analysis": "The issue appears to be related to...",
+            "detail_logs": [
+                "Investigated file structure",
+                "Found potential root cause in main.py",
+                "Tested initial fix but encountered regression"
+            ],
+            "analysis_code_patterns": "The codebase follows a pattern where...",
+            "proposed_solutions": [
+                "[tried] Update error handling in main()",
+                "[pending] Refactor input validation"
+            ],
+            "next_steps": "1. Implement input validation\n2. Add edge case tests",
+            "test_commands": [
+                "python reproduce_error.py",
+                "python -m pytest test_main.py"
+            ]
+        }
+        </report>
+
+        <!-- Important Notes:
+             - All fields in workspace_state are optional but recommended
+             - Content must be valid JSON
+             - Checklist items should be marked with ✓ (done) or □ (pending)
+             - Proposed solutions should indicate status [tried/pending/not working]
+             - Detail logs should be comprehensive for future reference
+             - File paths should be absolute from /testbed
+             - Test commands should be executable bash commands
+             - State is persistent between calls
+             - Updates merge with existing state
+        -->
+        '''
     )
     async def report(self, workspace_state) -> ToolResult:
         try:

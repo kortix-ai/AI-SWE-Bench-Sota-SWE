@@ -1,3 +1,9 @@
+# Kortix SWE Bench
+
+This Repo contains:
+- SWE Runner: Evaluating AI Agents on SWE-Bench
+- Git Agent CLI: An AI-powered command-line tool for automated GitHub issue resolution (using our Agent)
+
 # SWE Runner: Evaluating AI Agents on SWE-Bench
 
 SWE Runner is a tool for running and evaluating AI agents on the [SWE-Bench](https://github.com/princeton-nlp/SWE-bench) benchmark. It leverages [AgentPress](https://github.com/kortix-ai/agentpress) as the foundational framework for building AI agents.

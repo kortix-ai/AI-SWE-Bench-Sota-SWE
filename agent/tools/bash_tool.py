@@ -78,7 +78,33 @@ class BashTool(Tool):
         mappings=[
             {"param_name": "command", "node_type": "content", "path": "."}
         ],
-        example='''<bash-command>ls -la</bash-command>'''
+        example='''
+        <!-- Bash Command Tool -->
+        <!-- Execute bash shell commands in the repository environment with explanatory output -->
+        
+        <!-- Parameters Description:
+             - command: The bash command to execute (REQUIRED)
+                      Content goes between the tags
+        -->
+
+        <!-- Execute a simple command -->
+        <bash-command>ls -la</bash-command>
+
+        <!-- Run tests with filtered output -->
+        <bash-command>python -m pytest test_file.py | grep -A 5 "FAILED"</bash-command>
+
+        <!-- Build and run the project -->
+        <bash-command>make build && ./run_tests.sh</bash-command>
+
+        <!-- Check git status -->
+        <bash-command>git status && git diff</bash-command>
+
+        <!-- Important Notes:
+        - The working directory is `/testbed`
+        - The environment is set up with `conda activate testbed`
+        - When running pytest, use `grep` to filter the output and only show failed testcases
+        -->
+        '''
     )
     async def bash_command(self, command: str) -> ToolResult:
         try:

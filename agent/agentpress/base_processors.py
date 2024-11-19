@@ -7,7 +7,6 @@ This module provides the foundational architecture for:
 - Managing results and message processing
 """
 
-import logging
 from typing import Dict, Any, Callable, List, Optional, Set
 from abc import ABC, abstractmethod
 
@@ -226,18 +225,5 @@ class ResultsAdderBase(ABC):
             
         Raises:
             Exception: If result addition fails
-        """
-        pass
-
-    @abstractmethod
-    async def add_message_and_run_tools(self, thread_id: str, message_data: Dict[str, Any]):
-        """Add a message and execute its tool calls immediately.
-        
-        Args:
-            thread_id: ID of the conversation thread
-            message_data: Message data including any tool calls to execute
-            
-        Raises:
-            Exception: If message addition or tool execution fails
         """
         pass

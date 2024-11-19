@@ -5,7 +5,6 @@ import os
 from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
-from tools.report_tool import ReportTool
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
@@ -171,7 +170,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
-    use_xml = False
 
     workspace_state = {
         "checklist_of_tasks": """Status of tasks:
@@ -197,16 +195,21 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
-
     from tools.bash_tool import BashTool
     thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
     from tools.edit_and_run_tool import EditTool
     thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     from tools.report_tool import ReportTool
     report_tool = ReportTool(state_file=state_file)
-
     outer_iteration = 0
     total_iterations = 0
+    xml_examples = thread_manager.tool_registry.get_xml_examples()
+    xml_format = (
+        "\n\nSTRICTLY OUTPUT YOUR ACTIONS / TOOL CALLS IN THE FOLLOWING XML FORMAT'S WITHIN THE <ACTION> TAG:\n"
+        "<AVAILABLE_XML_TOOLS>\n"
+        f"{json.dumps(xml_examples, indent=2)}\n"
+        "</AVAILABLE_XML_TOOLS>"
+    )
 
     async def execute_view_commands(thread_manager, thread_id, workspace_state):
         folders = workspace_state.get('open_folders', [])
@@ -235,9 +238,9 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         if total_iterations == 0:
             # init
             system_message = {
-                "role": "system",
+                "role": "system", 
                 "content": system_prompt
-            }
+            } #+ xml_format
             await thread_manager.add_message(thread_id, system_message)
 
             await thread_manager.add_message(thread_id, {
@@ -310,9 +313,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 temperature=0.0,
                 max_tokens=8192,
                 tool_choice=tool_choice,
-                native_tool_calling=not use_xml,
-                xml_tool_calling=use_xml,
-                execute_tools_on_stream=True,
+                native_tool_calling=True,
+                xml_tool_calling=False,
                 parallel_tool_execution=False,
             )
 
