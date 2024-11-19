@@ -36,4 +36,7 @@ python swe_runner.py --instance-id astropy__astropy-14508 --dataset-type verifie
 python swe_runner.py --instances-file repo/swing_test_10.json --dataset-type verified --max-iterations 30 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 3
 
 
+python swe_runner.py --instances-file repo/swing_test_cases.json --dataset-type verified --max-iterations 30 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 4
+
+
 

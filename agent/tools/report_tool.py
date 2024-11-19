@@ -52,7 +52,16 @@ class ReportTool(Tool):
                             },
                             "detail_logs": {
                                 "type": "array",
-                                "description": """Detail of reasoning, proposed solutions, solutions tried, ... All the information that make your work worth it, and useful for the next generation""",
+                                "description": """Detail of reasoning, proposed solutions, solutions tried, ... All the information that make your work worth it, and useful for the next generation. Make it very details.""",
+                                "items": {"type": "string"}
+                            },
+                            "analysis_code_patterns": {
+                                "type": "string",
+                                "description": "Analysis of code patterns, functions of relevant files",
+                            },
+                            "proposed_solutions": {
+                                "type": "array",
+                                "description": """A list of proposed solutions to the issue, applied or not.""",
                                 "items": {"type": "string"}
                             },
                             "next_steps": {
