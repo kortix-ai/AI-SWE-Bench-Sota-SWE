@@ -28,7 +28,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Prefer solutions that require the fewest changes and maintain alignment with existing code patterns.
 - In the <FIX> section, analyze the minimality and simplicity of each proposed solution, and select the one that is most minimal and straightforward.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
-- Ensure that your changes do not affect existing test cases. You cannot run existing test files; you can only read them. Instead, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
+- Ensure that your changes do not affect existing test cases. **Under no circumstances should you modify any existing test files; you can only read them.** Instead, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 </IMPORTANT>
 """
@@ -46,7 +46,7 @@ Can you help me implement the necessary changes to the repository so that the re
 
 - Your task is to make minimal changes to the non-test files in the `/testbed` directory to ensure the <pr_description> is satisfied.
 - Focus on analyzing the issue thoroughly before making any changes.
-- Ensure that your changes do not affect existing test cases. You cannot run existing test files; you can only read them. Instead, you can create a `reproduce_error.py` script to test the error and an `edge_cases.py` script to test edge cases.
+- Ensure that your changes do not affect existing test cases. **Do not modify or run any existing test files; you can only read them.** Instead, you can create a `reproduce_error.py` script to test the error and an `edge_cases.py` script to test edge cases.
 - Use the following tags to structure your work:
   - <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>
 - Keep a **checklist of tasks** and track your progress as you complete each step.
@@ -54,11 +54,11 @@ Can you help me implement the necessary changes to the repository so that the re
 **Suggested Steps:**
 
 1. Explore and find files related to the issue.
-2. Expand the search scope to related files, you are allowed to view multiple files at once.
+2. Expand the search scope to related files; you are allowed to view multiple files at once.
 3. Analyze the PR description and understand the issue in detail.
 4. Identify the root cause by examining the related files.
-5. Check related existing test files.
-6. User <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
+5. Check related existing related test files.
+6. Use <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
 7. Decide on the minimal solution that can work to pass pull request requirements.
 8. Reproduce the error to confirm the issue.
 9. Implement the fix, ensuring it does not affect other test cases.
@@ -86,7 +86,7 @@ This is a continuation of the previous task. You are working on implementing the
 1. Review the current workspace state and note what has been accomplished so far.
 2. Re-evaluate the issue in light of the work done and consider if the approach needs adjustment.
 3. Update your plan based on your observations and reasoning.
-4. Continue implementing the fix, ensuring minimal changes and no impact on existing tests.
+4. Continue implementing the fix, ensuring minimal changes and no impact on existing tests. **Do not modify or run any existing test files.**
 5. Run your reproduction script to confirm that the error is fixed.
 6. Handle edge cases by writing and running additional tests.
 7. Use <CRITICAL> to evaluate whether your solution adheres to minimal changes, handles all edge cases, and does not introduce regressions.
@@ -133,13 +133,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     from tools.repo_tool import RepositoryTools
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
 
-    # from tools.edit_tool import EditTool
-    # thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
     from tools.bash_tool import BashTool
     thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
     from tools.edit_and_run_tool import EditTool
     thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
-    # summary_tool = SummaryTool(state_file=state_file)
+    from tools.report_tool import ReportTool
     report_tool = ReportTool(state_file=state_file)
 
     outer_iteration = 0
@@ -239,7 +237,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             # Add SummaryTool and reset at iteration 5
             if inner_iteration == reset_interval:
-                # thread_manager.add_tool(SummaryTool, state_file=state_file)
                 thread_manager.add_tool(ReportTool, state_file=state_file)
                 await thread_manager.add_message(thread_id, {
                     "role": "user",
@@ -288,8 +285,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             messages = await thread_manager.list_messages(thread_id)
             for i in range(len(messages) - 1, -1, -1):
                 await thread_manager.remove_message(thread_id, i)
-
-        
 
     print(f"Agent completed after {total_iterations} total iterations ({outer_iteration} reset cycles)")
 
