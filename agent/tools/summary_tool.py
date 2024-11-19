@@ -29,14 +29,14 @@ class SummaryTool(Tool):
                                 "description": """Status of tasks:
 1. [ ] Explore `/testbed` and find relevant files.
 2. [ ] Analyze PR description and issue details.
-3. [ ] Analyze root cause with related files.
-4. [ ] Locate, check, and understand existing tests related to the issue.
+3. [ ] Examine related files and make in-depth how they are written, code patterns, relevant functions.
+4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible fixes that don't affect existing tests.
 6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
 7. [ ] Reproduce the error.
 8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
 9. [ ] Handle edge cases comprehensively.
-10. [ ] Review changes with `git diff` and run existing tests to verify no regressions.
+10. [ ] Review changes and run existing tests to verify no regressions.
 11. [ ] Report findings or submit the fix.""",
                                 "items": {"type": "string"}
                             },

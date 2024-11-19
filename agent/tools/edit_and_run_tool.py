@@ -119,10 +119,10 @@ class EditTool(Tool):
                     },
                     "bash_command": {
                         "type": ["string", "null"],
-                        "description": "Bash command to run the file after editing e.g (python reproduce_error.py)."
+                        "description": "Bash command to run the file after editing e.g (python reproduce_error.py or echo 'No command to run')."
                     },
                 },
-                "required": ["command", "path", "bash_command"]
+                "required": ["command", "path", "bash_command"],
             }
         }
     })

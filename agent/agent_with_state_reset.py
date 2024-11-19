@@ -15,7 +15,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Use the following tags to structure your thought process and actions:
   - <OBSERVE>: To note observations about the codebase, files, or errors.
   - <REASON>: To analyze the issue, consider possible causes, and evaluate potential solutions.
-  - <FIX>: To propose multiple fix solutions with short code snippets, prioritizing minimal changes that align with existing code patterns.
+  - <FIX>: To propose multiple fix solutions with short code snippets, prioritizing minimal changes that align with existing code patterns. A fix may involve multiple changes of a file or multiple files. 
   - <PLAN>: To outline your intended approach before implementing changes.
   - <ACTION>: To document the actions you take, such as modifying files or running commands.
   - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
@@ -53,7 +53,7 @@ Can you help me implement the necessary changes to the repository so that the re
 1. Explore `/testbed` and find files related to the issue.
 2. Expand the search scope to related files; you may view multiple files at once.
 3. Analyze the PR description to understand the issue in detail.
-4. Identify the root cause by examining related files.
+4. Examine related files and make in-depth how they are written and identify the root cause.
 5. Use <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
 6. Decide on the solution that is minimal, precise, and standard-compliant.
 7. Reproduce the error to confirm the issue.
@@ -80,7 +80,7 @@ continuation_system_prompt = """You are continuing your previous work as an auto
 - Use the following tags to structure your thought process and actions:
   - <OBSERVE>: To note new observations about the codebase, files, or errors.
   - <REASON>: To analyze the current situation, consider possible causes, and evaluate potential solutions.
-  - <FIX>: To propose additional fix solutions if necessary, prioritizing minimal changes.
+  - <FIX>: To propose additional fix solutions if necessary, prioritizing minimal changes. A fix may involve multiple changes of a file or multiple files.
   - <PLAN>: To update your approach before implementing further changes.
   - <ACTION>: To document additional actions you take.
   - <CHECK>: To verify that your changes work as intended and do not introduce regressions.
@@ -90,6 +90,7 @@ continuation_system_prompt = """You are continuing your previous work as an auto
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
 - You work AUTONOMOUSLY, never ask user for additional information. ALWAYS use at least a tool.
+- If it doesn't work after multiple attemps, it is possible to use reset of EditTool to restore files for a fresh start. Then you can examine the files again and propose a better elegant minimal solution.
 </IMPORTANT>
 """
 
@@ -132,14 +133,14 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         "checklist_of_tasks": """Status of tasks:
 1. [ ] Explore `/testbed` and find relevant files.
 2. [ ] Analyze PR description and issue details.
-3. [ ] Analyze root cause with related files.
-4. [ ] Locate, check, and understand existing tests related to the issue.
+3. [ ] Examine related files and make in-depth how they are written, code patterns, relevant functions.
+4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible fixes that don't affect existing tests.
 6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
 7. [ ] Reproduce the error.
 8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
 9. [ ] Handle edge cases comprehensively.
-10. [ ] Review changes with `git diff` and run existing tests to verify no regressions.
+10. [ ] Review changes and run existing tests to verify no regressions.
 11. [ ] Report findings or submit the fix."""
     }
     await state_manager.set('workspace_state', workspace_state)
