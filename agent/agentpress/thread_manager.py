@@ -587,3 +587,31 @@ class ThreadManager:
         # Add the tool message to the thread
         await self.add_message(thread_id, tool_message)
 
+    async def reset_messages(self, thread_id: str):
+        """Reset (empty) the messages list for a thread while preserving history.
+
+        Args:
+            thread_id: The ID of the thread to reset
+
+        Raises:
+            FileNotFoundError: If thread doesn't exist
+            Exception: For other operation failures
+        """
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+
+        empty_data = {"messages": []}
+
+        try:
+            # Reset only main thread file, preserving history
+            with open(thread_path, 'w') as f:
+                json.dump(empty_data, f)
+
+            logging.info(f"Reset messages for thread {thread_id} (history preserved)")
+
+        except FileNotFoundError:
+            logging.error(f"Thread {thread_id} not found")
+            raise
+        except Exception as e:
+            logging.error(f"Failed to reset messages for thread {thread_id}: {e}")
+            raise
+

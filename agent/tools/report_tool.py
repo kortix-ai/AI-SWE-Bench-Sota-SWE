@@ -11,7 +11,7 @@ class ReportTool(Tool):
         "type": "function",
         "function": {
             "name": "report",
-            "description": "Track and report the current workspace state and actions taken. You should review all actions you've taken and the current state of the workspace before submitting the report. E.g have you use <REVIEW> to ensure all changes are consistent and correct?",
+            "description": "Track and report the current workspace state and actions taken.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -26,7 +26,7 @@ class ReportTool(Tool):
                             },
                             "checklist_of_tasks": {
                                 "type": "array",
-                                "description": """Status of tasks:
+                                "description": """Status of tasks, only check the ones that you have done:
 1. [ ] Explore `/testbed` and find relevant files.
 2. [ ] Analyze PR description and issue details.
 3. [ ] Examine related files and understand code patterns, relevant functions.
