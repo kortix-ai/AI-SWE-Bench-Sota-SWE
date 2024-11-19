@@ -11,7 +11,7 @@ class ReportTool(Tool):
         "type": "function",
         "function": {
             "name": "report",
-            "description": "Track and report the current workspace state and actions taken.",
+            "description": "Track and report the current workspace state and actions taken. You should review all actions you've taken and the current state of the workspace before submitting the report. E.g have you use <REVIEW> to ensure all changes are consistent and correct?",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -29,16 +29,15 @@ class ReportTool(Tool):
                                 "description": """Status of tasks:
 1. [ ] Explore `/testbed` and find relevant files.
 2. [ ] Analyze PR description and issue details.
-3. [ ] Examine related files and make in-depth how they are written, code patterns, relevant functions.
+3. [ ] Examine related files and understand code patterns, relevant functions.
 4. [ ] Analyze root cause with related files.
-5. [ ] Consider multiple possible fixes that don't affect existing tests.
-6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
-7. [ ] Reproduce the error.
-8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
+5. [ ] Consider multiple possible solutions, propose solutions, and pick the best one.
+6. [ ] Implement the fix directly, updating related parts of the code accordingly.
+7. [ ] Use 'run_pytest' tool to run existing tests and verify no regressions.
+8. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
 9. [ ] Review modified files and identify any dependent code that needs updates.
-10. [ ] Handle edge cases comprehensively.
-11. [ ] Review changes and run existing pytests to verify no regressions.
-12. [ ] Report findings or submit the fix.""",
+10. [ ] Use "view" edited files again, and <REVIEW> to ensure all changes are consistent and correct.
+11. [ ] Report findings or submit the fix.""",
                                 "items": {"type": "string"}
                             },
                             "open_files_in_code_editor": {
