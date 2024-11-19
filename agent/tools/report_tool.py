@@ -81,7 +81,12 @@ class ReportTool(Tool):
         try:
             # Handle string input by parsing as JSON
             if isinstance(workspace_state, str):
-                workspace_state = json.loads(workspace_state)
+                try:
+                    # Use JSONDecoder to parse the first valid JSON object
+                    decoder = json.JSONDecoder()
+                    workspace_state, _ = decoder.raw_decode(workspace_state)
+                except json.JSONDecodeError as e:
+                    return self.fail_response(f"Invalid JSON format: {str(e)}")
             
             # If there's a nested workspace_state, use that instead
             if isinstance(workspace_state, dict) and 'workspace_state' in workspace_state:
@@ -98,8 +103,6 @@ class ReportTool(Tool):
             return self.success_response(
                 f"""Workspace state updated:\n<workspace_state>\n{workspace_report}\n</workspace_state>"""
             )
-        except json.JSONDecodeError as e:
-            return self.fail_response(f"Invalid JSON format: {str(e)}")
         except Exception as e:
             return self.fail_response(f"Failed to update workspace state: {str(e)}")
 

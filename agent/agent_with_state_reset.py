@@ -10,8 +10,6 @@ import uuid
 # from tools.summary_tool import SummaryTool
 from tools.report_tool import ReportTool
 
-
-
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, minimal changes to solve specific issues.
 
 <IMPORTANT>
@@ -26,10 +24,11 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
   - <CRITICAL>: To evaluate the overall quality of your work and ensure minimal, concise changes with no regressions.
 - When proposing fixes, first consider whether the issue can be resolved by a minimal adjustment to the existing code before introducing new code.
 - Prefer solutions that require the fewest changes and maintain alignment with existing code patterns.
-- In the <FIX> section, analyze the minimality and simplicity of each proposed solution, and select the one that is most minimal and straightforward.
+- In the <FIX> section, analyze the minimality and simplicity of each proposed solution, and select the one that is most minimal, straightforward, and compliant with standards.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases. **Under no circumstances should you modify any existing test files; you can only read them.** Instead, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
+- Always ensure that any changes comply with the relevant standards and do not violate any existing specifications.
 </IMPORTANT>
 """
 
@@ -47,6 +46,7 @@ Can you help me implement the necessary changes to the repository so that the re
 - Your task is to make minimal changes to the non-test files in the `/testbed` directory to ensure the <pr_description> is satisfied.
 - Focus on analyzing the issue thoroughly before making any changes.
 - Ensure that your changes do not affect existing test cases. **Do not modify or run any existing test files; you can only read them.** Instead, you can create a `reproduce_error.py` script to test the error and an `edge_cases.py` script to test edge cases.
+- Always ensure that any changes comply with the relevant standards and do not violate any existing specifications.
 - Use the following tags to structure your work:
   - <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>
 - Keep a **checklist of tasks** and track your progress as you complete each step.
@@ -57,14 +57,14 @@ Can you help me implement the necessary changes to the repository so that the re
 2. Expand the search scope to related files; you are allowed to view multiple files at once.
 3. Analyze the PR description and understand the issue in detail.
 4. Identify the root cause by examining the related files.
-5. Check related existing related test files.
+5. Check related existing test files and understand their purpose and expectations.
 6. Use <FIX> to consider all possible ways to fix the issue without affecting existing test cases.
-7. Decide on the minimal solution that can work to pass pull request requirements.
+7. Decide on the minimal solution which is minimal, precise, and standard-compliant.
 8. Reproduce the error to confirm the issue.
-9. Implement the fix, ensuring it does not affect other test cases.
-10. Handle edge cases by writing and running additional tests.
-11. Use <CRITICAL> to evaluate your changes for minimal concise impact and absence of regressions.
-12. Review existing tests to ensure your changes do not introduce regressions. Report your findings or submit the fix.
+9. Implement the fix, ensuring compliance with standards and no impact on existing functionality by considering the scenarios covered in existing tests.
+10. Handle edge cases comprehensively by writing and running additional tests.
+11. Use <CRITICAL> to evaluate your changes for minimal impact and absence of regressions.
+12. Review existing tests to anticipate potential regressions. Report your findings or submit the fix.
 
 **Current Workspace State:**
 <workspace_state>
@@ -86,9 +86,9 @@ This is a continuation of the previous task. You are working on implementing the
 1. Review the current workspace state and note what has been accomplished so far.
 2. Re-evaluate the issue in light of the work done and consider if the approach needs adjustment.
 3. Update your plan based on your observations and reasoning.
-4. Continue implementing the fix, ensuring minimal changes and no impact on existing tests. **Do not modify or run any existing test files.**
+4. Continue implementing the fix, ensuring compliance with standards, minimal changes, and no impact on existing functionality by considering the scenarios covered in existing tests. **Do not modify or run any existing test files.**
 5. Run your reproduction script to confirm that the error is fixed.
-6. Handle edge cases by writing and running additional tests.
+6. Handle edge cases comprehensively by writing and running additional tests.
 7. Use <CRITICAL> to evaluate whether your solution adheres to minimal changes, handles all edge cases, and does not introduce regressions.
 
 **Current Workspace State:**
@@ -111,17 +111,17 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
     workspace_state = {
         "checklist_of_tasks": """Status of tasks:
-1. [ ] Explore and find relevant files
-2. [ ] Analyze PR description and issue details
-3. [ ] Analyze root cause with related files
-4. [ ] View existing tests without running them
-5. [ ] Consider multiple possible fixes that don't affect existing tests
-6. [ ] Choose the best solution which is minimal and precise
-7. [ ] Reproduce the error
-8. [ ] Implement the fix without affecting other test cases
-9. [ ] Handle edge cases
-10. [ ] Review existing tests without running them to check for potential regressions
-11. [ ] Report findings or submit the fix"""
+1. [ ] Explore and find relevant files.
+2. [ ] Analyze PR description and issue details.
+3. [ ] Analyze root cause with related files.
+4. [ ] View and understand existing tests without running them.
+5. [ ] Consider multiple possible fixes that don't affect existing tests.
+6. [ ] Choose the best solution which is minimal, precise, and standard-compliant.
+7. [ ] Reproduce the error.
+8. [ ] Implement the fix, ensuring compliance with standards and no impact on existing functionality.
+9. [ ] Handle edge cases comprehensively.
+10. [ ] Review changes by `git diff` and check existing tests without running them to anticipate potential regressions.
+11. [ ] Report findings or submit the fix."""
     }
     await state_manager.set('workspace_state', workspace_state)
 
