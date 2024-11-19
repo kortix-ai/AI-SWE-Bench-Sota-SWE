@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional
@@ -180,27 +180,39 @@ class RepositoryTools(Tool):
         
         return '\n'.join(content_lines)
 
-    @tool_schema({
-        "name": "view",
-        "description": "View the contents of a file or list the contents of a directory in the repository with detailed explanations.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "paths": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "The file or directory paths to view."
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "view",
+            "description": (
+                "View the contents of a file or list the contents of a directory in the repository with detailed explanations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "The file or directory paths to view."
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "The maximum directory depth to search for contents.",
+                        "default": 3
+                    },
                 },
-                "depth": {
-                    "type": "integer",
-                    "description": "The maximum directory depth to search for contents.",
-                    "default": 2
-                },
-            },
-            "required": ["paths"]
+                "required": ["paths"]
+            }
         }
     })
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 2) -> ToolResult:
+    @xml_schema(
+        tag_name="view",
+        mappings=[
+            {"param_name": "paths", "node_type": "attribute", "path": "."},
+            {"param_name": "depth", "node_type": "attribute", "path": "."}
+        ]
+    )
+    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 3) -> ToolResult:
         try:
             python_code = '''
 import os
@@ -231,21 +243,27 @@ def list_directory(root_path: str, depth: int, exclude_patterns: List[str], curr
         print(f"Error accessing {root_path}: {str(e)}", file=sys.stderr)
     return results
 
-def view_path(path: str, depth: int, exclude_patterns: List[str]):
+def view_path(path: str, depth: int, exclude_patterns: List[str], document_index: int):
     if os.path.isdir(path):
-        print(f'<directory path="{path}">')
+        print(f'<directory index="{document_index}">')
+        print(f'<source>{path}</source>')
+        print('<contents>')
         for item in list_directory(path, depth, exclude_patterns):
             print(item)
-        print("</directory>")
+        print('</contents>')
+        print('</directory>')
     elif os.path.isfile(path):
-        print(f'<file path="{path}">')
+        print(f'<document index="{document_index}">')
+        print(f'<source>{path}</source>')
+        print('<document_content>')
         try:
             with open(path, 'r') as f:
                 for i, line in enumerate(f, 1):
                     print(f"{i:6d}\t{line}", end='')
         except Exception as e:
             print(f"Error reading file {path}: {str(e)}", file=sys.stderr)
-        print("</file>")
+        print('</document_content>')
+        print('</document>')
     else:
         print(f"The path '{path}' is neither a file nor a directory.", file=sys.stderr)
 
@@ -253,9 +271,10 @@ def main():
     paths = sys.argv[1].split(',')
     exclude_patterns = sys.argv[2].split(',')
     depth = int(sys.argv[3])
-    
-    for path in paths:
-        view_path(path.strip(), depth, exclude_patterns)
+    print('<documents>')
+    for idx, path in enumerate(paths, 1):
+        view_path(path.strip(), depth, exclude_patterns, idx)
+    print('</documents>')
 
 if __name__ == '__main__':
     main()
@@ -293,251 +312,93 @@ if __name__ == '__main__':
         except Exception as e:
             return self.fail_response(f"Error executing view command: {str(e)}")
 
-    @tool_schema({
-        "name": "create_file",
-        "description": "Create a new file w ith specified content.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The file path to create."},
-                "content": {"type": "string", "description": "The content to write to the file."},
-            },
-            "required": ["path", "content"]
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "run_pytest",
+            "description": (
+                "Run a existing specified test file using pytest, only relevant to the issue."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "The path to the test file to execute."
+                    }
+                },
+                "required": ["file_path"]
+            }
         }
     })
-    async def create_file(self, path: str, content: str) -> ToolResult:
-        """Creates a new file with the specified content."""
-        try:
-            # Create directory if it doesn't exist
-            directory = os.path.dirname(path)
-            mkdir_command = f'mkdir -p "{directory}"'
-            await self.execute_command_in_container(mkdir_command)
-
-            # Create file with proper escaping and content
-            escaped_content = content.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-            create_command = f'printf "%s" "{escaped_content}" > "{path}"'
-            
-            stdout, stderr, returncode = await self.execute_command_in_container(create_command)
-            success = returncode == 0
-
-            if success and not stderr.strip():
-                # Update workspace state
-                await self._update_file_tree(path)
-                await self._update_open_file(path, content)
-                
-                return self.success_response(f"File created at {path}")
-            else:
-                error_msg = stderr.strip() if stderr.strip() else "Unknown error occurred"
-                return self.fail_response(f"Create file failed: {error_msg}")
-        
-        except Exception as e:
-            return self.fail_response(f"Error creating file: {str(e)}")
-
-        except Exception as e:
-            return self.fail_response(f"Error reading file: {str(e)}")
-
-    @tool_schema({
-        "name": "replace_string",
-        "description": "Replace a specific string in a file with another string.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The file path where the replacement should occur."},
-                "old_str": {"type": "string", "description": "The string to be replaced."},
-                "new_str": {"type": "string", "description": "The string to replace with."},
-            },
-            "required": ["path", "old_str", "new_str"]
-        }
-    })
-    async def replace_string(self, path: str, old_str: str, new_str: str) -> ToolResult:
+    @xml_schema(
+        tag_name="run_pytest",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."}
+        ]
+    )
+    async def run_pytest(self, file_path: str) -> ToolResult:
         """
-        Replaces a specific string in a file with another string.
+        Executes a pytest test file inside the Docker container.
 
         Parameters:
-            path (str): The file path where the replacement should occur.
-            old_str (str): The string to be replaced.
-            new_str (str): The string to replace with.
+            file_path (str): The path to the test file to execute.
 
         Returns:
-            ToolResult: The result of the replace string operation.
+            ToolResult: The result of the test execution.
         """
         try:
-
-            # Encode the old and new strings to base64 to handle special characters
-            old_str_base64 = base64.b64encode(old_str.encode('utf-8')).decode('ascii')
-            new_str_base64 = base64.b64encode(new_str.encode('utf-8')).decode('ascii')
-
-            # Define the Python code to execute inside the container
-            python_code = '''
-import sys
-import base64
-import difflib
-
-path = sys.argv[1]
-old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
-new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
-
-with open(path, 'r') as f:
-    content = f.read()
-
-if content.count(old_str) == 0:
-    print("String '{}' not found in file".format(old_str), file=sys.stderr)
-    sys.exit(1)
-elif content.count(old_str) > 1:
-    print("Multiple occurrences of '{}' found. Please ensure the string is unique.".format(old_str), file=sys.stderr)
-    sys.exit(1)
-else:
-    new_content = content.replace(old_str, new_str, 1)
-    with open(path, 'w') as f:
-        f.write(new_content)
-    print("Replacement successful in '{}'".format(path))
-
-    diff = difflib.unified_diff(
-        content.splitlines(),
-        new_content.splitlines(),
-        fromfile='before',
-        tofile='after',
-        lineterm=''
-    )
-    print("Changes:")
-    for line in diff:
-        print(line)
-'''
-
-            # Encode the Python code to base64
-            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
-
-            # Function to safely quote strings in bash
-            def bash_single_quote(s):
-                return "'" + s.replace("'", "'\\''") + "'"
-
-            # Escape the arguments
-            escaped_path = bash_single_quote(path)
-            escaped_old_str_base64 = bash_single_quote(old_str_base64)
-            escaped_new_str_base64 = bash_single_quote(new_str_base64)
-
-            # Build the command to execute inside the container
+            # Construct the command to run the test
             command = (
-                f"echo {bash_single_quote(code_base64)} | base64 -d | "
-                f"python3 - {escaped_path} {escaped_old_str_base64} {escaped_new_str_base64}"
+                f"cd /testbed && "
+                f"python -W ignore -m pytest {file_path} "
+                f"-v -rF --failed-first -x --tb=short --no-header --quiet --cache-clear --color=no"
             )
 
+            # Execute the command in the container
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
-            if success and not stderr.strip():
-                # Update workspace state by reading the new content
-                read_cmd = f'cat "{path}"'
-                new_content, _, _ = await self.execute_command_in_container(read_cmd)
-                await self._update_open_file(path, new_content.strip())
-                
-                return self.success_response(stdout.strip())
-            else:
-                return self.fail_response(f"Replace string failed: {stderr.strip()}")
+            # Update terminal session
+            await self._update_terminal(command, stdout + stderr, success)
 
-        except Exception as e:
-            return self.fail_response(f"Error replacing string: {str(e)}")
-
-    @tool_schema({
-        "name": "bash",
-        "description": "Execute a shell command in the repository environment with explanatory output.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "The shell command to execute."},
-            },
-            "required": ["command"]
-        }
-    })
-    async def bash(self, command: str) -> ToolResult:
-        """
-        Executes an arbitrary bash command with explanatory output.
-        
-        Parameters:
-            command (str): The shell command to execute.
-        
-        Returns:
-            ToolResult: The result of the bash command execution.
-        """
-        try:
-            stdout, stderr, returncode = await self._bash_executor.execute(command)
-            
-            # Format the output with execution context
-            output_parts = [
-                f"Command executed: {command}",
-                f"Working directory: /testbed",
-                f"Return code: {returncode}"
-            ]
-            
-            # Process stdout if present
-            if stdout:
-                output_parts.append("Standard output:")
-                output_parts.append(stdout)
-            
-            # Process stderr and determine if it contains only warnings
-            has_warnings = False
-            has_errors = False
-            if stderr:
-                stderr_lines = stderr.split('\n')
-                warning_lines = []
-                error_lines = []
-                
-                for line in stderr_lines:
-                    line = line.lower()
-                    if 'warning' in line or 'warn' in line:
-                        has_warnings = True
-                        warning_lines.append(line)
-                    else:
-                        has_errors = True
-                        error_lines.append(line)
-                
-                if has_warnings:
-                    output_parts.append("Warnings:")
-                    output_parts.extend(warning_lines)
-                    
-                if has_errors:
-                    output_parts.append("Errors:")
-                    output_parts.extend(error_lines)
-            
-            full_output = '\n'.join(output_parts)
-            
-            # Consider success if:
-            # 1. returncode is 0, OR
-            # 2. there are only warnings (no errors), OR
-            # 3. stderr contains only warnings
-            success = (
-                returncode == 0 or
-                (has_warnings and not has_errors) or
-                (stderr and not has_errors and 'warning' in stderr.lower())
+            # Format output with command and proper tags
+            formatted_output = (
+                f"<command>{command}</command>\n"
+                f"<test_results>\n{stdout.strip()}\n</test_results>\n"
             )
-            
-            # Always update terminal session
-            await self._update_terminal(command, full_output, success)
-            
-            # Return success response even with warnings
+
             if success:
-                return self.success_response(full_output[:2000])
+                return self.success_response(formatted_output)
             else:
-                return self.fail_response(full_output[:2000])
-        
-        except Exception as e:
-            error_output = (
-                f"Error executing bash command:\n"
-                f"Command: {command}\n"
-                f"Exception: {str(e)}"
-            )
-            await self._update_terminal(command, error_output, False)
-            return self.fail_response(error_output)
+                error_output = (
+                    f"<command>{command}</command>\n"
+                    f"<test_results>\n{stdout.strip()}\n</test_results>\n"
+                    f"<errors>\n{stderr.strip()}\n</errors>\n"
+                )
+                return self.fail_response(error_output)
 
-    @tool_schema({
-        "name": "submit",
-        "description": "If you are confident that the issue is resolve, submit the fix",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
+        except Exception as e:
+            return self.fail_response(
+                f"<error>Error executing test: {str(e)}</error>\n"
+            )
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "submit",
+            "description": "If all test files is working including edge cases, and existings tests and you are confident that the issue is resolve, submit the fix.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         }
     })
+    @xml_schema(
+        tag_name="submit",
+        mappings=[]
+    )
     async def submit(self) -> ToolResult:
         """
         Signals that the task is completed.

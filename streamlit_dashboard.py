@@ -49,13 +49,25 @@ def load_thread_data(run_dir: str) -> List[Dict]:
     threads_dir = os.path.join(run_dir, 'threads')
     thread_data = []
     if os.path.exists(threads_dir):
-        for file in sorted(os.listdir(threads_dir)):
-            if file.endswith('.json'):
+        # First look for history files
+        history_files = [f for f in os.listdir(threads_dir) if f.endswith('_history.json')]
+        if history_files:
+            # Sort history files to maintain order
+            for file in sorted(history_files):
                 try:
                     with open(os.path.join(threads_dir, file), 'r') as f:
                         thread_data.append(json.load(f))
                 except json.JSONDecodeError:
                     st.warning(f"Failed to decode JSON from {file}")
+        else:
+            # Fall back to regular thread files for backward compatibility
+            for file in sorted(os.listdir(threads_dir)):
+                if file.endswith('.json') and not file.endswith('_history.json'):
+                    try:
+                        with open(os.path.join(threads_dir, file), 'r') as f:
+                            thread_data.append(json.load(f))
+                    except json.JSONDecodeError:
+                        st.warning(f"Failed to decode JSON from {file}")
     return thread_data
 
 def load_diff_file(run_dir: str, run_name: str) -> str:
@@ -88,6 +100,16 @@ def format_message_content(content):
         return "\n".join(formatted_content)
     return str(content)
 
+def truncate_text(text: str, max_lines: int = 10) -> str:
+    """Truncate text to show first and last n lines."""
+    lines = text.splitlines()
+    if len(lines) <= max_lines * 2:
+        return text
+    
+    first_part = lines[:max_lines]
+    last_part = lines[-max_lines:]
+    return '\n'.join(first_part) + '\n...\n' + '\n'.join(last_part)
+
 def display_run_details(run_data: List[Dict]):
     """Display the details of a selected run."""
     if not run_data:
@@ -109,16 +131,18 @@ def display_run_details(run_data: List[Dict]):
                 avatar = "👤"
             elif role == "system":
                 avatar = "⚙️"
-            elif role == "tool":
+            elif role == "tool" or role == "tool_result":
                 avatar = "🔧"
             else:
                 avatar = "❓"
             
             with st.chat_message(role, avatar=avatar):
                 formatted_content = format_message_content(content)
-                if role == "tool":
+                if role == "tool" or role == "tool_result" or role == "git diff":
                     name = message.get("name", "")
                     output = content
+                    if st.session_state.get('truncate_tool', False) and name != "report" and role != "git diff":
+                        output = truncate_text(output)
                     icon = "✅" 
                     label = f"{name} {icon}"
                     
@@ -126,6 +150,8 @@ def display_run_details(run_data: List[Dict]):
                         st.code(output, language='python')
                 elif role in ["user", "system"]:
                     with st.expander(label=f"{role.title()} Message", expanded=False):
+                        if st.session_state.get('truncate_tool', False):
+                            formatted_content = truncate_text(formatted_content)
                         st.markdown(formatted_content)
                 else:
                     # Add iteration number for assistant messages
@@ -278,6 +304,8 @@ def main():
 
         st.markdown("---")
 
+        st.subheader("Performance")
+
         if st.checkbox("Show Log"):
             st.session_state.show_log = True
         else:
@@ -292,6 +320,11 @@ def main():
             st.session_state.expanded_tool = True
         else:
             st.session_state.expanded_tool = False
+
+        if st.checkbox("Truncate tool", value=True):
+            st.session_state.truncate_tool = True
+        else:
+            st.session_state.truncate_tool = False
 
         st.markdown("---")
         successful_runs, total_runs, passed_tests, total_tests = calculate_test_statistics(runs, output_dir)
