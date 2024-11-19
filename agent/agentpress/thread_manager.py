@@ -348,6 +348,14 @@ class ThreadManager:
 
         try:
             messages = await self.list_messages(thread_id)
+            
+            # temporary fix
+            if messages and messages[-1].get('role') == 'assistant':
+                messages.append({
+                    "role": "user",
+                    "content": "Continue! You must always use a tool."
+                })
+                
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)

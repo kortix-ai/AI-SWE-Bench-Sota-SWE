@@ -55,7 +55,7 @@ python -m swebench.harness.run_evaluation \
     --run_id test_eval
 
 
-python swe_runner.py --range 1 1 --dataset-type lite --max-iterations 31 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 1 --install-packages --submission
+python swe_runner.py --range 1 1 --dataset-type lite --max-iterations 31 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 1 --install-packages --submission --disable-streamlit
 
 
 # Run full for Lite

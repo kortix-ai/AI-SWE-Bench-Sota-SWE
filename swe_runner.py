@@ -123,6 +123,11 @@ def main():
         subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:
+        # Skip evaluation if submission mode is enabled
+        if args.submission:
+            print("Skipping evaluation step - submission mode is enabled")
+            sys.exit(0)
+            
         # Run evaluation.py
         print("Running evaluation...")
         if args.input_file:
