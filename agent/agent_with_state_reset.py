@@ -13,22 +13,23 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 <IMPORTANT>
 - Before modifying any files, thoroughly analyze the problem by observing and reasoning about the issue.
 - Use the following tags to structure your thought process and actions:
-  - <OBSERVE>: To note observations about the codebase, files, or errors.
-  - <REASON>: To analyze the issue, consider causes, evaluate potential solutions, and check how changes might affect other parts of the codebase. Always consider code interdependencies.
-  - <FIX>: To propose multiple fix solutions with short code snippets, prioritizing changes that align with existing code patterns. A fix may involve changes to one or multiple files.
-  - <PLAN>: To outline your intended approach before implementing changes.
-  - <ACTION>: To document the actions you take, such as modifying files or running commands.
-  - <CHECK>: To verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
-  - <CRITICAL>: To evaluate the overall quality of your work, ensuring concise changes with no regressions.
+  - <OBSERVE>: Note observations about the codebase, files, or errors.
+  - <REASON>: Analyze the issue, consider causes, evaluate potential solutions, and assess how changes might affect other parts of the codebase. Always consider code interdependencies.
+  - <FIX>: Propose multiple fix solutions with short code snippets, prioritizing changes that align with existing code patterns and standards. A fix may involve changes to one or multiple files.
+  - <PLAN>: Outline your intended approach before implementing changes.
+  - <ACTION>: Document the actions you take, such as modifying files or running commands.
+  - <CHECK>: Verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
+  - <REVIEW>: Thoroughly inspect the modified code to assess whether it meets all the requirements and determine if further updates are necessary.
+  - <CRITICAL>: Evaluate the overall quality of your work, ensuring concise changes with no regressions.
 - Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
+- After making changes, use <REVIEW> to inspect the code and decide if any additional updates are necessary to fully meet the requirements.
 - Aim for solutions that maintain alignment with existing code patterns and adhere to relevant standards.
 - In the <FIX> section, analyze the quality and simplicity of each proposed solution, selecting the one that is most effective and compliant with standards.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** Create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test your changes.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
-- After making changes, use 'view' to check the modified files again and see if any other parts need to be updated accordingly.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
-- You work AUTONOMOUSLY, never ask the user for additional information. ALWAYS use at least one tool.
+- You work AUTONOMOUSLY; never ask the user for additional information. ALWAYS use at least one tool.
 </IMPORTANT>
 """
 
@@ -47,8 +48,8 @@ Can you help me implement the necessary changes to the repository so that the re
 - Analyze the issue thoroughly before making any changes.
 - After EVERY tool use, use <CHECK> to analyze the output and determine next steps.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** You can create a `reproduce_error.py` script to test errors and an `edge_cases.py` script for edge cases.
-- After implementing changes, use 'view' to check the modified files again and see if any other parts need to be updated accordingly.
-- Use the following tags to structure your work: <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>.
+- After implementing changes, use <REVIEW> to inspect the modified files and determine if any other parts of the file need to be updated accordingly.
+- Use the following tags to structure your work: <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>.
 
 **Suggested Steps:**
 
@@ -60,10 +61,10 @@ Can you help me implement the necessary changes to the repository so that the re
 6. Decide on the solution that is precise, high-quality, and standard-compliant.
 7. Reproduce the error to confirm the issue.
 8. Implement the fix, ensuring compliance with standards and no impact on existing functionality.
-9. Use 'view' to check the modified files again to determine if any other parts need to be updated accordingly.
+9. Use <REVIEW> to thoroughly inspect the modified code and decide if any additional updates are necessary.
 10. Handle edge cases comprehensively by writing and running additional tests.
 11. Use <CRITICAL> to evaluate your changes for effectiveness and absence of regressions.
-12. Check related existing test files, run existing tests using `pytest` if applicable to verify that your changes do not introduce regressions.
+12. Check related existing test files, run existing tests using `pytest` if applicable, to verify that your changes do not introduce regressions.
 13. Report your findings or submit the fix.
 
 **Current Workspace State:**
@@ -81,20 +82,21 @@ continuation_system_prompt = """You are continuing your previous work as an auto
 - Review the current workspace state and your checklist of tasks.
 - Continue implementing precise, high-quality changes to solve the specific issue described.
 - Use the following tags to structure your thought process and actions:
-  - <OBSERVE>: To note new observations about the codebase, files, or errors.
-  - <REASON>: To analyze the current situation, consider causes, evaluate potential solutions, and assess the impact of changes on other code parts. Always check for code interdependencies.
-  - <FIX>: To propose additional fix solutions if necessary, prioritizing effective changes. A fix may involve changes to one or multiple files.
-  - <PLAN>: To update your approach before implementing further changes.
-  - <ACTION>: To document additional actions you take.
-  - <CHECK>: To verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
-  - <CRITICAL>: To evaluate the overall quality of your work, ensuring concise changes with no regressions.
+  - <OBSERVE>: Note new observations about the codebase, files, or errors.
+  - <REASON>: Analyze the current situation, consider causes, evaluate potential solutions, and assess the impact of changes on other code parts. Always check for code interdependencies.
+  - <FIX>: Propose additional fix solutions if necessary, prioritizing effective changes. A fix may involve changes to one or multiple files.
+  - <PLAN>: Update your approach before implementing further changes.
+  - <ACTION>: Document additional actions you take.
+  - <CHECK>: Verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
+  - <REVIEW>: Thoroughly inspect the modified code to assess whether it meets all the requirements and determine if further updates are necessary.
+  - <CRITICAL>: Evaluate the overall quality of your work, ensuring concise changes with no regressions.
 - Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
+- After making changes, use <REVIEW> to inspect the code and decide if any additional updates are necessary to fully meet the requirements.
 - Maintain your checklist of tasks, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
-- After making changes, use 'view' to check the modified files again and see if any other parts need to be updated accordingly.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
-- You work AUTONOMOUSLY, never ask the user for additional information. ALWAYS use at least one tool.
+- You work AUTONOMOUSLY; never ask the user for additional information. ALWAYS use at least one tool.
 - If it doesn't work after multiple attempts, you can use the reset feature of EditTool to restore files for a fresh start, then examine the files again and propose a better, elegant solution.
 </IMPORTANT>
 """
@@ -112,7 +114,7 @@ This is a continuation of the previous task. You are working on implementing the
 2. Re-evaluate the issue in light of the work done and adjust your approach if necessary.
 3. Update your plan based on your observations and reasoning.
 4. Continue implementing the fix, ensuring compliance with standards, high quality, and no impact on existing functionality.
-5. Use 'view' to check the modified files again to determine if any other parts need to be updated accordingly.
+5. Use <REVIEW> to thoroughly inspect the modified code and decide if any additional updates are necessary.
 6. Run existing tests to verify that your changes do not break anything, but do not modify existing test files.
 7. Run your reproduction script to confirm that the error is fixed.
 8. Handle edge cases comprehensively by writing and running additional tests.
@@ -123,7 +125,7 @@ This is a continuation of the previous task. You are working on implementing the
 {workspace_state}
 </workspace_state>
 
-Remember to build upon your previous work rather than starting over. Use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <CRITICAL>) to structure your thought process and responses.
+Remember to build upon your previous work rather than starting over. Use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>) to structure your thought process and responses.
 """
 
 #------------------------------------------------------------
@@ -230,8 +232,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             await execute_view_commands(thread_manager, thread_id, workspace_state)
 
-
-
             # Execute test commands
             test_commands = workspace_state.get('test_commands', [])
             for cmd in test_commands:
@@ -243,11 +243,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
         while inner_iteration < reset_interval and total_iterations < max_iterations:
             inner_iteration += 1
             total_iterations += 1
-
-            # bash_command_arguments = {
-            #     "command": f"git diff -- pyproject.toml || echo 'No changes in open files'"
-            # }
-            # await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
 
             model_mapping = {
                 "sonnet": "anthropic/claude-3-5-sonnet-latest",
@@ -266,14 +261,12 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                     "role": "user",
                     "content": (
                         "Time's up! Please review your checklist of tasks and indicate which tasks have been completed. "
-                        "Have you met all the requirements specified in the PR description? Ensure that you have followed all the steps in the check list."
+                        "Have you met all the requirements specified in the PR description? Ensure that you have followed all the steps in the checklist."
                         "If you have completed all tasks and are confident that the issue is resolved, please SUBMIT your fix. "
                         "Otherwise, you must REPORT the current state of the workspace without doing anything else and provide instructions "
                         "for the next iteration using ReportTool."
                     )
                 })
-                # This force can't force two tools at a time
-                # tool_choice = {"type": "function", "function": {"name": "report"}}
                 tool_choice = "any"
             else:
                 tool_choice = "any"
