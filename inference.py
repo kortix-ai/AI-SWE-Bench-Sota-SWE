@@ -361,8 +361,8 @@ def main():
         print("Evaluation completed.")
 
         # Step 8: Copy logs to submissions/run_id/log
-        source_log_dir = os.path.join('logs', 'run_evaluation', args.model_name, args.run_id)
-        dest_log_dir = os.path.join(run_id_dir, 'log')
+        source_log_dir = os.path.join('logs', 'run_evaluation', args.run_id, args.run_id)
+        dest_log_dir = os.path.join(run_id_dir, 'logs')
         os.makedirs(dest_log_dir, exist_ok=True)
         if os.path.exists(source_log_dir):
             for file_name in os.listdir(source_log_dir):
