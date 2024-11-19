@@ -239,8 +239,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             # init
             system_message = {
                 "role": "system", 
-                "content": system_prompt + xml_format
-            }
+                "content": system_prompt
+            } #+ xml_format
             await thread_manager.add_message(thread_id, system_message)
 
             await thread_manager.add_message(thread_id, {
@@ -313,8 +313,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 temperature=0.0,
                 max_tokens=8192,
                 tool_choice=tool_choice,
-                native_tool_calling=False,
-                xml_tool_calling=True,
+                native_tool_calling=True,
+                xml_tool_calling=False,
                 parallel_tool_execution=False,
             )
 
