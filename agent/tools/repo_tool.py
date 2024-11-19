@@ -210,7 +210,37 @@ class RepositoryTools(Tool):
         mappings=[
             {"param_name": "paths", "node_type": "attribute", "path": "."},
             {"param_name": "depth", "node_type": "attribute", "path": "."}
-        ]
+        ],
+        example='''
+        <!-- Repository View Tool -->
+        <!-- View the contents of files or list directory contents with detailed explanations -->
+        
+        <!-- Parameters Description:
+             - paths: Array of file or directory paths to view (REQUIRED)
+             - depth: Maximum directory depth to search for contents (default: 3)
+        -->
+
+        <!-- View a single file -->
+        <view paths="/testbed/src/main.py" depth="1" />
+
+        <!-- View multiple files -->
+        <view paths="/testbed/src/main.py,/testbed/tests/test_main.py" depth="1" />
+
+        <!-- View directory contents -->
+        <view paths="/testbed/src" depth="3" />
+
+        <!-- View multiple paths with custom depth -->
+        <view paths="/testbed/src,/testbed/tests" depth="2" />
+
+        <!-- Important Notes:
+             - Paths should be absolute paths from repository root
+             - Default depth is 3 if not specified
+             - Hidden files and directories are automatically excluded
+             - Common exclude patterns: .rst, .pyc files
+             - Output includes line numbers for files
+             - Directory listings are sorted alphabetically
+        -->
+        '''
     )
     async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 3) -> ToolResult:
         try:
@@ -335,7 +365,27 @@ if __name__ == '__main__':
         tag_name="run_pytest",
         mappings=[
             {"param_name": "file_path", "node_type": "attribute", "path": "."}
-        ]
+        ],
+        example='''
+        <!-- Repository Test Runner Tool -->
+        <!-- Run pytest on specified test files relevant to the issue -->
+        
+        <!-- Parameters Description:
+             - file_path: The path to the test file to execute (REQUIRED)
+        -->
+
+        <!-- Run a single test file -->
+        <run_pytest file_path="/testbed/tests/test_main.py" />
+
+        <!-- Important Notes:
+             - Test execution uses pytest with verbose output (-v)
+             - Tests stop on first failure (-x)
+             - Short traceback format is used (--tb=short)
+             - Cache is cleared before running (--cache-clear)
+             - Output includes test results and any errors
+             - Command is executed from /testbed directory
+        -->
+        '''
     )
     async def run_pytest(self, file_path: str) -> ToolResult:
         """
@@ -397,7 +447,24 @@ if __name__ == '__main__':
     })
     @xml_schema(
         tag_name="submit",
-        mappings=[]
+        mappings=[],
+        example='''
+        <!-- Repository Submit Tool -->
+        <!-- Submit the fix when all tests pass and the issue is resolved -->
+        
+        <!-- No Parameters Required -->
+        
+        <!-- Submit the completed fix -->
+        <submit />
+
+        <!-- Important Notes:
+             - Only use when all test files are working
+             - Ensure edge cases are covered
+             - Verify existing tests pass
+             - Be confident the issue is fully resolved
+             - This marks the task as completed
+        -->
+        '''
     )
     async def submit(self) -> ToolResult:
         """

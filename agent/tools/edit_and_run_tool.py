@@ -68,10 +68,57 @@ class EditTool(Tool):
             {"param_name": "bash_command", "node_type": "element", "path": "bash_command"}
         ],
         example='''
-        <edit-file command="create" path="/testbed/example.txt">
-            <file_text>Hello World!</file_text>
+        <!-- Edit File and Run Tool -->
+        <!-- This tool allows you to perform file editing operations and then run commands within the repository environment -->
+        
+        <!-- Parameters Description:
+             - command: The command to execute (create/str_replace/insert/undo_edit/reset)
+             - path: The absolute file path to operate on
+             - file_text: The text content for 'create' command
+             - old_str: The string to be replaced in 'str_replace' command
+             - new_str: The string to replace with in 'str_replace' and 'insert' commands
+             - insert_line: Line number to insert at for 'insert' command (starting from 1)
+             - bash_command: Bash command to run after editing (REQUIRED)
+        -->
+
+        <!-- Create a new file and run it -->
+        <edit-file command="create" path="/testbed/reproduce_error.py">
+            <file_text>print('Reproducing error')</file_text>
+            <bash_command>python reproduce_error.py</bash_command>
+        </edit-file>
+
+        <!-- Replace a string and run tests -->
+        <edit-file command="str_replace" path="/testbed/test_file.py">
+            <old_str>assert result == False</old_str>
+            <new_str>assert result == True</new_str>
+            <bash_command>python -m pytest test_file.py</bash_command>
+        </edit-file>
+
+        <!-- Insert text and build project -->
+        <edit-file command="insert" path="/testbed/src/main.py">
+            <insert_line>5</insert_line>
+            <new_str>logger.debug('Debug message added')</new_str>
             <bash_command>make build</bash_command>
         </edit-file>
+
+        <!-- Undo last edit and verify -->
+        <edit-file command="undo_edit" path="/testbed/config.py">
+            <bash_command>cat config.py</bash_command>
+        </edit-file>
+
+        <!-- Reset file to HEAD and run tests -->
+        <edit-file command="reset" path="/testbed/test_suite.py">
+            <bash_command>python -m pytest test_suite.py</bash_command>
+        </edit-file>
+
+        <!-- Important Notes:
+             - All file paths must be absolute paths starting from the root directory
+             - For str_replace, the old_str must be unique in the file
+             - The undo_edit command supports multiple undos, reversing each prior edit sequentially
+             - Line numbers for insert_line start from 1
+             - bash_command is required for all operations
+             - The tool will first perform the file operation, then execute the bash command
+        -->
         '''
     )
     @openapi_schema({

@@ -105,6 +105,7 @@ class XMLResultsAdder(ResultsAdderBase):
                 "content": f"Result for {result['name']}:\n{result['content']}"
             }
             await self.add_message(thread_id, result_message)
+            
         except Exception as e:
             logging.error(f"Error adding tool result: {e}")
             # Ensure the result is still added even if there's an error
@@ -113,12 +114,3 @@ class XMLResultsAdder(ResultsAdderBase):
                 "content": f"Result for {result['name']}:\n{result['content']}"
             }
             await self.add_message(thread_id, result_message)
-
-    async def add_message_and_run_tools(self, thread_id: str, message_data: Dict[str, Any]):
-        """Add a message and execute its tool calls immediately.
-        
-        Args:
-            thread_id: ID of the conversation thread
-            message_data: Message data including any tool calls to execute
-        """
-        await self.thread_manager.add_message_and_run_tools(thread_id, message_data)
