@@ -148,11 +148,16 @@ def display_run_details(run_data: List[Dict]):
                     
                     with st.expander(label=label, expanded=st.session_state.get('expanded_tool', False)):
                         st.code(output, language='python')
-                elif role in ["user", "system"]:
+                elif role in ["user"]:
                     with st.expander(label=f"{role.title()} Message", expanded=False):
                         if st.session_state.get('truncate_tool', False):
                             formatted_content = truncate_text(formatted_content)
                         st.markdown(formatted_content)
+                elif role == "system":
+                    with st.expander(label=f"{role.title()} Message", expanded=False):
+                        # Replace literal \n with actual newlines
+                        formatted_content = formatted_content.replace('\\n', '\n')
+                        st.code(formatted_content, language='xml', wrap_lines=True)
                 else:
                     # Add iteration number for assistant messages
                     if role == "assistant":

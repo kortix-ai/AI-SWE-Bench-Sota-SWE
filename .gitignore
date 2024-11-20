@@ -34,3 +34,6 @@ submissions/
 
 *.json
 *.log
+*.ipynb
+*.zip
+.vscode/
