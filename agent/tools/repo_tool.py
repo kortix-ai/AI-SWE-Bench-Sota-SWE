@@ -72,16 +72,16 @@ class RepositoryTools(Tool):
         self.container_name = container_name
         self._bash_executor = BashExecutor(container_name)
         # Initialize workspace state
-        asyncio.create_task(self._init_workspace_state())
+        asyncio.create_task(self._init_workspace())
 
-    async def _init_workspace_state(self):
+    async def _init_workspace(self):
         """Initialize the workspace state with empty structures."""
-        workspace_state = {
+        workspace = {
             "file_tree": {},           # Current directory structure
             "open_files": {},          # Currently open files and their contents
             "terminal_session": [],    # Current terminal session output (last N commands)
         }
-        await self.state_manager.set("workspace", workspace_state)
+        await self.state_manager.set("workspace", workspace)
 
     async def _parse_directory_listing(self, output: str) -> dict:
         """Parse directory listing output into a tree structure."""
@@ -383,3 +383,246 @@ if __name__ == '__main__':
             ToolResult: Success message indicating task completion.
         """
         return self.success_response("Task completed successfully.")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "open_file",
+            "description": "Open a file and add its content to the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to open."},
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="open_file",
+        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+        example='''
+        <!-- Open File Tool -->
+        <!-- Open a file and add its content to the workspace state -->
+        
+        <!-- Parameters:
+             - path: The file path to open (REQUIRED)
+        -->
+        <open_file path="/testbed/src/main.py" />
+        '''
+    )
+    async def open_file(self, path: str) -> ToolResult:
+        try:
+            command = f"cat {path}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            if returncode == 0:
+                await self._update_open_file(path, stdout)
+                return self.success_response(f"File {path} opened successfully.")
+            else:
+                return self.fail_response(f"Failed to open file {path}: {stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error opening file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "close_file",
+            "description": "Close a file and remove its content from the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to close."},
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="close_file",
+        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+        example='''
+        <!-- Close File Tool -->
+        <!-- Close a file and remove its content from the workspace state -->
+        
+        <!-- Parameters:
+             - path: The file path to close (REQUIRED)
+        -->
+        <close_file path="/testbed/src/main.py" />
+        '''
+    )
+    async def close_file(self, path: str) -> ToolResult:
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if path in workspace["open_files"]:
+                del workspace["open_files"][path]
+                await self.state_manager.set("workspace", workspace)
+                return self.success_response(f"File {path} closed successfully.")
+            else:
+                return self.fail_response(f"File {path} is not open.")
+        except Exception as e:
+            return self.fail_response(f"Error closing file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "Create a new file with the specified content and add it to the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to create."},
+                    "content": {"type": "string", "description": "The content to write into the file."}
+                },
+                "required": ["path", "content"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="create_file",
+        mappings=[
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "content", "node_type": "text", "path": "."}
+        ],
+        example='''
+        <!-- Create File Tool -->
+        <!-- Create a new file with specified content -->
+        
+        <!-- Parameters:
+             - path: The file path to create (REQUIRED)
+             - content: The content to write into the file (REQUIRED)
+        -->
+        <create_file path="/testbed/src/new_file.py">
+        print("Hello, World!")
+        </create_file>
+        '''
+    )
+    async def create_file(self, path: str, content: str) -> ToolResult:
+        try:
+            encoded_content = base64.b64encode(content.encode()).decode()
+            command = f"echo {encoded_content} | base64 -d > {path}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            if returncode == 0:
+                await self._update_open_file(path, content)
+                return self.success_response(f"File {path} created successfully.")
+            else:
+                return self.fail_response(f"Failed to create file {path}: {stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error creating file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Edit an existing file by replacing specified strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to edit."},
+                    "replacements": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "old_string": {"type": "string"},
+                                "new_string": {"type": "string"}
+                            },
+                            "required": ["old_string", "new_string"]
+                        },
+                        "description": "List of string replacements to perform."
+                    }
+                },
+                "required": ["path", "replacements"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="edit_file",
+        mappings=[
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "replacements", "node_type": "child", "path": "."}
+        ],
+        example='''
+        <!-- Edit File Tool -->
+        <!-- Edit an existing file by replacing specified strings -->
+        
+        <!-- Parameters:
+             - path: The file path to edit (REQUIRED)
+             - replacements: List of string replacements (REQUIRED)
+        -->
+        <edit_file path="/testbed/src/main.py">
+            <replacements>
+                <replacement>
+                    <old_string>foo</old_string>
+                    <new_string>bar</new_string>
+                </replacement>
+                <replacement>
+                    <old_string>hello</old_string>
+                    <new_string>world</new_string>
+                </replacement>
+            </replacements>
+        </edit_file>
+        '''
+    )
+    async def edit_file(self, path: str, replacements: List[dict]) -> ToolResult:
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if path in workspace["open_files"]:
+                content = workspace["open_files"][path]["content"]
+                for rep in replacements:
+                    old_string = rep.get("old_string")
+                    new_string = rep.get("new_string")
+                    content = content.replace(old_string, new_string)
+                # Update the file content in the container
+                encoded_content = base64.b64encode(content.encode()).decode()
+                command = f"echo {encoded_content} | base64 -d > {path}"
+                stdout, stderr, returncode = await self._bash_executor.execute(command)
+                if returncode == 0:
+                    await self._update_open_file(path, content)
+                    return self.success_response(f"File {path} edited successfully.")
+                else:
+                    return self.fail_response(f"Failed to edit file {path}: {stderr}")
+            else:
+                return self.fail_response(f"File {path} is not open.")
+        except Exception as e:
+            return self.fail_response(f"Error editing file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Run a shell command in the terminal and update the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The shell command to execute."}
+                },
+                "required": ["command"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="run_command",
+        mappings=[{"param_name": "command", "node_type": "text", "path": "."}],
+        example='''
+        <!-- Run Command Tool -->
+        <!-- Run a shell command in the terminal -->
+        
+        <!-- Parameters:
+             - command: The shell command to execute (REQUIRED)
+        -->
+        <run_command>
+        ls -la /testbed/src
+        </run_command>
+        '''
+    )
+    async def run_command(self, command: str) -> ToolResult:
+        try:
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            success = returncode == 0
+            await self._update_terminal(command, stdout + stderr, success)
+            if success:
+                return self.success_response(f"Command executed successfully:\n{stdout}")
+            else:
+                return self.fail_response(f"Command failed with error:\n{stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error executing command: {str(e)}")
