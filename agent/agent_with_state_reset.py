@@ -343,13 +343,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                             }
                             await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
 
-                            await thread_manager.execute_tool_and_add_message(
-                                thread_id,
-                                "user",
-                                'view',
-                                {"paths": [arguments['path']]}
-                            )
-
         if total_iterations < max_iterations:
             await thread_manager.add_to_history_only(thread_id, {
                 "role": "switch",
@@ -367,10 +360,10 @@ if __name__ == "__main__":
         parser.add_argument("--container-name", required=True, help="Docker container name")
         parser.add_argument("--threads-dir", required=True, help="Directory to store thread outputs")
         parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
-        parser.add_argument("--max-iterations", type=int, default=10, help="Maximum number of iterations")
+        parser.add_argument("--max-iterations", type=int, default=31, help="Maximum number of iterations")
         parser.add_argument("--model-name", choices=["sonnet", "haiku", "deepseek", "gpt-4o", "qwen"], default="sonnet",
                             help="Model name to use")
-        parser.add_argument("--reset-interval", type=int, default=15, help="Number of iterations before state reset")
+        parser.add_argument("--reset-interval", type=int, default=10, help="Number of iterations before state reset")
         args = parser.parse_args()
 
         thread_manager = ThreadManager(threads_dir=args.threads_dir)
