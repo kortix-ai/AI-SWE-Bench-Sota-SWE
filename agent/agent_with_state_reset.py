@@ -5,6 +5,10 @@ import os
 from langfuse.decorators import observe
 from agentpress.thread_manager import ThreadManager
 from agentpress.state_manager import StateManager
+import agentops
+
+agentops.init(os.environ['AGENTOPS_API_KEY'])
+
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
@@ -166,6 +170,9 @@ Remember to build upon your previous work rather than starting over. Use the tag
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, reset_interval: int = 8, model_name: str = "sonnet"):
+    # Start agentops session at the beginning of run_agent
+    agentops_session = agentops.start_session()
+    
     thread_manager = ThreadManager(threads_dir=threads_dir)
     state_file = os.path.join(threads_dir, thread_id, 'state.json')
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
@@ -316,6 +323,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 native_tool_calling=True,
                 xml_tool_calling=False,
                 parallel_tool_execution=False,
+                agentops_session=agentops_session,  
             )
 
             assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
