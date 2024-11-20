@@ -333,6 +333,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 for tool_call in tool_calls:
                     if tool_call['function']['name'] == 'submit':
                         print("Task completed via submit tool, stopping...")
+                        agentops_session.end_session()
                         return
                     elif tool_call['function']['name'] == 'edit_file_and_run':
                         arguments = json.loads(tool_call['function']['arguments'])
@@ -356,6 +357,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             })
 
     print(f"Agent completed after {total_iterations} total iterations ({outer_iteration} reset cycles)")
+
+    agentops_session.end_session()
 
 if __name__ == "__main__":
     async def main():
