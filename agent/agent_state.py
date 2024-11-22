@@ -12,7 +12,12 @@ agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
-{xml_format}"""
+{xml_format}
+
+- You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
+- Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
+- Proceed step-by-step, use <OBSERVE> and <REASON> tags to document your thought process.
+"""
 
 user_prompt = """
 I've uploaded a Python code repository in the directory `/testbed`. Consider the following PR description:

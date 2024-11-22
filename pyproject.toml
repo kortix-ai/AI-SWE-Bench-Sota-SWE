@@ -16,7 +16,6 @@ litellm = "^1.52.10"
 python-dotenv = "^1.0.1"
 openai = "^1.54.5"
 pytest = "^8.3.3"
-streamlit-autorefresh = "^1.0.1"
 swebench = "^2.1.3"
 
 

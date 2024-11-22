@@ -77,9 +77,11 @@ class RepositoryTools(Tool):
     async def _init_workspace(self):
         """Initialize the workspace state with empty structures."""
         workspace = {
-            "file_tree": {},           # Current directory structure
+            # "file_tree": {},           # Current directory structure
             "open_files": {},          # Currently open files and their contents
+            "open_folders": {},        # Currently open folders
             "terminal_session": [],    # Current terminal session output (last N commands)
+            "thinking_logs": []        # Logs for internal thoughts or notes
         }
         await self.state_manager.set("workspace", workspace)
 
@@ -375,7 +377,7 @@ if __name__ == '__main__':
         -->
         '''
     )
-    async def submit(self) -> ToolResult:
+    async def submit() -> ToolResult:
         """
         Signals that the task is completed.
 
