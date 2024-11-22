@@ -210,8 +210,8 @@ class RepositoryTools(Tool):
     @xml_schema(
         tag_name="view",
         mappings=[
-            {"param_name": "paths", "node_type": "attribute", "path": "."},
-            {"param_name": "depth", "node_type": "attribute", "path": "."}
+            {"param_name": "paths", "node_type": "attribute", "path": "paths"},
+            {"param_name": "depth", "node_type": "attribute", "path": "depth"}
         ],
         example='''
         <!-- Repository View Tool -->
@@ -377,7 +377,7 @@ if __name__ == '__main__':
         -->
         '''
     )
-    async def submit() -> ToolResult:
+    async def submit(self, ) -> ToolResult:
         """
         Signals that the task is completed.
 
