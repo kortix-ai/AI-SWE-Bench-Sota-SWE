@@ -239,7 +239,6 @@ class XMLToolParser(ToolParserBase):
                             logging.info(f"Found attribute {mapping.path} -> {mapping.param_name}: {value}")
                     
                     elif mapping.node_type == "element":
-                        # Extract element content
                         content, remaining_chunk = self._extract_tag_content(remaining_chunk, mapping.path)
                         if content is not None:
                             params[mapping.param_name] = content.strip()
@@ -257,7 +256,6 @@ class XMLToolParser(ToolParserBase):
                     logging.error(f"Error processing mapping {mapping}: {e}")
                     continue
             
-            # Validate required parameters
             missing = [mapping.param_name for mapping in schema.mappings if mapping.param_name not in params]
             if missing:
                 logging.error(f"Missing required parameters: {missing}")

@@ -192,51 +192,44 @@ class RepositoryTools(Tool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "paths": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "The file or directory paths to view."
+                    "path": {
+                        "type": "string",
+                        "description": "The file or directory path to view."
                     },
                     "depth": {
                         "type": "integer",
-                        "description": "The maximum directory depth to search for contents.",
+                        "description": "The maximum directory depth to search for contents (only used for directories).",
                         "default": 3
                     },
                 },
-                "required": ["paths"]
+                "required": ["path"]
             }
         }
     })
     @xml_schema(
         tag_name="view",
         mappings=[
-            {"param_name": "paths", "node_type": "attribute", "path": "paths"},
+            {"param_name": "path", "node_type": "attribute", "path": "path"},
             {"param_name": "depth", "node_type": "attribute", "path": "depth"}
         ],
         example='''
         <!-- Repository View Tool -->
-        <!-- View the contents of files or list directory contents with detailed explanations -->
+        <!-- View the contents of a file or list directory contents with detailed explanations -->
         
         <!-- Parameters Description:
-             - paths: Array of file or directory paths to view (REQUIRED)
-             - depth: Maximum directory depth to search for contents (default: 3)
+             - path: File or directory path to view (REQUIRED)
+             - depth: Maximum directory depth to search for contents (optional, only used for directories)
         -->
 
-        <!-- View a single file -->
-        <view paths="/testbed/src/main.py" depth="1" />
+        <!-- View a file -->
+        <view path="/testbed/.../main.py" />
 
-        <!-- View multiple files -->
-        <view paths="/testbed/src/main.py,/testbed/tests/test_main.py" depth="1" />
-
-        <!-- View directory contents -->
-        <view paths="/testbed/src" depth="3" />
-
-        <!-- View multiple paths with custom depth -->
-        <view paths="/testbed/src,/testbed/tests" depth="2" />
+        <!-- View directory contents with depth -->
+        <view path="/testbed" depth="3" />
 
         <!-- Important Notes:
-             - Paths should be absolute paths from repository root
-             - Default depth is 3 if not specified
+             - Path should be absolute path from repository root
+             - Depth parameter is ignored for file views
              - Hidden files and directories are automatically excluded
              - Common exclude patterns: .rst, .pyc files
              - Output includes line numbers for files
@@ -244,8 +237,17 @@ class RepositoryTools(Tool):
         -->
         '''
     )
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 3) -> ToolResult:
+    async def view(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = None) -> ToolResult:
         try:
+            # Convert to list with single path for compatibility with existing code
+            paths = [path]
+            
+            # Set depth to 1 for files, use provided depth or default 3 for directories
+            if os.path.isfile(path):
+                depth = 1
+            else:
+                depth = depth or 3
+            
             python_code = '''
 import os
 import fnmatch
