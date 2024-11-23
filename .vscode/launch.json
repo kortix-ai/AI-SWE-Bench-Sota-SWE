@@ -6,17 +6,19 @@
             "name": "Debug SWE Runner",
             "program": "${workspaceFolder}/swe_runner.py",
             "args": [
-                "--instance-id",
-                "astropy__astropy-14369",
+                "--range",
+                "1",
+                "1",
                 "--dataset-type",
-                "verified",
+                "lite",
                 "--max-iterations",
-                "16",
+                "1",
                 "--model-name",
                 "sonnet",
                 "--execute-file",
-                "agent/agent_with_state_reset.py",
-                "--run-eval"
+                "agent/agent_state.py",
+                "--num-worker",
+                "1"
             ]
         }
     ]

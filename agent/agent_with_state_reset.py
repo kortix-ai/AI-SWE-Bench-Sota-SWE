@@ -41,7 +41,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 - Always think about how changes in one area might impact other parts of the system.
 - Aim for solutions that maintain alignment with existing code patterns and adhere to relevant standards.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
-- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** Use the 'run_pytest' tool to run existing tests and verify that your changes do not cause regressions.
+- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
 - Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to cover edge cases.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
@@ -63,7 +63,7 @@ Can you help me implement the necessary changes to the repository so that the re
 - Your task is to make changes to the non-test files in the `/testbed` directory to ensure the <pr_description> is satisfied.
 - Analyze the issue thoroughly before making any changes.
 - After EVERY tool use, use <CHECK> to analyze the output and determine next steps.
-- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** Use the 'run_pytest' tool to run existing tests and verify that your changes do not cause regressions.
+- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
 - Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases.
 - After implementing changes, use <REVIEW> to:
   - Inspect the modified code.
@@ -80,14 +80,13 @@ Can you help me implement the necessary changes to the repository so that the re
 4. Examine related files, understand how they are written, and identify the root cause.
 5. Use <FIX> to consider multiple possible solutions, propose solutions, and pick the best one.
 6. Implement the fix directly, updating related parts of the code accordingly.
-7. Use the 'run_pytest' tool to run existing tests and ensure that your changes do not introduce regressions.
-8. Only after that, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases.
-9. Use <REVIEW> to thoroughly inspect the modified code:
+7. Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases.
+8. Use <REVIEW> to thoroughly inspect the modified code:
    - Determine if any additional updates are necessary.
    - Search for and address similar issues in related code sections.
    - Ensure that all changes are consistent throughout the codebase.
-10. Use <CRITICAL> to evaluate your changes for effectiveness, handling of edge cases, and absence of regressions.
-11. Report your findings or submit the fix.
+9. Use <CRITICAL> to evaluate your changes for effectiveness, handling of edge cases, and absence of regressions.
+10. Report your findings or submit the fix.
 
 **Current Workspace State:**
 <workspace_state>
@@ -126,14 +125,14 @@ continuation_system_prompt = """You are continuing your previous work as an auto
 - Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
 - After making changes, use <REVIEW> to inspect the code and decide if any additional updates are necessary to fully meet the requirements.
 - Maintain your checklist of tasks, marking each as completed when done.
-- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read and run them.** Use the 'run_pytest' tool to run existing tests and verify that your changes do not cause regressions.
+- Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
 - Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to cover edge cases.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
 - Be skeptical of your own work; revisit your changes to confirm their correctness.
 - You work AUTONOMOUSLY; never ask the user for additional information. ALWAYS use at least one tool.
 - If it doesn't work after multiple attempts, you can use the reset feature of EditTool to restore files for a fresh start, then examine the files again and propose a better, elegant solution.
-- If you modfied a non-test file. Please use 'view' to check the file again, and make sure to update relevant parts that might be affected by your changes
+- If you modified a non-test file, please use 'view' to check the file again, and make sure to update relevant parts that might be affected by your changes
 </IMPORTANT>
 """
 
@@ -154,9 +153,8 @@ This is a continuation of the previous task. You are working on implementing the
    - Determine if any additional updates are necessary.
    - Search for and address similar issues in related code sections.
    - Ensure that all changes are consistent throughout the codebase.
-6. Use the 'run_pytest' tool to run existing tests and ensure that your changes do not introduce regressions.
-7. Only after that, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to confirm that the error is fixed and handle edge cases.
-8. Use <CRITICAL> to evaluate whether your solution adheres to high-quality standards, handles all edge cases, and introduces no regressions.
+6. Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to confirm that the error is fixed and handle edge cases.
+7. Use <CRITICAL> to evaluate whether your solution adheres to high-quality standards, handles all edge cases, and introduces no regressions.
 
 **Current Workspace State:**
 <workspace_state>
@@ -186,12 +184,11 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible solutions, propose solutions, and pick the best one.
 6. [ ] Implement the fix directly, updating related parts of the code accordingly.
-7. [ ] Use 'run_pytest' tool to run existing tests and verify no regressions.
-8. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
-9. [ ] Review modified files and identify any dependent code that needs updates.
-10. [ ] Use <REVIEW> to ensure all changes are consistent and correct.
-11. [ ] Use <CRITICAL> to evaluate your changes for effectiveness and absence of regressions.
-12. [ ] Report findings or submit the fix."""
+7. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
+8. [ ] Review modified files and identify any dependent code that needs updates.
+9. [ ] Use <REVIEW> to ensure all changes are consistent and correct.
+10. [ ] Use <CRITICAL> to evaluate your changes for effectiveness and absence of regressions.
+11. [ ] Report findings or submit the fix."""
     }
     await state_manager.set('workspace_state', workspace_state)
 
@@ -335,13 +332,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                         print("Task completed via submit tool, stopping...")
                         agentops_session.end_session()
                         return
-                    elif tool_call['function']['name'] == 'edit_file_and_run':
-                        arguments = json.loads(tool_call['function']['arguments'])
-                        if arguments['command'] == 'str_replace':
-                            bash_command_arguments = {
-                                "command": f"git diff "
-                            }
-                            await thread_manager.execute_tool_and_add_message(thread_id, "git diff", 'bash_command', bash_command_arguments)
 
         if total_iterations < max_iterations:
             await thread_manager.add_to_history_only(thread_id, {

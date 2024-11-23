@@ -31,6 +31,10 @@ experiments/
 logs/
 
 submissions/
+new_agentpress/
 
 *.json
 *.log
+*.ipynb
+*.zip
+.vscode/

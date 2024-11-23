@@ -33,11 +33,10 @@ class ReportTool(Tool):
 4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible solutions, propose solutions, and pick the best one.
 6. [ ] Implement the fix directly, updating related parts of the code accordingly.
-7. [ ] Use 'run_pytest' tool to run existing tests and verify no regressions.
-8. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
-9. [ ] Review modified files and identify any dependent code that needs updates.
-10. [ ] Use "view" edited files again, and <REVIEW> to ensure all changes are consistent and correct.
-11. [ ] Report findings or submit the fix.""",
+7. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
+8. [ ] Review modified files and identify any dependent code that needs updates.
+9. [ ] Use "view" edited files again, and <REVIEW> to ensure all changes are consistent and correct.
+10. [ ] Report findings or submit the fix.""",
                                 "items": {"type": "string"}
                             },
                             "open_files_in_code_editor": {

@@ -72,16 +72,18 @@ class RepositoryTools(Tool):
         self.container_name = container_name
         self._bash_executor = BashExecutor(container_name)
         # Initialize workspace state
-        asyncio.create_task(self._init_workspace_state())
+        asyncio.create_task(self._init_workspace())
 
-    async def _init_workspace_state(self):
+    async def _init_workspace(self):
         """Initialize the workspace state with empty structures."""
-        workspace_state = {
-            "file_tree": {},           # Current directory structure
+        workspace = {
+            # "file_tree": {},           # Current directory structure
             "open_files": {},          # Currently open files and their contents
+            "open_folders": {},        # Currently open folders
             "terminal_session": [],    # Current terminal session output (last N commands)
+            "thinking_logs": []        # Logs for internal thoughts or notes
         }
-        await self.state_manager.set("workspace", workspace_state)
+        await self.state_manager.set("workspace", workspace)
 
     async def _parse_directory_listing(self, output: str) -> dict:
         """Parse directory listing output into a tree structure."""
@@ -190,51 +192,44 @@ class RepositoryTools(Tool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "paths": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "The file or directory paths to view."
+                    "path": {
+                        "type": "string",
+                        "description": "The file or directory path to view."
                     },
                     "depth": {
                         "type": "integer",
-                        "description": "The maximum directory depth to search for contents.",
+                        "description": "The maximum directory depth to search for contents (only used for directories).",
                         "default": 3
                     },
                 },
-                "required": ["paths"]
+                "required": ["path"]
             }
         }
     })
     @xml_schema(
         tag_name="view",
         mappings=[
-            {"param_name": "paths", "node_type": "attribute", "path": "."},
-            {"param_name": "depth", "node_type": "attribute", "path": "."}
+            {"param_name": "path", "node_type": "attribute", "path": "path"},
+            {"param_name": "depth", "node_type": "attribute", "path": "depth"}
         ],
         example='''
         <!-- Repository View Tool -->
-        <!-- View the contents of files or list directory contents with detailed explanations -->
+        <!-- View the contents of a file or list directory contents with detailed explanations -->
         
         <!-- Parameters Description:
-             - paths: Array of file or directory paths to view (REQUIRED)
-             - depth: Maximum directory depth to search for contents (default: 3)
+             - path: File or directory path to view (REQUIRED)
+             - depth: Maximum directory depth to search for contents (optional, only used for directories)
         -->
 
-        <!-- View a single file -->
-        <view paths="/testbed/src/main.py" depth="1" />
+        <!-- View a file -->
+        <view path="/testbed/.../main.py" />
 
-        <!-- View multiple files -->
-        <view paths="/testbed/src/main.py,/testbed/tests/test_main.py" depth="1" />
-
-        <!-- View directory contents -->
-        <view paths="/testbed/src" depth="3" />
-
-        <!-- View multiple paths with custom depth -->
-        <view paths="/testbed/src,/testbed/tests" depth="2" />
+        <!-- View directory contents with depth -->
+        <view path="/testbed" depth="3" />
 
         <!-- Important Notes:
-             - Paths should be absolute paths from repository root
-             - Default depth is 3 if not specified
+             - Path should be absolute path from repository root
+             - Depth parameter is ignored for file views
              - Hidden files and directories are automatically excluded
              - Common exclude patterns: .rst, .pyc files
              - Output includes line numbers for files
@@ -242,8 +237,17 @@ class RepositoryTools(Tool):
         -->
         '''
     )
-    async def view(self, paths: List[str], exclude_patterns: list = ['.rst', '.pyc'], depth: int = 3) -> ToolResult:
+    async def view(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = None) -> ToolResult:
         try:
+            # Convert to list with single path for compatibility with existing code
+            paths = [path]
+            
+            # Set depth to 1 for files, use provided depth or default 3 for directories
+            if os.path.isfile(path):
+                depth = 1
+            else:
+                depth = depth or 3
+            
             python_code = '''
 import os
 import fnmatch
@@ -345,97 +349,6 @@ if __name__ == '__main__':
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "run_pytest",
-            "description": (
-                "Run a existing specified test file using pytest, only relevant to the issue."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The path to the test file to execute."
-                    }
-                },
-                "required": ["file_path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="run_pytest",
-        mappings=[
-            {"param_name": "file_path", "node_type": "attribute", "path": "."}
-        ],
-        example='''
-        <!-- Repository Test Runner Tool -->
-        <!-- Run pytest on specified test files relevant to the issue -->
-        
-        <!-- Parameters Description:
-             - file_path: The path to the test file to execute (REQUIRED)
-        -->
-
-        <!-- Run a single test file -->
-        <run_pytest file_path="/testbed/tests/test_main.py" />
-
-        <!-- Important Notes:
-             - Test execution uses pytest with verbose output (-v)
-             - Tests stop on first failure (-x)
-             - Short traceback format is used (--tb=short)
-             - Cache is cleared before running (--cache-clear)
-             - Output includes test results and any errors
-             - Command is executed from /testbed directory
-        -->
-        '''
-    )
-    async def run_pytest(self, file_path: str) -> ToolResult:
-        """
-        Executes a pytest test file inside the Docker container.
-
-        Parameters:
-            file_path (str): The path to the test file to execute.
-
-        Returns:
-            ToolResult: The result of the test execution.
-        """
-        try:
-            # Construct the command to run the test
-            command = (
-                f"cd /testbed && "
-                f"python -W ignore -m pytest {file_path} "
-                f"-v -rF --failed-first -x --tb=short --no-header --quiet --cache-clear --color=no"
-            )
-
-            # Execute the command in the container
-            stdout, stderr, returncode = await self.execute_command_in_container(command)
-            success = returncode == 0
-
-            # Update terminal session
-            await self._update_terminal(command, stdout + stderr, success)
-
-            # Format output with command and proper tags
-            formatted_output = (
-                f"<command>{command}</command>\n"
-                f"<test_results>\n{stdout.strip()}\n</test_results>\n"
-            )
-
-            if success:
-                return self.success_response(formatted_output)
-            else:
-                error_output = (
-                    f"<command>{command}</command>\n"
-                    f"<test_results>\n{stdout.strip()}\n</test_results>\n"
-                    f"<errors>\n{stderr.strip()}\n</errors>\n"
-                )
-                return self.fail_response(error_output)
-
-        except Exception as e:
-            return self.fail_response(
-                f"<error>Error executing test: {str(e)}</error>\n"
-            )
-
-    @openapi_schema({
-        "type": "function",
-        "function": {
             "name": "submit",
             "description": "If all test files is working including edge cases, and existings tests and you are confident that the issue is resolve, submit the fix.",
             "parameters": {
@@ -466,7 +379,7 @@ if __name__ == '__main__':
         -->
         '''
     )
-    async def submit(self) -> ToolResult:
+    async def submit(self, ) -> ToolResult:
         """
         Signals that the task is completed.
 
@@ -474,3 +387,246 @@ if __name__ == '__main__':
             ToolResult: Success message indicating task completion.
         """
         return self.success_response("Task completed successfully.")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "open_file",
+            "description": "Open a file and add its content to the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to open."},
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="open_file",
+        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+        example='''
+        <!-- Open File Tool -->
+        <!-- Open a file and add its content to the workspace state -->
+        
+        <!-- Parameters:
+             - path: The file path to open (REQUIRED)
+        -->
+        <open_file path="/testbed/src/main.py" />
+        '''
+    )
+    async def open_file(self, path: str) -> ToolResult:
+        try:
+            command = f"cat {path}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            if returncode == 0:
+                await self._update_open_file(path, stdout)
+                return self.success_response(f"File {path} opened successfully.")
+            else:
+                return self.fail_response(f"Failed to open file {path}: {stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error opening file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "close_file",
+            "description": "Close a file and remove its content from the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to close."},
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="close_file",
+        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+        example='''
+        <!-- Close File Tool -->
+        <!-- Close a file and remove its content from the workspace state -->
+        
+        <!-- Parameters:
+             - path: The file path to close (REQUIRED)
+        -->
+        <close_file path="/testbed/src/main.py" />
+        '''
+    )
+    async def close_file(self, path: str) -> ToolResult:
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if path in workspace["open_files"]:
+                del workspace["open_files"][path]
+                await self.state_manager.set("workspace", workspace)
+                return self.success_response(f"File {path} closed successfully.")
+            else:
+                return self.fail_response(f"File {path} is not open.")
+        except Exception as e:
+            return self.fail_response(f"Error closing file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "Create a new file with the specified content and add it to the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to create."},
+                    "content": {"type": "string", "description": "The content to write into the file."}
+                },
+                "required": ["path", "content"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="create_file",
+        mappings=[
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "content", "node_type": "text", "path": "."}
+        ],
+        example='''
+        <!-- Create File Tool -->
+        <!-- Create a new file with specified content -->
+        
+        <!-- Parameters:
+             - path: The file path to create (REQUIRED)
+             - content: The content to write into the file (REQUIRED)
+        -->
+        <create_file path="/testbed/src/new_file.py">
+        print("Hello, World!")
+        </create_file>
+        '''
+    )
+    async def create_file(self, path: str, content: str) -> ToolResult:
+        try:
+            encoded_content = base64.b64encode(content.encode()).decode()
+            command = f"echo {encoded_content} | base64 -d > {path}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            if returncode == 0:
+                await self._update_open_file(path, content)
+                return self.success_response(f"File {path} created successfully.")
+            else:
+                return self.fail_response(f"Failed to create file {path}: {stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error creating file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Edit an existing file by replacing specified strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to edit."},
+                    "replacements": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "old_string": {"type": "string"},
+                                "new_string": {"type": "string"}
+                            },
+                            "required": ["old_string", "new_string"]
+                        },
+                        "description": "List of string replacements to perform."
+                    }
+                },
+                "required": ["path", "replacements"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="edit_file",
+        mappings=[
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "replacements", "node_type": "child", "path": "."}
+        ],
+        example='''
+        <!-- Edit File Tool -->
+        <!-- Edit an existing file by replacing specified strings -->
+        
+        <!-- Parameters:
+             - path: The file path to edit (REQUIRED)
+             - replacements: List of string replacements (REQUIRED)
+        -->
+        <edit_file path="/testbed/src/main.py">
+            <replacements>
+                <replacement>
+                    <old_string>foo</old_string>
+                    <new_string>bar</new_string>
+                </replacement>
+                <replacement>
+                    <old_string>hello</old_string>
+                    <new_string>world</new_string>
+                </replacement>
+            </replacements>
+        </edit_file>
+        '''
+    )
+    async def edit_file(self, path: str, replacements: List[dict]) -> ToolResult:
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if path in workspace["open_files"]:
+                content = workspace["open_files"][path]["content"]
+                for rep in replacements:
+                    old_string = rep.get("old_string")
+                    new_string = rep.get("new_string")
+                    content = content.replace(old_string, new_string)
+                # Update the file content in the container
+                encoded_content = base64.b64encode(content.encode()).decode()
+                command = f"echo {encoded_content} | base64 -d > {path}"
+                stdout, stderr, returncode = await self._bash_executor.execute(command)
+                if returncode == 0:
+                    await self._update_open_file(path, content)
+                    return self.success_response(f"File {path} edited successfully.")
+                else:
+                    return self.fail_response(f"Failed to edit file {path}: {stderr}")
+            else:
+                return self.fail_response(f"File {path} is not open.")
+        except Exception as e:
+            return self.fail_response(f"Error editing file {path}: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Run a shell command in the terminal and update the workspace state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The shell command to execute."}
+                },
+                "required": ["command"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="run_command",
+        mappings=[{"param_name": "command", "node_type": "text", "path": "."}],
+        example='''
+        <!-- Run Command Tool -->
+        <!-- Run a shell command in the terminal -->
+        
+        <!-- Parameters:
+             - command: The shell command to execute (REQUIRED)
+        -->
+        <run_command>
+        ls -la /testbed/src
+        </run_command>
+        '''
+    )
+    async def run_command(self, command: str) -> ToolResult:
+        try:
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            success = returncode == 0
+            await self._update_terminal(command, stdout + stderr, success)
+            if success:
+                return self.success_response(f"Command executed successfully:\n{stdout}")
+            else:
+                return self.fail_response(f"Command failed with error:\n{stderr}")
+        except Exception as e:
+            return self.fail_response(f"Error executing command: {str(e)}")
