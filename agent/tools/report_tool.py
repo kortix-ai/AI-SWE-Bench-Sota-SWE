@@ -32,7 +32,7 @@ class ReportTool(Tool):
 3. [ ] Examine related files and understand code patterns, relevant functions.
 4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible solutions, propose solutions, and pick the best one.
-6. [ ] Implement the fix directly, updating related parts of the code accordingly.
+6. [ ] Implement the fix directly to the code base, updating related parts of the code accordingly.
 7. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
 8. [ ] Review modified files and identify any dependent code that needs updates.
 9. [ ] Use "view" edited files again, and <REVIEW> to ensure all changes are consistent and correct.

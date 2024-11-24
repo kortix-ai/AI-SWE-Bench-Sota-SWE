@@ -18,21 +18,17 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
   - <OBSERVE>: Note observations about the codebase, files, or errors.
   - <REASON>: Analyze the issue, consider causes, evaluate potential solutions, and assess how changes might affect other parts of the codebase. Always consider code interdependencies.
   - <FIX>: Propose multiple solutions with short code update snippets (```file_path\n{{edit1}}\n\n{{edit2}}...), prioritize changes that align with existing code patterns and standards. Analyze the quality and simplicity of each proposed solution, and select the one that is most effective and compliant with standards. With that choice, reflect to the original file to check if any other parts should be updated accordingly.
-  - <PLAN>: Outline your intended approach before implementing changes.
   - <ACTION>: Document the actions you take, such as modifying files or running commands.
   - <CHECK>: Verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
   - <REVIEW>: Inspect the modified code to ensure it meets requirements and determine if further updates are necessary.
   - <CRITICAL>: Evaluate the overall quality of your work, ensuring concise changes with no regressions.
 - Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
-- After making changes, use <REVIEW> to:
-  - Inspect the code thoroughly.
-  - Identify any other parts of the code that might be affected by your changes.
-  - Update related functions or modules to ensure consistency and correctness.
 - Always think about how changes in one area might impact other parts of the system.
+- After picking the best solution, implement the fix directly to the code base before creating and running any reproduce or tests.
 - Aim for solutions that maintain alignment with existing code patterns and adhere to relevant standards.
 - Maintain a checklist of tasks to track your progress, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
-- Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to cover edge cases.
+- Only after implementing the fix and ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to cover edge cases.
 - Ensure that these test scripts print out whether they succeeded or failed when run.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
@@ -56,11 +52,12 @@ Can you help me implement the necessary changes to the repository so that the re
 - Analyze the issue thoroughly before making any changes.
 - After EVERY tool use, use <CHECK> to analyze the output and determine next steps.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
-- Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
+- After picking the best solution, implement the fix directly to the code base before creating and running any reproduce or tests.
+- Only after implementing the fix and ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
 - After implementing changes, use <REVIEW> to:
   - Inspect the modified code to ensure it meets requirements.
   - Determine if any additional updates are necessary.
-- Use the following tags to structure your work: <OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>.
+- Use the following tags to structure your work: <OBSERVE>, <REASON>, <FIX>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>.
 
 **Suggested Steps:**
 
@@ -69,8 +66,8 @@ Can you help me implement the necessary changes to the repository so that the re
 3. Analyze the PR description to understand the issue in detail.
 4. Examine related files, understand how they are written, and identify the root cause.
 5. Use <FIX> to consider multiple possible solutions, propose solutions, and pick the best one.
-6. Implement the fix directly, updating related parts of the code accordingly.
-7. Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
+6. Implement the fix directly to the code base, updating related parts of the code accordingly.
+7. Only after implementing the fix, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test if the fix is working and to handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
 8. Use <REVIEW> to thoroughly inspect the modified code:
    - Determine if any additional updates are necessary.
    - Search for and address similar issues in related code sections.
@@ -98,16 +95,16 @@ continuation_system_prompt = """You are continuing your previous work as an auto
   - <OBSERVE>: Note new observations about the codebase, files, or errors.
   - <REASON>: Critically analyze the current situation, consider causes, evaluate potential solutions, and assess the impact of changes on other code parts. Always check for code interdependencies.
   - <FIX>: Propose additional solutions if necessary, prioritizing effective changes. A fix may involve changes to one or multiple files.
-  - <PLAN>: Update your approach before implementing further changes.
   - <ACTION>: Document additional actions you take.
   - <CHECK>: Verify and analyze the results after EVERY tool use. Always examine the output for errors, unexpected behavior, or important information.
   - <REVIEW>: Inspect the modified code to ensure it meets requirements and determine if further updates are necessary.
   - <CRITICAL>: Evaluate the overall quality of your work with a critical mindset, ensuring concise changes with no regressions.
 - Always use <CHECK> after receiving tool results to analyze the output and determine next steps.
+- After picking the best solution, implement the fix directly to the code base before creating and running any reproduce or tests.
 - After making changes, use <REVIEW> to inspect the code and decide if any additional updates are necessary to fully meet the requirements.
 - Maintain your checklist of tasks, marking each as completed when done.
 - Ensure that your changes do not affect existing test cases. **Do not modify any existing test files; you can read them.**
-- Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test (e.g., `python reproduce_error.py`) if the fix is working and to cover edge cases.
+- Only after implementing the fix and ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to test (e.g., `python reproduce_error.py`) if the fix is working and to cover edge cases.
 - Ensure that these test scripts print out whether they succeeded or failed when run.
 - Think deeply about edge cases and how your changes might impact other parts of the system.
 - Always ensure that any changes comply with relevant standards and do not violate existing specifications.
@@ -129,18 +126,17 @@ This is a continuation of the previous task. You are working on implementing the
 
 1. Review the current workspace state and note your accomplishments so far.
 2. Re-evaluate the issue in light of the work done and adjust your approach if necessary.
-3. Update your plan based on your observations and reasoning.
-4. Continue implementing the fix, ensuring compliance with standards, high quality, and no impact on existing functionality.
-5. Use <REVIEW> to inspect the modified code to ensure it meets requirements and determine if further updates are necessary.
-6. Only after ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to confirm that the error is fixed and handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
-7. Use <CRITICAL> to evaluate whether your solution adheres to high-quality standards, handles all edge cases, and introduces no regressions.
+3. After picking the best solution, implement the fix directly to the code base, ensuring compliance with standards, high quality, and no impact on existing functionality.
+4. Use <REVIEW> to inspect the modified code to ensure it meets requirements and determine if further updates are necessary.
+5. Only after implementing the fix and ensuring existing tests pass, create your own scripts (e.g., `reproduce_error.py`, `edge_cases.py`) to confirm that the error is fixed and handle edge cases. Ensure that these test scripts print out whether they succeeded or failed when run.
+6. Use <CRITICAL> to evaluate whether your solution adheres to high-quality standards, handles all edge cases, and introduces no regressions.
 
 **Current Workspace State:**
 <workspace_state>
 {workspace_state}
 </workspace_state>
 
-Remember to build upon your previous work rather than starting over. Use the tags (<OBSERVE>, <REASON>, <FIX>, <PLAN>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>) to structure your thought process and responses.
+Remember to build upon your previous work rather than starting over. Use the tags (<OBSERVE>, <REASON>, <FIX>, <ACTION>, <CHECK>, <REVIEW>, <CRITICAL>) to structure your thought process and responses.
 """
 
 #------------------------------------------------------------
@@ -162,7 +158,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 3. [ ] Examine related files and understand code patterns, relevant functions.
 4. [ ] Analyze root cause with related files.
 5. [ ] Consider multiple possible solutions, propose solutions, and pick the best one.
-6. [ ] Implement the fix directly, updating related parts of the code accordingly.
+6. [ ] Implement the fix directly to the code base, updating related parts of the code accordingly.
 7. [ ] Create 'reproduce_error.py' and 'edge_cases.py' to test if the fix is working and to handle edge cases.
 8. [ ] Review modified files and identify any dependent code that needs updates.
 9. [ ] Use <REVIEW> to inspect the code for consistency and correctness.
