@@ -52,9 +52,9 @@ class BashExecutor:
                     pass
                 return '', 'Command execution timed out after 5 minutes', 1
                 
-            # Decode outputs
-            stdout_str = stdout.decode().strip() if stdout else ''
-            stderr_str = stderr.decode().strip() if stderr else ''
+            # Decode outputs with UTF-8 encoding and replace errors
+            stdout_str = stdout.decode('utf-8', errors='replace').strip() if stdout else ''
+            stderr_str = stderr.decode('utf-8', errors='replace').strip() if stderr else ''
             
             # Handle empty output
             if not stdout_str and not stderr_str and process.returncode == 0:
@@ -161,7 +161,10 @@ class RepositoryTools(Tool):
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
-        return stdout.decode(), stderr.decode(), process.returncode
+        # Decode outputs with UTF-8 encoding and replace errors
+        stdout_decoded = stdout.decode('utf-8', errors='replace')
+        stderr_decoded = stderr.decode('utf-8', errors='replace')
+        return stdout_decoded, stderr_decoded, process.returncode
 
     async def _extract_file_content(self, output: str) -> str:
         """Extract file content from view output."""
@@ -310,7 +313,7 @@ if __name__ == '__main__':
     main()
 '''
             # Encode the Python script and arguments
-            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
+            code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('utf-8')
             paths_str = ','.join(paths)
             exclude_str = ','.join(exclude_patterns)
             
