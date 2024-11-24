@@ -339,7 +339,7 @@ old_str = base64.b64decode(sys.argv[2]).decode('utf-8')
 new_str = base64.b64decode(sys.argv[3]).decode('utf-8')
 
 # Read the file content
-with open(path, 'r') as f:
+with open(path, 'r', encoding='utf-8') as f:
     content = f.read()
 
 occurrences = content.count(old_str)
@@ -347,36 +347,24 @@ if occurrences == 0:
     print(f"The string '{{old_str}}' was not found in the file.", file=sys.stderr)
     sys.exit(1)
 elif occurrences > 1:
-    print(f"The string '{{old_str}}' was found multiple times in the file. Please ensure it is unique.", file=sys.stderr)
+    print(f"The string '{{old_str}}' was found multiple times in the file. Please add more context to make it unique.", file=sys.stderr)
     sys.exit(1)
 
 # Save current content for undo
 history_dir = '/tmp/edit_tool_history'
 os.makedirs(history_dir, exist_ok=True)
 history_file = os.path.join(history_dir, base64.b64encode(path.encode()).decode())
-with open(history_file, 'a') as hf:
+with open(history_file, 'a', encoding='utf-8') as hf:
     hf.write(base64.b64encode(content.encode()).decode() + '\\n')
 
 # Replace the old string with the new string
 new_content = content.replace(old_str, new_str, 1)
 
 # Write the new content back to the file
-with open(path, 'w') as f:
+with open(path, 'w', encoding='utf-8') as f:
     f.write(new_content)
 
 print(f"Successfully replaced string in `" + path + "`.")
-
-# Print the diff for logging
-# diff = difflib.unified_diff(
-#     content.splitlines(),
-#     new_content.splitlines(),
-#     fromfile='original',
-#     tofile='modified',
-#     lineterm=''
-# )
-# print("Changes:")
-# for line in diff:
-#     print(line)
 '''
 
             # Encode the Python code to base64

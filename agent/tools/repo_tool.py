@@ -290,7 +290,7 @@ def view_path(path: str, depth: int, exclude_patterns: List[str], document_index
         print(f'<source>{path}</source>')
         print('<document_content>')
         try:
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 for i, line in enumerate(f, 1):
                     print(f"{i:6d}\t{line}", end='')
         except Exception as e:
