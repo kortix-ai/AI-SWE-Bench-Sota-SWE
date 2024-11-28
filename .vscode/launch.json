@@ -20,7 +20,7 @@
                 "--execute-file",
                 "agent/agent_state.py",
                 "--num-worker",
-                "1"
+                "1",
             ]
         }
     ]

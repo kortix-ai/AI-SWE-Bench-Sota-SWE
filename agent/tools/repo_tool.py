@@ -66,23 +66,25 @@ class BashExecutor:
             return '', f"Error executing command: {str(e)}", 1
 
 class RepositoryTools(Tool):
-    def __init__(self, container_name: str, state_file: str):
+    def __init__(self, container_name: str, state_manager: StateManager):
         super().__init__()
-        self.state_manager = StateManager(store_file=state_file)
+        self.state_manager = state_manager
         self.container_name = container_name
         self._bash_executor = BashExecutor(container_name)
-        # Initialize workspace state
-        asyncio.create_task(self._init_workspace())
+        # Remove the asynchronous task creation
+        # asyncio.create_task(self._init_workspace())
 
     async def _init_workspace(self):
-        """Initialize the workspace state with empty structures."""
-        workspace = {
-            "open_folders": {},        # Currently open folders
-            "open_files": {},          # Currently open files
-            "terminal_session": [],    # Current terminal session output (last N commands)
-            "thinking_logs": [],        # Logs for internal thoughts or notes
-        }
-        await self.state_manager.set("workspace", workspace)
+        """Initialize the workspace state with empty structures if not already initialized."""
+        workspace = await self.state_manager.get("workspace")
+        if workspace is None:
+            workspace = {
+                "open_folders": {},        # Currently open folders
+                "open_files": {},          # Currently open files
+                "terminal_session": [],    # Current terminal session output (last N commands)
+                "thinking_logs": [],        # Logs for internal thoughts or notes
+            }
+            await self.state_manager.set("workspace", workspace)
 
     async def _update_open_file(self, path: str, content: str):
         """Update or add a file in the open files list."""

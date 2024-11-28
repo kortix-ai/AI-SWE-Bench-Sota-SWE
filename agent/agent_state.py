@@ -14,10 +14,12 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 
 {xml_format}
 
-- You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
-- Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
+- You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 - Proceed step-by-step, use <OBSERVE> and <REASON> tags to document your thought process.
+- Only make ONE ACTION at a time.
 """
+# - You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
+# - Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
 
 user_prompt = """
 I've uploaded a Python code repository in the directory `/testbed`. Consider the following PR description:
@@ -30,6 +32,9 @@ Can you help me implement the necessary changes to the repository so that the re
 
 The current state of the repository is as follows:
 {workspace}
+
+- You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
+- Only make ONE ACTION at a time.
 """
 
 #------------------------------------------------------------
@@ -44,16 +49,18 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     state_manager = StateManager(store_file=state_file)
 
-    workspace = {}
-    await state_manager.set('workspace', workspace)
-
     with open(problem_file, 'r') as f:
         instance_data = json.load(f)[0]
     problem_statement = instance_data['problem_statement']
     instance_id = instance_data['instance_id']
 
     from tools.repo_tool import RepositoryTools
-    thread_manager.add_tool(RepositoryTools, container_name=container_name, state_file=state_file)
+    thread_manager.add_tool(RepositoryTools, container_name=container_name, state_manager=state_manager)
+    repo_tool = RepositoryTools(container_name=container_name, state_manager=state_manager)
+
+    # Initialize the workspace explicitly
+    await repo_tool._init_workspace()
+
     # from tools.bash_tool import BashTool
     # thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
     # from tools.edit_and_run_tool import EditTool
@@ -82,7 +89,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             await thread_manager.reset_messages(thread_id)
 
             # Retrieve the current workspace
-            workspace = await RepositoryTools.format_workspace_xml()
+            workspace = await repo_tool.format_workspace_xml()
             await thread_manager.add_message(thread_id, {
                 "role": "user",
                 "content": user_prompt.format(problem_statement=problem_statement, workspace=workspace)
