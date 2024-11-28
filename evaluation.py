@@ -49,6 +49,25 @@ def prepare_dataset(dataset: pd.DataFrame, output_file: str, eval_n_limit: int =
     ]
     print(f'Finished instances: {len(finished_ids)}, Remaining instances: {len(new_dataset)}')
 
+    # Check if all instances are finished
+    if len(new_dataset) == 0:
+        while True:
+            response = input("All instances have been evaluated. Do you want to re-run the evaluation? (y/n): ")
+            if response.lower() == 'y':
+                print("Restarting evaluation for all instances...")
+                new_dataset = dataset.to_dict('records')
+                # Backup the existing output file
+                if os.path.exists(output_file):
+                    backup_file = output_file + '.backup'
+                    os.rename(output_file, backup_file)
+                    print(f"Backed up existing results to {backup_file}")
+                break
+            elif response.lower() == 'n':
+                print("Exiting evaluation...")
+                sys.exit(0)
+            else:
+                print("Please enter 'y' or 'n'")
+
     if eval_n_limit and eval_n_limit > 0:
         new_dataset = new_dataset[:eval_n_limit]
         print(f'Limiting evaluation to first {eval_n_limit} instances.')
@@ -59,8 +78,8 @@ def run_evaluation(
     dataset: pd.DataFrame,
     output_file: str,
     output_dir: str,
-    num_workers: int,
     process_instance_func,
+    num_workers: int,
 ):
     from multiprocessing import Pool
     from tqdm import tqdm
