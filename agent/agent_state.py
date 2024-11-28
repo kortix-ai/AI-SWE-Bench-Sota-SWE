@@ -29,9 +29,7 @@ I've uploaded a Python code repository in the directory `/testbed`. Consider the
 Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
 
 The current state of the repository is as follows:
-<workspace>
 {workspace}
-</workspace>
 """
 
 #------------------------------------------------------------
@@ -84,12 +82,10 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             await thread_manager.reset_messages(thread_id)
 
             # Retrieve the current workspace
-            workspace = await state_manager.get('workspace')
-            workspace_str = json.dumps(workspace)
-
+            workspace = await RepositoryTools.format_workspace_xml()
             await thread_manager.add_message(thread_id, {
                 "role": "user",
-                "content": user_prompt.format(problem_statement=problem_statement, workspace=workspace_str)
+                "content": user_prompt.format(problem_statement=problem_statement, workspace=workspace)
             })
 
             response = await thread_manager.run_thread(

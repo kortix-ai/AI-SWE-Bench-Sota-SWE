@@ -78,45 +78,10 @@ class RepositoryTools(Tool):
         """Initialize the workspace state with empty structures."""
         workspace = {
             "open_folders": {},        # Currently open folders
-            "open_files": {},          # Currently open files and their contents
+            "open_files": {},          # Currently open files
             "terminal_session": [],    # Current terminal session output (last N commands)
             "thinking_logs": [],        # Logs for internal thoughts or notes
-            "action_logs": []          # Logs for actions taken by the agent
         }
-        await self.state_manager.set("workspace", workspace)
-
-    async def _parse_directory_listing(self, output: str) -> dict:
-        """Parse directory listing output into a tree structure."""
-        file_tree = {}
-        
-        for line in output.strip().split('\n'):
-            if line.startswith('<directory') or line.startswith('</directory'):
-                continue
-                
-            # Clean and normalize path
-            path = line.strip()
-            if path.startswith('/testbed/'):
-                path = path[9:]  # Remove /testbed/ prefix
-            if not path:
-                continue
-                
-            # Build tree structure
-            parts = path.split('/')
-            current = file_tree
-            for i, part in enumerate(parts):
-                if i == len(parts) - 1:
-                    current[part] = "file"
-                else:
-                    if part not in current:
-                        current[part] = {}
-                    current = current[part]
-        
-        return file_tree
-
-    async def _update_file_tree(self, file_tree: dict):
-        """Update the file tree in workspace state."""
-        workspace = await self.state_manager.get("workspace")
-        workspace["file_tree"] = file_tree
         await self.state_manager.set("workspace", workspace)
 
     async def _update_open_file(self, path: str, content: str):
@@ -181,6 +146,28 @@ class RepositoryTools(Tool):
                 content_lines.append(line.split('\t', 1)[1])
         
         return '\n'.join(content_lines)
+
+    async def _update_open_folder(self, path: str, content: str):
+        """Update or add a folder in the open folders list."""
+        workspace = await self.state_manager.get("workspace")
+        workspace["open_folders"][path] = content
+        await self.state_manager.set("workspace", workspace)
+
+    async def format_workspace_xml(self) -> str:
+        """Format the workspace into an XML string for the Agent."""
+        workspace = await self.state_manager.get("workspace")
+        xml_output = "<workspace>\n"
+        xml_output += "  <open_folders>\n"
+        for path, output in workspace["open_folders"].items():
+            xml_output += f"    <folder path=\"{path}\">\n{output}\n    </folder>\n"
+        xml_output += "  </open_folders>\n"
+        xml_output += "  <open_files>\n"
+        for path, file_info in workspace["open_files"].items():
+            content = file_info["content"]
+            xml_output += f"    <file path=\"{path}\">\n{content}\n    </file>\n"
+        xml_output += "  </open_files>\n"
+        xml_output += "</workspace>"
+        return xml_output
 
     @openapi_schema({
         "type": "function",
@@ -328,18 +315,13 @@ if __name__ == '__main__':
             success = returncode == 0
 
             if success and not stderr.strip():
-                for path in paths:
-                    if os.path.isdir(path):
-                        # Update file tree from directory listing
-                        file_tree = await self._parse_directory_listing(stdout)
-                        await self._update_file_tree(file_tree)
-                    else:
-                        # For files, extract content and add to open_files
-                        content = await self._extract_file_content(stdout)
-                        if content:
-                            await self._update_open_file(path, content)
-                
-                return self.success_response(str(stdout.strip()))
+                if os.path.isdir(path):
+                    # Update open_folders with the directory contents
+                    await self._update_open_folder(path, stdout.strip())
+                else:
+                    # Add file content to open_files
+                    await self._update_open_file(path, stdout.strip())
+                return self.success_response(stdout.strip())
             else:
                 return self.fail_response(f"View command failed: {stderr.strip()}")
         
