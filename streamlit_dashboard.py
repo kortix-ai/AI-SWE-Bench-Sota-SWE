@@ -161,7 +161,7 @@ def display_run_details(run_data: List[Dict]):
                 else:
                     # Add iteration number for assistant messages
                     if role == "assistant":
-                        st.markdown(f"**[{assistant_count}]** {formatted_content}")
+                        st.code(f"[{assistant_count}] {formatted_content}")
                     else:
                         st.markdown(formatted_content)
                 
