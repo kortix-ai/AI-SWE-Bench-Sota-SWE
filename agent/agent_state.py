@@ -16,7 +16,7 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 
 - You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 - Proceed step-by-step, use <OBSERVE> and <REASON> tags to document your thought process.
-- Only make ONE ACTION at a time.
+- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 """
 # - You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 # - Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
@@ -33,10 +33,12 @@ Can you help me implement the necessary changes to the repository so that the re
 The current state of the repository is as follows:
 {workspace}
 
-- You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
-- Only make ONE ACTION at a time.
+- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
+- Make sure you have the all relevant context before making any changes.
 """
+# - Remember to close irrelevant folders or files that do not relevant to to problem.
 
+# - Only make MULTIPLE ACTIONs at a time, but you must wait for 
 #------------------------------------------------------------
 
 @observe()

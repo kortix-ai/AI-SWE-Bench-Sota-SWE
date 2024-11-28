@@ -141,20 +141,32 @@ class XMLToolParser(ToolParserBase):
 
         while pos < length:
             # Find the next start tag for any registered tag
-            match = None
+            match_found = False
+            earliest_pos = length
+            matched_tag_name = None
+
             for tag_name in self.tool_registry.xml_tools.keys():
                 start_pattern = f'<{tag_name}'
                 tag_pos = content.find(start_pattern, pos)
-                if tag_pos != -1 and (match is None or tag_pos < match[0]):
-                    match = (tag_pos, tag_name)
-            if not match:
-                break
-            start_pos, tag_name = match
+                if tag_pos != -1 and tag_pos < earliest_pos:
+                    earliest_pos = tag_pos
+                    matched_tag_name = tag_name
+                    match_found = True
+
+            if not match_found:
+                # No more tags found, move pos forward
+                pos += 1
+                continue
+
+            start_pos = earliest_pos
+            tag_name = matched_tag_name
             # Find end of the opening tag
             tag_end = content.find('>', start_pos)
             if tag_end == -1:
+                # Move past '<' and continue
                 pos = start_pos + 1
                 continue
+
             # Check if it's a self-closing tag
             is_self_closing = content[tag_end - 1] == '/'
             if is_self_closing:
@@ -190,7 +202,9 @@ class XMLToolParser(ToolParserBase):
                     xml_chunk = content[start_pos:pos]
                     chunks.append(xml_chunk)
                 else:
+                    # Unable to find closing tag, move pos forward
                     pos = start_pos + 1
+
         return chunks
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:

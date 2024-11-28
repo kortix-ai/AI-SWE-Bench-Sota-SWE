@@ -376,8 +376,10 @@ if __name__ == '__main__':
             command = f"cat {path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                await self._update_open_item(path, stdout)
-                return self.success_response(f"Item {path} opened successfully.")
+                # Format output with tags
+                formatted_output = f'<file path="{path}">\n{stdout}\n</file>'
+                await self._update_open_item(path, formatted_output)
+                return self.success_response(formatted_output)
             else:
                 return self.fail_response(f"Failed to open item {path}: {stderr}")
         except Exception as e:
