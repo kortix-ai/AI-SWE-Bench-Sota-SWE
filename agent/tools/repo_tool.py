@@ -504,7 +504,7 @@ if __name__ == '__main__':
         tag_name="edit_file",
         mappings=[
             {"param_name": "path", "node_type": "attribute", "path": "."},
-            {"param_name": "replacements", "node_type": "child", "path": "."}
+            {"param_name": "replacements", "node_type": "element", "path": "replacements"}
         ],
         example='''
         <!-- Edit File Tool -->
@@ -528,14 +528,21 @@ if __name__ == '__main__':
         </edit_file>
         '''
     )
-    async def edit_item(self, path: str, replacements: List[dict]) -> ToolResult:
+    async def edit_file(self, path: str, replacements: dict) -> ToolResult:
         try:
             workspace = await self.state_manager.get("workspace")
             if path in workspace["open_items"]:
                 content = workspace["open_items"][path]["content"]
-                for rep in replacements:
-                    old_string = rep.get("old_string")
-                    new_string = rep.get("new_string")
+                # Extract the list of replacements
+                replacement_list = replacements.get('replacement')
+                if not replacement_list:
+                    return self.fail_response("No replacements provided.")
+                # Ensure replacement_list is a list
+                if not isinstance(replacement_list, list):
+                    replacement_list = [replacement_list]
+                for rep in replacement_list:
+                    old_string = rep.get("old_string", "")
+                    new_string = rep.get("new_string", "")
                     content = content.replace(old_string, new_string)
                 # Update the file content in the container
                 encoded_content = base64.b64encode(content.encode()).decode()

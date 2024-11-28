@@ -9,6 +9,7 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 from agentpress.base_processors import ToolParserBase
 import json
+import xml.etree.ElementTree as ET
 import re
 from agentpress.tool_registry import ToolRegistry
 
@@ -207,6 +208,23 @@ class XMLToolParser(ToolParserBase):
 
         return chunks
 
+    def _xml_element_to_dict(self, element):
+        """Recursively convert an ElementTree element into a dict."""
+        if len(element) == 0:
+            # No child elements
+            return element.text or ''
+        result = {}
+        for child in element:
+            child_result = self._xml_element_to_dict(child)
+            if child.tag in result:
+                # Multiple children with same tag, make a list
+                if not isinstance(result[child.tag], list):
+                    result[child.tag] = [result[child.tag]]
+                result[child.tag].append(child_result)
+            else:
+                result[child.tag] = child_result
+        return result
+
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
         """Parse XML chunk into tool call format.
         
@@ -255,8 +273,19 @@ class XMLToolParser(ToolParserBase):
                     elif mapping.node_type == "element":
                         content, remaining_chunk = self._extract_tag_content(remaining_chunk, mapping.path)
                         if content is not None:
-                            params[mapping.param_name] = content.strip()
-                            logging.info(f"Found element {mapping.path} -> {mapping.param_name}")
+                            # Check if content contains XML tags
+                            if '<' in content and '>' in content:
+                                # Parse the content as XML
+                                try:
+                                    element = ET.fromstring(f'<{mapping.path}>{content}</{mapping.path}>')
+                                    params[mapping.param_name] = self._xml_element_to_dict(element)
+                                    logging.info(f"Parsed element {mapping.path} into structured data for {mapping.param_name}")
+                                except Exception as e:
+                                    logging.error(f"Error parsing XML content for {mapping.param_name}: {e}")
+                            else:
+                                # Content is plain text
+                                params[mapping.param_name] = content.strip()
+                                logging.info(f"Found element {mapping.path} -> {mapping.param_name}")
                     
                     elif mapping.node_type == "content":
                         if mapping.path == ".":
