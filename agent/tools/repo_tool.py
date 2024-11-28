@@ -82,6 +82,14 @@ class RepositoryTools(Tool):
                 "thinking_logs": [],        # Logs for internal thoughts or notes
             }
             await self.state_manager.set("workspace", workspace)
+            # Add initial view of /testbed
+            result = await self.view_folder(path="/testbed", depth=1)
+            if result.success:
+                workspace["open_items"]["/testbed"] = {
+                    "content": result.output,
+                    "last_modified": datetime.now().isoformat()
+                }
+            await self.state_manager.set("workspace", workspace)
 
     async def _update_open_item(self, path: str, content: str):
         """Update or add an item in the open items list."""

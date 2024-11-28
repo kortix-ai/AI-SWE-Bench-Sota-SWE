@@ -14,9 +14,9 @@ system_prompt = """You are an autonomous expert software engineer focused on imp
 
 {xml_format}
 
+- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 - You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 - Proceed step-by-step, use <OBSERVE> and <REASON> tags to document your thought process.
-- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 """
 # - You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 # - Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
