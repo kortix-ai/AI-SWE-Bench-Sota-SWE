@@ -158,20 +158,20 @@ class RepositoryTools(Tool):
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "view",
+            "name": "view_folder",
             "description": (
-                "View the contents of a file or list the contents of a directory in the repository with detailed explanations."
+                "List the contents of a directory in the repository with detailed explanations."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "The file or directory path to view."
+                        "description": "The directory path to view."
                     },
                     "depth": {
                         "type": "integer",
-                        "description": "The maximum directory depth to search for contents (only used for directories).",
+                        "description": "The maximum directory depth to search for contents.",
                         "default": 3
                     },
                 },
@@ -180,37 +180,32 @@ class RepositoryTools(Tool):
         }
     })
     @xml_schema(
-        tag_name="view",
+        tag_name="view_folder",
         mappings=[
             {"param_name": "path", "node_type": "attribute", "path": "path"},
             {"param_name": "depth", "node_type": "attribute", "path": "depth"}
         ],
         example='''
-        <!-- Repository View Tool -->
-        <!-- View the contents of a file or list directory contents with detailed explanations -->
+        <!-- Repository View Folder Tool -->
+        <!-- List directory contents with detailed explanations -->
         
         <!-- Parameters Description:
-             - path: File or directory path to view (REQUIRED)
-             - depth: Maximum directory depth to search for contents (optional, only used for directories)
+             - path: Directory path to view (REQUIRED)
+             - depth: Maximum directory depth to search for contents (optional)
         -->
 
-        <!-- View a file -->
-        <view path="/testbed/.../example.py" />
-
         <!-- View directory contents with depth -->
-        <view path="/testbed" depth="3" />
+        <view_folder path="/testbed" depth="3" />
 
         <!-- Important Notes:
              - Path should be absolute path from repository root
-             - Depth parameter is ignored for file views
              - Hidden files and directories are automatically excluded
              - Common exclude patterns: .rst, .pyc files
-             - Output includes line numbers for files
              - Directory listings are sorted alphabetically
         -->
         '''
     )
-    async def view(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = 3) -> ToolResult:
+    async def view_folder(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = 3) -> ToolResult:
         try:
             # Convert to list with single path for compatibility with existing code
             paths = [path]
