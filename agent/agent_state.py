@@ -12,11 +12,13 @@ agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
+STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT'S A SINGLE <ACTIONS> TAG:\n"
+<AVAILABLE_XML_TOOLS>
 {xml_format}
+</AVAILABLE_XML_TOOLS>
 
-- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 - You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
-- Proceed step-by-step, use <OBSERVE> and <REASON> tags to document your thought process.
+- Firstly, use <OBSERVE> and <REASON> tags to document your thought process, finally put all actions to take within <ACTIONS> tag and wait for the results.
 """
 # - You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 # - Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
@@ -33,9 +35,9 @@ Can you help me implement the necessary changes to the repository so that the re
 The current state of the repository is as follows:
 {workspace}
 
-- Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 - Make sure you have the all relevant context before making any changes.
 """
+# - Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
 # - Remember to close irrelevant folders or files that do not relevant to to problem.
 
 # - Only make MULTIPLE ACTIONs at a time, but you must wait for 
@@ -71,12 +73,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     # report_tool = ReportTool(state_file=state_file)
 
     xml_examples = thread_manager.tool_registry.get_xml_examples()
-    xml_format = (
-        "\n\nSTRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT'S WITHIN THE <ACTION> TAG:\n"
-        "<AVAILABLE_XML_TOOLS>\n"
-        f"{json.dumps(xml_examples, indent=2)}\n"
-        "</AVAILABLE_XML_TOOLS>"
-    )
+    xml_format = f"{json.dumps(xml_examples, indent=2)}"
     system_message = {
         "role": "system",
         "content": system_prompt.format(xml_format=xml_format)
