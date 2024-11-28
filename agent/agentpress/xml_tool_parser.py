@@ -217,12 +217,13 @@ class XMLToolParser(ToolParserBase):
         for child in element:
             child_result = self._xml_element_to_dict(child)
             if child.tag in result:
-                # Multiple children with same tag, make a list
+                # Ensure result[child.tag] is always a list
                 if not isinstance(result[child.tag], list):
                     result[child.tag] = [result[child.tag]]
                 result[child.tag].append(child_result)
             else:
-                result[child.tag] = child_result
+                # Always store child elements in a list
+                result[child.tag] = [child_result]
         return result
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:

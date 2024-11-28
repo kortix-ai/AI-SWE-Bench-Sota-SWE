@@ -562,11 +562,30 @@ if __name__ == '__main__':
                 if returncode != 0:
                     return self.fail_response(f"Failed to read file {path}: {stderr}")
                 content = stdout
-                # Perform the replacements
-                for rep in replacements:
-                    old_string = rep.get("old_string", "")
-                    new_string = rep.get("new_string", "")
-                    content = content.replace(old_string, new_string)
+                
+                # Ensure replacements is a list of replacement objects
+                if isinstance(replacements, dict):
+                    # Handle single replacement from XML parsing
+                    if 'replacement' in replacements:
+                        replacements_list = replacements['replacement']
+                        if isinstance(replacements_list, dict):
+                            replacements_list = [replacements_list]
+                    else:
+                        # Direct dictionary case
+                        replacements_list = [replacements]
+                elif isinstance(replacements, list):
+                    replacements_list = replacements
+                else:
+                    return self.fail_response("Invalid replacements format")
+
+                # Apply all replacements
+                for rep in replacements_list:
+                    if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
+                        old_string = rep['old_string'][0]
+                        new_string = rep['new_string'][0]
+                        content = content.replace(old_string, new_string)
+                    else:
+                        return self.fail_response("Invalid replacement format")
                 # Write the updated content back to the file
                 encoded_content = base64.b64encode(content.encode()).decode()
                 command = f"echo {encoded_content} | base64 -d > {path}"
