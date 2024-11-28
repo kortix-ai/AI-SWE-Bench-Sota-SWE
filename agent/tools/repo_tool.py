@@ -77,11 +77,11 @@ class RepositoryTools(Tool):
     async def _init_workspace(self):
         """Initialize the workspace state with empty structures."""
         workspace = {
-            # "file_tree": {},           # Current directory structure
-            "open_files": {},          # Currently open files and their contents
             "open_folders": {},        # Currently open folders
+            "open_files": {},          # Currently open files and their contents
             "terminal_session": [],    # Current terminal session output (last N commands)
-            "thinking_logs": []        # Logs for internal thoughts or notes
+            "thinking_logs": [],        # Logs for internal thoughts or notes
+            "action_logs": []          # Logs for actions taken by the agent
         }
         await self.state_manager.set("workspace", workspace)
 
@@ -222,7 +222,7 @@ class RepositoryTools(Tool):
         -->
 
         <!-- View a file -->
-        <view path="/testbed/.../main.py" />
+        <view path="/testbed/.../example.py" />
 
         <!-- View directory contents with depth -->
         <view path="/testbed" depth="3" />
@@ -237,7 +237,7 @@ class RepositoryTools(Tool):
         -->
         '''
     )
-    async def view(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = None) -> ToolResult:
+    async def view(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = 3) -> ToolResult:
         try:
             # Convert to list with single path for compatibility with existing code
             paths = [path]
@@ -412,7 +412,7 @@ if __name__ == '__main__':
         <!-- Parameters:
              - path: The file path to open (REQUIRED)
         -->
-        <open_file path="/testbed/src/main.py" />
+        <open_file path="/testbed/.../example.py" />
         '''
     )
     async def open_file(self, path: str) -> ToolResult:
@@ -451,7 +451,7 @@ if __name__ == '__main__':
         <!-- Parameters:
              - path: The file path to close (REQUIRED)
         -->
-        <close_file path="/testbed/src/main.py" />
+        <close_file path="/testbed/.../example.py" />
         '''
     )
     async def close_file(self, path: str) -> ToolResult:
@@ -553,7 +553,7 @@ if __name__ == '__main__':
              - path: The file path to edit (REQUIRED)
              - replacements: List of string replacements (REQUIRED)
         -->
-        <edit_file path="/testbed/src/main.py">
+        <edit_file path="/testbed/.../example.py">
             <replacements>
                 <replacement>
                     <old_string>foo</old_string>

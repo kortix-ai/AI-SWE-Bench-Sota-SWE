@@ -85,7 +85,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
             # Retrieve the current workspace
             workspace = await state_manager.get('workspace')
-            workspace_str = json.dumps(workspace, indent=2)
+            workspace_str = json.dumps(workspace)
 
             await thread_manager.add_message(thread_id, {
                 "role": "user",
