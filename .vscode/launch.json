@@ -14,7 +14,7 @@
                 "--dataset-type",
                 "lite",
                 "--max-iterations",
-                "2",
+                "4",
                 "--model-name",
                 "sonnet",
                 "--execute-file",

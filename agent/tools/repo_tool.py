@@ -71,25 +71,22 @@ class RepositoryTools(Tool):
         self.state_manager = state_manager
         self.container_name = container_name
         self._bash_executor = BashExecutor(container_name)
-        # Remove the asynchronous task creation
-        # asyncio.create_task(self._init_workspace())
 
     async def _init_workspace(self):
         """Initialize the workspace state with empty structures if not already initialized."""
         workspace = await self.state_manager.get("workspace")
         if workspace is None:
             workspace = {
-                "open_folders": {},        # Currently open folders
-                "open_files": {},          # Currently open files
+                "open_items": {},          # open_folders and open_files
                 "terminal_session": [],    # Current terminal session output (last N commands)
                 "thinking_logs": [],        # Logs for internal thoughts or notes
             }
             await self.state_manager.set("workspace", workspace)
 
-    async def _update_open_file(self, path: str, content: str):
-        """Update or add a file in the open files list."""
+    async def _update_open_item(self, path: str, content: str):
+        """Update or add an item in the open items list."""
         workspace = await self.state_manager.get("workspace")
-        workspace["open_files"][path] = {
+        workspace["open_items"][path] = {
             "content": content,
             "last_modified": datetime.now().isoformat()
         }
@@ -149,25 +146,12 @@ class RepositoryTools(Tool):
         
         return '\n'.join(content_lines)
 
-    async def _update_open_folder(self, path: str, content: str):
-        """Update or add a folder in the open folders list."""
-        workspace = await self.state_manager.get("workspace")
-        workspace["open_folders"][path] = content
-        await self.state_manager.set("workspace", workspace)
-
     async def format_workspace_xml(self) -> str:
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
         xml_output = "<workspace>\n"
-        xml_output += "  <open_folders>\n"
-        for path, output in workspace["open_folders"].items():
-            xml_output += f"    <folder path=\"{path}\">\n{output}\n    </folder>\n"
-        xml_output += "  </open_folders>\n"
-        xml_output += "  <open_files>\n"
-        for path, file_info in workspace["open_files"].items():
-            content = file_info["content"]
-            xml_output += f"    <file path=\"{path}\">\n{content}\n    </file>\n"
-        xml_output += "  </open_files>\n"
+        for path, item in workspace["open_items"].items():
+            xml_output += f"  <item path=\"{path}\">\n{item['content']}\n  </item>\n"
         xml_output += "</workspace>"
         return xml_output
 
@@ -317,12 +301,8 @@ if __name__ == '__main__':
             success = returncode == 0
 
             if success and not stderr.strip():
-                if os.path.isdir(path):
-                    # Update open_folders with the directory contents
-                    await self._update_open_folder(path, stdout.strip())
-                else:
-                    # Add file content to open_files
-                    await self._update_open_file(path, stdout.strip())
+                # Update open_items with the content
+                await self._update_open_item(path, stdout.strip())
                 return self.success_response(stdout.strip())
             else:
                 return self.fail_response(f"View command failed: {stderr.strip()}")
@@ -399,17 +379,18 @@ if __name__ == '__main__':
         <open_file path="/testbed/.../example.py" />
         '''
     )
-    async def open_file(self, path: str) -> ToolResult:
+    async def open_item(self, path: str) -> ToolResult:
+        """Open an item and add its content to the workspace state."""
         try:
             command = f"cat {path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                await self._update_open_file(path, stdout)
-                return self.success_response(f"File {path} opened successfully.")
+                await self._update_open_item(path, stdout)
+                return self.success_response(f"Item {path} opened successfully.")
             else:
-                return self.fail_response(f"Failed to open file {path}: {stderr}")
+                return self.fail_response(f"Failed to open item {path}: {stderr}")
         except Exception as e:
-            return self.fail_response(f"Error opening file {path}: {str(e)}")
+            return self.fail_response(f"Error opening item {path}: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -438,17 +419,17 @@ if __name__ == '__main__':
         <close_file path="/testbed/.../example.py" />
         '''
     )
-    async def close_file(self, path: str) -> ToolResult:
+    async def close_item(self, path: str) -> ToolResult:
         try:
             workspace = await self.state_manager.get("workspace")
-            if path in workspace["open_files"]:
-                del workspace["open_files"][path]
+            if path in workspace["open_items"]:
+                del workspace["open_items"][path]
                 await self.state_manager.set("workspace", workspace)
-                return self.success_response(f"File {path} closed successfully.")
+                return self.success_response(f"Item {path} closed successfully.")
             else:
-                return self.fail_response(f"File {path} is not open.")
+                return self.fail_response(f"Item {path} is not open.")
         except Exception as e:
-            return self.fail_response(f"Error closing file {path}: {str(e)}")
+            return self.fail_response(f"Error closing item {path}: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -490,7 +471,7 @@ if __name__ == '__main__':
             command = f"echo {encoded_content} | base64 -d > {path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                await self._update_open_file(path, content)
+                await self._update_open_item(path, content)
                 return self.success_response(f"File {path} created successfully.")
             else:
                 return self.fail_response(f"Failed to create file {path}: {stderr}")
@@ -551,11 +532,11 @@ if __name__ == '__main__':
         </edit_file>
         '''
     )
-    async def edit_file(self, path: str, replacements: List[dict]) -> ToolResult:
+    async def edit_item(self, path: str, replacements: List[dict]) -> ToolResult:
         try:
             workspace = await self.state_manager.get("workspace")
-            if path in workspace["open_files"]:
-                content = workspace["open_files"][path]["content"]
+            if path in workspace["open_items"]:
+                content = workspace["open_items"][path]["content"]
                 for rep in replacements:
                     old_string = rep.get("old_string")
                     new_string = rep.get("new_string")
@@ -565,14 +546,14 @@ if __name__ == '__main__':
                 command = f"echo {encoded_content} | base64 -d > {path}"
                 stdout, stderr, returncode = await self._bash_executor.execute(command)
                 if returncode == 0:
-                    await self._update_open_file(path, content)
-                    return self.success_response(f"File {path} edited successfully.")
+                    await self._update_open_item(path, content)
+                    return self.success_response(f"Item {path} edited successfully.")
                 else:
-                    return self.fail_response(f"Failed to edit file {path}: {stderr}")
+                    return self.fail_response(f"Failed to edit item {path}: {stderr}")
             else:
-                return self.fail_response(f"File {path} is not open.")
+                return self.fail_response(f"Item {path} is not open.")
         except Exception as e:
-            return self.fail_response(f"Error editing file {path}: {str(e)}")
+            return self.fail_response(f"Error editing item {path}: {str(e)}")
 
     @openapi_schema({
         "type": "function",
