@@ -4,7 +4,6 @@ from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 import os
 from typing import List, Optional
-from datetime import datetime
 
 class BashExecutor:
     """Executes bash commands in Docker container using individual exec calls."""
@@ -80,8 +79,8 @@ class RepositoryTools(Tool):
                 "open_folders": {},        # Dictionary with folder paths as keys and depths as values
                 "open_files": [],          # List of paths to open files
                 "terminal_session": [],    # Current terminal session output (last N commands)
-                "thinking_logs": [],       # Logs for internal thoughts or notes
-                "actions_taken": [],       # List of past actions
+                # "thinking_logs": [],       # Logs for internal thoughts or notes
+                # "actions_taken": [],       # List of past actions
             }
             
             # Find and add only main source code folders with depth 3
@@ -95,7 +94,7 @@ class RepositoryTools(Tool):
             
             folders = [f for f in stdout.splitlines() if not any(exclude_dir in f for exclude_dir in exclude_dirs)]
             if len(folders) == 1:
-                workspace["open_folders"][folders[0]] = 3
+                workspace["open_folders"][folders[0]] = 4
             else: 
                 self.fail_response(f"Error finding main source code folder: {stderr}")
                 # Add initial view of /testbed with depth 1
@@ -103,14 +102,16 @@ class RepositoryTools(Tool):
             
             await self.state_manager.set("workspace", workspace)
 
-    async def _update_terminal(self, command: str, output: str, success: bool):
-        """Update terminal session with new output."""
+    async def _update_terminal(self, command: str, output: Optional[str] = None, success: Optional[bool] = None):
+        """Update terminal session with new command and optionally outputs."""
         workspace = await self.state_manager.get("workspace")
+        if "terminal_session" not in workspace:
+            workspace["terminal_session"] = []
+        # Add new command to terminal session
         workspace["terminal_session"].append({
             "command": command,
             "output": output,
             "success": success,
-            "timestamp": datetime.now().isoformat()
         })
         # Keep only last 5 commands
         workspace["terminal_session"] = workspace["terminal_session"][-5:]
@@ -160,6 +161,18 @@ class RepositoryTools(Tool):
     async def format_workspace_xml(self) -> str:
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
+        # Execute pending commands in terminal_session
+        for session_entry in workspace.get("terminal_session", []):
+            if session_entry.get("output") is None:
+                stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
+                success = returncode == 0
+                output = stdout + stderr
+                # Update the session entry with the output and success
+                session_entry["output"] = output
+                session_entry["success"] = success
+        # Save updated workspace
+        await self.state_manager.set("workspace", workspace)
+
         xml_output = "<workspace>\n"
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
@@ -174,6 +187,15 @@ class RepositoryTools(Tool):
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
+        xml_output += "<terminal_session>\n"
+        for session_entry in workspace.get("terminal_session", []):
+            xml_output += f"<command success=\"{session_entry['success']}\">\n"
+            xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
+            xml_output += "<output>\n"
+            xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
+            xml_output += "</output>\n"
+            xml_output += "</command>\n"
+        xml_output += "</terminal_session>\n"
         xml_output += "</workspace>"
         return xml_output
 
@@ -300,9 +322,12 @@ if __name__ == '__main__':
             workspace = await self.state_manager.get("workspace")
             if "open_folders" not in workspace:
                 workspace["open_folders"] = {}
-            workspace["open_folders"][path] = depth or 2
-            await self.state_manager.set("workspace", workspace)
-            return self.success_response(f"Folder {path} added to workspace.")
+            if path not in workspace["open_folders"]:
+                workspace["open_folders"][path] = depth or 2
+                await self.state_manager.set("workspace", workspace)
+                return self.success_response(f"Folder {path} added to workspace.")
+            else:
+                return self.fail_response(f"Folder {path} is already open in the workspace.")
         except Exception as e:
             return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
@@ -410,8 +435,8 @@ if __name__ == '__main__':
     @xml_schema(
         tag_name="create_file",
         mappings=[
-            {"param_name": "path", "node_type": "attribute", "path": "."},
-            {"param_name": "content", "node_type": "text", "path": "."}
+            {"param_name": "path", "node_type": "attribute", "path": "path"},
+            {"param_name": "content", "node_type": "content", "path": "."}
         ],
         example='''
         <!-- Create File Tool -->
@@ -422,7 +447,7 @@ if __name__ == '__main__':
              - content: The content to write into the file (REQUIRED)
         -->
         <create_file path="/testbed/.../new_file.py">
-        print("Hello, World!")
+print("Hello, World!")
         </create_file>
         '''
     )
@@ -434,6 +459,8 @@ if __name__ == '__main__':
             if returncode == 0:
                 # Add to open_files
                 workspace = await self.state_manager.get("workspace")
+                if "open_files" not in workspace:
+                    workspace["open_files"] = []
                 if path not in workspace["open_files"]:
                     workspace["open_files"].append(path)
                     await self.state_manager.set("workspace", workspace)
@@ -561,7 +588,9 @@ if __name__ == '__main__':
     })
     @xml_schema(
         tag_name="run_command",
-        mappings=[{"param_name": "command", "node_type": "text", "path": "."}],
+        mappings=[
+            {"param_name": "command", "node_type": "attribute", "path": "command"}
+        ],
         example='''
         <!-- Run Command Tool -->
         <!-- Run a shell command in the terminal -->
@@ -569,12 +598,16 @@ if __name__ == '__main__':
         <!-- Parameters:
              - command: The shell command to execute (REQUIRED)
         -->
-        <run_command>
-        python example_edge_cases.py
-        </run_command>
+        <run_command command="python example_edge_cases.py" />
         '''
     )
     async def run_command(self, command: str) -> ToolResult:
+        """Add command to terminal session without executing it immediately."""
+        await self._update_terminal(command)
+        return self.success_response(f"Command '{command}' added to terminal session.")
+
+    async def _execute_command(self, command: str) -> ToolResult:
+        """Execute a shell command and update the terminal session."""
         try:
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
@@ -588,23 +621,22 @@ if __name__ == '__main__':
 
     def success_response(self, message: str) -> ToolResult:
         result = super().success_response(message)
-        self._add_action(result)
+        # asyncio.create_task(self._add_action(message))
         return result
 
     def fail_response(self, message: str) -> ToolResult:
         result = super().fail_response(message)
-        self._add_action(result)
+        # asyncio.create_task(self._add_action(message))
         return result
 
-    async def _add_action(self, result: ToolResult):
+    async def _add_action(self, message: str):
         workspace = await self.state_manager.get("workspace")
         # Ensure actions_taken is initialized
         if "actions_taken" not in workspace:
             workspace["actions_taken"] = []
-        workspace["actions_taken"].append({
-            "action_result": result.message,
-            "success": result.success
-        })
+        workspace["actions_taken"].append(
+            message
+        )
         await self.state_manager.set("workspace", workspace)
 
     @openapi_schema({
@@ -632,6 +664,7 @@ if __name__ == '__main__':
              - path: The file path to add to the workspace (REQUIRED)
         -->
         <open_file path="/testbed/.../example.py" />
+        <open_file path="/testbed/.../example2.py" />
         '''
     )
     async def open_file(self, path: str) -> ToolResult:
@@ -643,6 +676,8 @@ if __name__ == '__main__':
             if path not in workspace["open_files"]:
                 workspace["open_files"].append(path)
                 await self.state_manager.set("workspace", workspace)
-            return self.success_response(f"File {path} added to workspace.")
+                return self.success_response(f"File {path} added to workspace.")
+            else:
+                return self.fail_response(f"File {path} is already open in the workspace.")
         except Exception as e:
             return self.fail_response(f"Error adding file {path} to workspace: {str(e)}")

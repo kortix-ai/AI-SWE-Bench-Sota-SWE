@@ -33,7 +33,7 @@ Can you help me implement the necessary changes to the repository so that the re
 The current state of the repository is as follows:
 {workspace}
 
-- Make sure you have the all relevant context before making any changes.
+- Make sure you have the all relevant context before making any changes. Do not hesitate to open new files related to the issue.
 - After applying the changes, create your own test scripts (e.g reproduce.py, edge_cases.py) and run them to check if the fix is working and it covers edge cases.
 - Only submit if all tests passed.
 """
