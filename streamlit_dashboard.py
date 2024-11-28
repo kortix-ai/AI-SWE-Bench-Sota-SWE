@@ -341,8 +341,8 @@ def main():
     if selected_run:
         st.header(f"📁 Run Details: {selected_run}")
         
-        # Create tabs
-        tab_names = ["💬Chat", "📝Code Diff", "💡Ground Truth", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs", "🗄 Combined Logs"]
+        # Update tab names list (removed Ground Truth tab)
+        tab_names = ["💬Chat", "📝Code Diff", "📋 Log", "🔍 Threads", "🧪 Passing Tests", "📄 Eval Logs", "🗄 Combined Logs"]
         current_tab = st.tabs(tab_names)
         
         # Load data based on active tab
@@ -351,23 +351,28 @@ def main():
             display_run_details(run_data)
             
         with current_tab[1]:  # Diff tab
-            diff_content = load_diff_file(run_dir, selected_run)
-            if diff_content:
-                st.code(diff_content, language="diff")
-            else:
-                st.info("No diff file available")
-                
-        with current_tab[2]:  # Ground Truth tab
+            # Load ground truth first
             ground_truth = load_ground_truth(run_dir)
             if ground_truth:
-                st.subheader("Patch")
+                st.subheader("Ground Truth Patch")
                 st.code(ground_truth.get('patch', ''), language="diff")
+            
+            # Then show actual code diff
+            diff_content = load_diff_file(run_dir, selected_run)
+            if diff_content:
+                st.subheader("Actual Code Changes")
+                st.code(diff_content, language="diff")
+            
+            # Finally show test patch
+            if ground_truth:
                 st.subheader("Test Patch")
                 st.code(ground_truth.get('test_patch', ''), language="diff")
-            else:
-                st.info("No ground truth file available")
+            
+            if not ground_truth and not diff_content:
+                st.info("No diff or ground truth files available")
                 
-        with current_tab[3]:  # Log tab
+        # Update indices for remaining tabs
+        with current_tab[2]:  # Log tab
             if st.session_state.show_log:
                 log_content = load_log_file(run_dir, selected_run)
                 if log_content:
@@ -378,7 +383,7 @@ def main():
                 st.info("Please check the box to show log")
                 
                 
-        with current_tab[4]:  # Threads tab
+        with current_tab[3]:  # Threads tab
             if st.session_state.show_thread:
                 thread_data = load_thread_data(run_dir)
                 if thread_data:
@@ -388,7 +393,7 @@ def main():
             else:
                 st.info("Please check the box to show thread")
             
-        with current_tab[5]:  # Passing Tests tab
+        with current_tab[4]:  # Passing Tests tab
             eval_result = load_evaluation_result(run_dir)
             if eval_result:
                 report = eval_result.get('test_result', {}).get('report', {})
@@ -416,28 +421,31 @@ def main():
             else:
                 st.info("No evaluation result available")
         
-        with current_tab[6]:  # Eval Logs tab
+        with current_tab[5]:  # Eval Logs tab
             eval_log_content = load_eval_log(run_dir)
             if eval_log_content:
                 st.code(eval_log_content)
             else:
                 st.info("No eval log available")
 
-        with current_tab[7]:  # Combined Logs tab
-            run_data = load_thread_data(run_dir)
-            diff_content = load_diff_file(run_dir, selected_run)
-            eval_log_content = load_eval_log(run_dir)
-            def get_final_test_log(log_text):
-                if not log_text: return log_text
-                parts = log_text.split("test process starts")
-                return "=================================== test process starts" + parts[-1] if len(parts) > 1 and parts[-1].strip() else log_text
-            eval_log_content = get_final_test_log(eval_log_content)
-            combined_content = get_combined_content(run_data, diff_content, eval_log_content, run_dir)
-            
-            if combined_content:
-                st.code(combined_content, language="python")
+        with current_tab[6]:  # Combined Logs tab
+            if st.session_state.show_log:
+                run_data = load_thread_data(run_dir)
+                diff_content = load_diff_file(run_dir, selected_run)
+                eval_log_content = load_eval_log(run_dir)
+                def get_final_test_log(log_text):
+                    if not log_text: return log_text
+                    parts = log_text.split("test process starts")
+                    return "=================================== test process starts" + parts[-1] if len(parts) > 1 and parts[-1].strip() else log_text
+                eval_log_content = get_final_test_log(eval_log_content)
+                combined_content = get_combined_content(run_data, diff_content, eval_log_content, run_dir)
+                
+                if combined_content:
+                    st.code(combined_content, language="python")
+                else:
+                    st.info("No combined logs available")
             else:
-                st.info("No combined logs available")
+                st.info("Please check the box to show log")
     else:
         # add space here
         st.markdown("---")
