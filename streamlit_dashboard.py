@@ -291,7 +291,7 @@ def main():
 
         if not runs:
             st.warning("No runs found in the specified directory.")
-            st.stop()
+            st.stop("")
 
         selected_run = None
         for run in runs:

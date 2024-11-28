@@ -94,7 +94,7 @@ class XMLResultsAdder(ResultsAdderBase):
                         # Create a simple reference message as user role
                         result_message = {
                             "role": "user",
-                            "content": f"Result for {root_tag}\n{result['content']}"
+                            "content": f"Result for {root_tag}:\n{result['content']}"
                         }
                         await self.add_message(thread_id, result_message)
                         return

@@ -81,9 +81,26 @@ class RepositoryTools(Tool):
                 "open_files": [],          # List of paths to open files
                 "terminal_session": [],    # Current terminal session output (last N commands)
                 "thinking_logs": [],       # Logs for internal thoughts or notes
+                "actions_taken": [],       # List of past actions
             }
-            # Add initial view of /testbed with default depth of 3
-            workspace["open_folders"]["/testbed"] = 3
+            
+            # Find and add only main source code folders with depth 3
+            exclude_dirs = ['tests', 'doc', 'docs', 'examples', 
+                            'utils', 'tools', 'egg-info', 'build', 'dist',
+                            '__pycache__', '.git', '.github', 'licenses', 'scripts', 'extras']
+            
+            # Command to list directories in /testbed
+            cmd = 'ls -d /testbed/*/'
+            stdout, stderr, returncode = await self._bash_executor.execute(cmd)
+            
+            folders = [f for f in stdout.splitlines() if not any(exclude_dir in f for exclude_dir in exclude_dirs)]
+            if len(folders) == 1:
+                workspace["open_folders"][folders[0]] = 3
+            else: 
+                self.fail_response(f"Error finding main source code folder: {stderr}")
+                # Add initial view of /testbed with depth 1
+                workspace["open_folders"]["/testbed"] = 1
+            
             await self.state_manager.set("workspace", workspace)
 
     async def _update_terminal(self, command: str, output: str, success: bool):
@@ -146,7 +163,7 @@ class RepositoryTools(Tool):
         xml_output = "<workspace>\n"
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
-            result = await self.view_folder(path=path, depth=depth)
+            result = await self._fetch_folder_contents(path=path, depth=depth)
             if result.success:
                 xml_output += f"{result.output}\n"
         # Include content from open files
@@ -155,70 +172,15 @@ class RepositoryTools(Tool):
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
+            else:
+                xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
         xml_output += "</workspace>"
         return xml_output
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "view_folder",
-            "description": (
-                "List the contents of a directory in the repository with detailed explanations."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "The directory path to view."
-                    },
-                    "depth": {
-                        "type": "integer",
-                        "description": "The maximum directory depth to search for contents.",
-                        "default": 3
-                    },
-                },
-                "required": ["path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="view_folder",
-        mappings=[
-            {"param_name": "path", "node_type": "attribute", "path": "path"},
-            {"param_name": "depth", "node_type": "attribute", "path": "depth"}
-        ],
-        example='''
-        <!-- Repository View Folder Tool -->
-        <!-- List directory contents with detailed explanations -->
-        
-        <!-- Parameters Description:
-             - path: Directory path to view (REQUIRED)
-             - depth: Maximum directory depth to search for contents (optional)
-        -->
-
-        <!-- View directory contents with depth -->
-        <view_folder path="/testbed" depth="3" />
-
-        <!-- Important Notes:
-             - Path should be absolute path from repository root
-             - Hidden files and directories are automatically excluded
-             - Common exclude patterns: .rst, .pyc files
-             - Directory listings are sorted alphabetically
-        -->
-        '''
-    )
-    async def view_folder(self, path: str, exclude_patterns: list = ['.rst', '.pyc'], depth: Optional[int] = 3) -> ToolResult:
+    async def _fetch_folder_contents(self, path: str, depth: Optional[int]) -> ToolResult:
+        """Fetch the contents of a folder."""
         try:
-            # Convert to list with single path for compatibility with existing code
-            paths = [path]
-            
-            # Set depth to 1 for files, use provided depth or default 3 for directories
-            if os.path.isfile(path):
-                depth = 1
-            else:
-                depth = depth or 3
-            
+            exclude_patterns = ['.rst', '.pyc']
             python_code = '''
 import os
 import fnmatch
@@ -254,17 +216,8 @@ def view_path(path: str, depth: int, exclude_patterns: List[str]):
         for item in list_directory(path, depth, exclude_patterns):
             print(item)
         print('</directory>')
-    elif os.path.isfile(path):
-        print(f'<file path="{path}">')
-        try:
-            with open(path, 'r') as f:
-                for i, line in enumerate(f, 1):
-                    print(f"{i:6d}\t{line}", end='')
-        except Exception as e:
-            print(f"Error reading file {path}: {str(e)}", file=sys.stderr)
-        print('</file>')
     else:
-        print(f"The path '{path}' is neither a file nor a directory.", file=sys.stderr)
+        print(f"The path '{path}' is not a directory.", file=sys.stderr)
 
 def main():
     path = sys.argv[1]
@@ -277,26 +230,81 @@ if __name__ == '__main__':
 '''
             # Encode the Python script and arguments
             code_base64 = base64.b64encode(python_code.encode('utf-8')).decode('ascii')
-            paths_str = ','.join(paths)
             exclude_str = ','.join(exclude_patterns)
-            
             # Command to execute the Python script in the container
             command = (
                 f"echo {repr(code_base64)} | base64 -d | "
-                f"python3 - {repr(paths_str)} {repr(exclude_str)} {depth}"
+                f"python3 - {repr(path)} {repr(exclude_str)} {depth}"
             )
-            
             stdout, stderr, returncode = await self.execute_command_in_container(command)
             success = returncode == 0
 
             if success and not stderr.strip():
-                # No need to update open_items anymore, just return the output
                 return self.success_response(stdout.strip())
             else:
-                return self.fail_response(f"View command failed: {stderr.strip()}")
-        
+                return self.fail_response(f"Error fetching folder contents: {stderr.strip()}")
         except Exception as e:
-            return self.fail_response(f"Error executing view command: {str(e)}")
+            return self.fail_response(f"Exception during folder content fetch: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "view_folder",
+            "description": (
+                "Add a directory to the workspace to view its contents."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The directory path to add to the workspace."
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "The maximum directory depth to search for contents.",
+                        "default": 2
+                    },
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="view_folder",
+        mappings=[
+            {"param_name": "path", "node_type": "attribute", "path": "path"},
+            {"param_name": "depth", "node_type": "attribute", "path": "depth"}
+        ],
+        example='''
+        <!-- Repository View Folder Tool -->
+        <!-- Add directory to workspace to view its contents -->
+
+        <!-- Parameters Description:
+             - path: Directory path to add to workspace (REQUIRED)
+             - depth: Maximum directory depth to search for contents (optional)
+        -->
+
+        <!-- Add directory to workspace with depth -->
+        <view_folder path="/testbed" depth="2" />
+
+        <!-- Important Notes:
+             - Path should be absolute path from repository root
+             - Hidden files and directories are automatically excluded
+        -->
+        '''
+    )
+    async def view_folder(self, path: str, depth: Optional[int] = 2) -> ToolResult:
+        """Add a directory to the workspace to view its contents."""
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if "open_folders" not in workspace:
+                workspace["open_folders"] = {}
+            workspace["open_folders"][path] = depth or 2
+            await self.state_manager.set("workspace", workspace)
+            return self.success_response(f"Folder {path} added to workspace.")
+        except Exception as e:
+            return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -316,9 +324,9 @@ if __name__ == '__main__':
         example='''
         <!-- Repository Submit Tool -->
         <!-- Submit the fix when all tests pass and the issue is resolved -->
-        
+
         <!-- No Parameters Required -->
-        
+
         <!-- Submit the completed fix -->
         <submit />
 
@@ -343,68 +351,6 @@ if __name__ == '__main__':
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "open_file",
-            "description": "Open a file or folder and add it to the workspace state.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "The file or folder path to open."},
-                    "depth": {
-                        "type": "integer",
-                        "description": "The maximum directory depth to search for contents (only for folders).",
-                        "default": 3
-                    },
-                },
-                "required": ["path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="open_file",
-        mappings=[
-            {"param_name": "path", "node_type": "attribute", "path": "."},
-            {"param_name": "depth", "node_type": "attribute", "path": "."},
-        ],
-        example='''
-        <!-- Open File or Folder Tool -->
-        <!-- Open a file or folder and add it to the workspace state -->
-        
-        <!-- Parameters:
-             - path: The file or folder path to open (REQUIRED)
-             - depth: Maximum depth for folders (optional, default is 3)
-        -->
-        <open_file path="/testbed" depth="3" />
-        '''
-    )
-    async def open_item(self, path: str, depth: int = 3) -> ToolResult:
-        """Open an item and add its content to the workspace state."""
-        try:
-            workspace = await self.state_manager.get("workspace")
-            # Determine if the path is a file or directory
-            command = f"if [ -d '{path}' ]; then echo 'directory'; elif [ -f '{path}' ]; then echo 'file'; else echo 'none'; fi"
-            stdout, stderr, returncode = await self._bash_executor.execute(command)
-            if returncode == 0:
-                item_type = stdout.strip()
-                if item_type == 'directory':
-                    # Add or update the folder with its depth
-                    workspace["open_folders"][path] = depth
-                    await self.state_manager.set("workspace", workspace)
-                    return self.success_response(f"Folder {path} opened with depth {depth} successfully.")
-                elif item_type == 'file':
-                    if path not in workspace["open_files"]:
-                        workspace["open_files"].append(path)
-                        await self.state_manager.set("workspace", workspace)
-                    return self.success_response(f"File {path} opened successfully.")
-                else:
-                    return self.fail_response(f"Path {path} does not exist.")
-            else:
-                return self.fail_response(f"Failed to determine item type for {path}: {stderr}")
-        except Exception as e:
-            return self.fail_response(f"Error opening item {path}: {str(e)}")
-
-    @openapi_schema({
-        "type": "function",
-        "function": {
             "name": "close_file",
             "description": "Close a file and remove its content from the workspace state.",
             "parameters": {
@@ -422,7 +368,7 @@ if __name__ == '__main__':
         example='''
         <!-- Close File Tool -->
         <!-- Close a file and remove its content from the workspace state -->
-        
+
         <!-- Parameters:
              - path: The file path to close (REQUIRED)
         -->
@@ -470,12 +416,12 @@ if __name__ == '__main__':
         example='''
         <!-- Create File Tool -->
         <!-- Create a new file with specified content -->
-        
+
         <!-- Parameters:
              - path: The file path to create (REQUIRED)
              - content: The content to write into the file (REQUIRED)
         -->
-        <create_file path="/testbed/src/new_file.py">
+        <create_file path="/testbed/.../new_file.py">
         print("Hello, World!")
         </create_file>
         '''
@@ -486,7 +432,7 @@ if __name__ == '__main__':
             command = f"echo {encoded_content} | base64 -d > {path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                # Add to open_files instead of open_items
+                # Add to open_files
                 workspace = await self.state_manager.get("workspace")
                 if path not in workspace["open_files"]:
                     workspace["open_files"].append(path)
@@ -532,7 +478,7 @@ if __name__ == '__main__':
         example='''
         <!-- Edit File Tool -->
         <!-- Edit an existing file by replacing specified strings -->
-        
+
         <!-- Parameters:
              - path: The file path to edit (REQUIRED)
              - replacements: List of string replacements (REQUIRED)
@@ -619,12 +565,12 @@ if __name__ == '__main__':
         example='''
         <!-- Run Command Tool -->
         <!-- Run a shell command in the terminal -->
-        
+
         <!-- Parameters:
              - command: The shell command to execute (REQUIRED)
         -->
         <run_command>
-        ls -la /testbed/src
+        python example_edge_cases.py
         </run_command>
         '''
     )
@@ -639,3 +585,64 @@ if __name__ == '__main__':
                 return self.fail_response(f"Command failed with error:\n{stderr}")
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
+
+    def success_response(self, message: str) -> ToolResult:
+        result = super().success_response(message)
+        self._add_action(result)
+        return result
+
+    def fail_response(self, message: str) -> ToolResult:
+        result = super().fail_response(message)
+        self._add_action(result)
+        return result
+
+    async def _add_action(self, result: ToolResult):
+        workspace = await self.state_manager.get("workspace")
+        # Ensure actions_taken is initialized
+        if "actions_taken" not in workspace:
+            workspace["actions_taken"] = []
+        workspace["actions_taken"].append({
+            "action_result": result.message,
+            "success": result.success
+        })
+        await self.state_manager.set("workspace", workspace)
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "open_file",
+            "description": "Add a file to the workspace to view its content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The file path to add to the workspace."}
+                },
+                "required": ["path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="open_file",
+        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+        example='''
+        <!-- Open File Tool -->
+        <!-- Add a file to the workspace to view its content -->
+
+        <!-- Parameters:
+             - path: The file path to add to the workspace (REQUIRED)
+        -->
+        <open_file path="/testbed/.../example.py" />
+        '''
+    )
+    async def open_file(self, path: str) -> ToolResult:
+        """Add a file to the workspace to view its content."""
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if "open_files" not in workspace:
+                workspace["open_files"] = []
+            if path not in workspace["open_files"]:
+                workspace["open_files"].append(path)
+                await self.state_manager.set("workspace", workspace)
+            return self.success_response(f"File {path} added to workspace.")
+        except Exception as e:
+            return self.fail_response(f"Error adding file {path} to workspace: {str(e)}")

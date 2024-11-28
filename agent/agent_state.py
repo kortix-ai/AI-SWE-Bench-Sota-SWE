@@ -20,8 +20,6 @@ STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT'S A SINGLE <ACTIONS> TA
 - You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
 - Firstly, use <OBSERVE> and <REASON> tags to document your thought process, finally put all actions to take within <ACTIONS> tag and wait for the results.
 """
-# - You can use multiple actions in your response. But you must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
-# - Give a list of actions and you can terminate your response to wait for the results of each action before proceeding to the next step.
 
 user_prompt = """
 I've uploaded a Python code repository in the directory `/testbed`. Consider the following PR description:
@@ -36,12 +34,10 @@ The current state of the repository is as follows:
 {workspace}
 
 - Make sure you have the all relevant context before making any changes.
+- After applying the changes, create your own test scripts (e.g reproduce.py, edge_cases.py) and run them to check if the fix is working and it covers edge cases.
+- Only submit if all tests passed.
 """
-# - Only make ONE ACTION at a time, but you can view multiple files or folders in a single action.
-# - Remember to close irrelevant folders or files that do not relevant to to problem.
 
-# - Only make MULTIPLE ACTIONs at a time, but you must wait for 
-#------------------------------------------------------------
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
@@ -107,15 +103,19 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 # agentops_session=agentops_session,
             )
 
-            assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-            if assistant_messages:
-                last_assistant = assistant_messages[0]
-                tool_calls = last_assistant.get('tool_calls', [])
-                for tool_call in tool_calls:
-                    if tool_call['function']['name'] == 'submit':
-                        print("Task completed via submit tool, stopping...")
-                        agentops_session.end_session()
-                        return
+            # Check for submit in XML response
+            # assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+            # if assistant_messages:
+            #     last_assistant = assistant_messages[0]['content']
+            #     try:
+            #         # Look for submit tag in the response
+            #         if '<submit' in last_assistant:
+            #             print("Task completed via submit tool, stopping...")
+            #             agentops_session.end_session()
+            #             return
+            #     except Exception as e:
+            #         print(f"Error parsing XML response: {str(e)}")
+            #         continue
 
         except Exception as e:
             print(f"Error in iteration {iteration}: {str(e)}")
