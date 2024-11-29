@@ -11,6 +11,7 @@ from agentpress.base_processors import ToolParserBase
 import json
 import xml.etree.ElementTree as ET
 import re
+from xml.sax.saxutils import escape
 from agentpress.tool_registry import ToolRegistry
  
 class XMLToolParser(ToolParserBase):
@@ -203,22 +204,22 @@ class XMLToolParser(ToolParserBase):
         return chunks
 
     def _xml_element_to_dict(self, element):
-        """Recursively convert an ElementTree element into a dict."""
-        result = {}
-        if element.attrib:
-            result['@attributes'] = element.attrib
-        if element.text and element.text.strip():
-            result['#text'] = element.text.strip()
-        for child in element:
-            child_result = self._xml_element_to_dict(child)
-            if child.tag in result:
-                # Ensure result[child.tag] is always a list
-                if not isinstance(result[child.tag], list):
-                    result[child.tag] = [result[child.tag]]
-                result[child.tag].append(child_result)
-            else:
-                result[child.tag]= child_result
-        return result
+        """Recursively convert an ElementTree element into a dict"""
+        children = list(element)
+        if children:
+            result = {}
+            for child in children:
+                child_result = self._xml_element_to_dict(child)
+                if child.tag in result:
+                    # Ensure result[child.tag] is always a list
+                    if not isinstance(result[child.tag], list):
+                        result[child.tag] = [result[child.tag]]
+                    result[child.tag].append(child_result)
+                else:
+                    result[child.tag] = child_result
+            return result
+        else:
+            return element.text.strip() if element.text else ''
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
         """Parse XML chunk into tool call format.
@@ -272,7 +273,8 @@ class XMLToolParser(ToolParserBase):
                             if '<' in content and '>' in content:
                                 # Parse the content as XML
                                 try:
-                                    element = ET.fromstring(f'<{mapping.path}>{content}</{mapping.path}>')
+                                    escaped_content = escape(content)
+                                    element = ET.fromstring(f'<{mapping.path}>{escaped_content}</{mapping.path}>')
                                     params[mapping.param_name] = self._xml_element_to_dict(element)
                                     logging.info(f"Parsed element {mapping.path} into structured data for {mapping.param_name}")
                                 except Exception as e:
