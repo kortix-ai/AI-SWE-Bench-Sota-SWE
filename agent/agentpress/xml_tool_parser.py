@@ -12,7 +12,7 @@ import json
 import xml.etree.ElementTree as ET
 import re
 from agentpress.tool_registry import ToolRegistry
-
+ 
 class XMLToolParser(ToolParserBase):
     """XML-specific implementation for parsing tool calls from LLM responses.
     
@@ -135,13 +135,13 @@ class XMLToolParser(ToolParserBase):
             return None
 
     def _extract_xml_chunks(self, content: str) -> List[str]:
-        """Extract complete XML chunks including self-closing tags."""
+        """Extract complete XML chunks corresponding to registered tools, including nested elements."""
         chunks = []
         pos = 0
         length = len(content)
 
         while pos < length:
-            # Find the next start tag for any registered tag
+            # Find the next start tag for any registered tool
             match_found = False
             earliest_pos = length
             matched_tag_name = None
@@ -155,65 +155,60 @@ class XMLToolParser(ToolParserBase):
                     match_found = True
 
             if not match_found:
-                # No more tags found, move pos forward
-                pos += 1
-                continue
+                # No more tags found, exit the loop
+                break
 
             start_pos = earliest_pos
             tag_name = matched_tag_name
+
             # Find end of the opening tag
             tag_end = content.find('>', start_pos)
             if tag_end == -1:
-                # Move past '<' and continue
+                # Malformed tag, move past '<' and continue
                 pos = start_pos + 1
                 continue
 
             # Check if it's a self-closing tag
-            is_self_closing = content[tag_end - 1] == '/'
-            if is_self_closing:
+            if content[tag_end - 1] == '/':
                 # Self-closing tag
                 xml_chunk = content[start_pos:tag_end + 1]
                 chunks.append(xml_chunk)
                 pos = tag_end + 1
             else:
-                # Tag with content
+                # Tag with content; need to find the matching closing tag
                 pos = tag_end + 1
                 nesting_level = 1
                 while nesting_level > 0 and pos < length:
-                    # Find the next opening or closing tag
                     next_start = content.find(f'<{tag_name}', pos)
                     next_end = content.find(f'</{tag_name}>', pos)
-                    if next_start != -1 and (next_start < next_end or next_end == -1):
-                        # Possible nested tag
-                        tag_close = content.find('>', next_start)
-                        if tag_close == -1:
-                            break
-                        # Check for self-closing nested tag
-                        if content[tag_close - 1] == '/':
-                            pos = tag_close + 1
-                        else:
-                            nesting_level += 1
-                            pos = tag_close + 1
+
+                    if next_start != -1 and next_start < next_end:
+                        # Found a nested opening tag of the same name
+                        nesting_level += 1
+                        pos = next_start + len(f'<{tag_name}')
                     elif next_end != -1:
                         nesting_level -= 1
                         pos = next_end + len(f'</{tag_name}>')
                     else:
+                        # No matching closing tag found
                         break
+
                 if nesting_level == 0:
                     xml_chunk = content[start_pos:pos]
                     chunks.append(xml_chunk)
                 else:
-                    # Unable to find closing tag, move pos forward
+                    # Malformed XML, skip this tag
                     pos = start_pos + 1
 
         return chunks
 
     def _xml_element_to_dict(self, element):
         """Recursively convert an ElementTree element into a dict."""
-        if len(element) == 0:
-            # No child elements
-            return element.text or ''
         result = {}
+        if element.attrib:
+            result['@attributes'] = element.attrib
+        if element.text and element.text.strip():
+            result['#text'] = element.text.strip()
         for child in element:
             child_result = self._xml_element_to_dict(child)
             if child.tag in result:
@@ -222,8 +217,7 @@ class XMLToolParser(ToolParserBase):
                     result[child.tag] = [result[child.tag]]
                 result[child.tag].append(child_result)
             else:
-                # Always store child elements in a list
-                result[child.tag] = [child_result]
+                result[child.tag]= child_result
         return result
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
