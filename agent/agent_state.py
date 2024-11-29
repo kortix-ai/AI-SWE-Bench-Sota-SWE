@@ -12,7 +12,7 @@ agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
-STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT'S A SINGLE <ACTIONS> TAG:\n"
+STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT IN A SINGLE <ACTIONS> TAG:\n"
 <AVAILABLE_XML_TOOLS>
 {xml_format}
 </AVAILABLE_XML_TOOLS>
@@ -34,7 +34,7 @@ The current state of the repository is as follows:
 {workspace}
 
 - Make sure you have the all relevant context before making any changes. Do not hesitate to open new files related to the issue.
-- After applying the changes, create your own test scripts (e.g reproduce.py, edge_cases.py) and run them to check if the fix is working and it covers edge cases.
+- After applying the changes, create test scripts if not exist (e.g reproduce.py, edge_cases.py) and run them to check if the fix is working and it covers edge cases.
 - Only submit if all tests passed.
 """
 

@@ -1,8 +1,9 @@
 import asyncio
 import base64
+import shlex
+import json
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
-import os
 from typing import List, Optional
 
 class BashExecutor:
@@ -79,8 +80,6 @@ class RepositoryTools(Tool):
                 "open_folders": {},        # Dictionary with folder paths as keys and depths as values
                 "open_files": [],          # List of paths to open files
                 "terminal_session": [],    # Current terminal session output (last N commands)
-                # "thinking_logs": [],       # Logs for internal thoughts or notes
-                # "actions_taken": [],       # List of past actions
             }
             
             # Find and add only main source code folders with depth 3
@@ -454,7 +453,7 @@ print("Hello, World!")
     async def create_file(self, path: str, content: str) -> ToolResult:
         try:
             encoded_content = base64.b64encode(content.encode()).decode()
-            command = f"echo {encoded_content} | base64 -d > {path}"
+            command = f"echo {encoded_content} | base64 -d > {shlex.quote(path)}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
                 # Add to open_files
@@ -529,20 +528,44 @@ print("Hello, World!")
         try:
             workspace = await self.state_manager.get("workspace")
             if path in workspace["open_files"]:
-                # Read the current content from the file system
-                command = f"cat {path}"
-                stdout, stderr, returncode = await self._bash_executor.execute(command)
-                if returncode != 0:
-                    return self.fail_response(f"Failed to read file {path}: {stderr}")
-                content = stdout
-                
-                # Ensure replacements is a list of replacement objects
+                # Prepare the Python script
+                python_script = '''
+import sys
+import json
+import base64
+
+try:
+    path = sys.argv[1]
+    replacements_base64 = sys.argv[2]
+
+    replacements_json = base64.b64decode(replacements_base64).decode('utf-8')
+    replacements = json.loads(replacements_json)
+
+    with open(path, 'r') as f:
+        content = f.read()
+
+    for replacement in replacements:
+        old_string = replacement['old_string']
+        new_string = replacement['new_string']
+        content = content.replace(old_string, new_string)
+
+    with open(path, 'w') as f:
+        f.write(content)
+except Exception as e:
+    print(f"Error: {str(e)}", file=sys.stderr)
+    sys.exit(1)
+'''
+                # Serialize the script and arguments
+                # First, process the replacements into a list of dicts
+                replacements_list = []
                 if isinstance(replacements, dict):
                     # Handle single replacement from XML parsing
                     if 'replacement' in replacements:
-                        replacements_list = replacements['replacement']
-                        if isinstance(replacements_list, dict):
-                            replacements_list = [replacements_list]
+                        replacements_data = replacements['replacement']
+                        if isinstance(replacements_data, dict):
+                            replacements_list = [replacements_data]
+                        elif isinstance(replacements_data, list):
+                            replacements_list = replacements_data
                     else:
                         # Direct dictionary case
                         replacements_list = [replacements]
@@ -551,22 +574,35 @@ print("Hello, World!")
                 else:
                     return self.fail_response("Invalid replacements format")
 
-                # Apply all replacements
+                replacements_cleaned = []
                 for rep in replacements_list:
                     if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
-                        old_string = rep['old_string'][0]
-                        new_string = rep['new_string'][0]
-                        content = content.replace(old_string, new_string)
+                        old_string = rep['old_string'][0] if isinstance(rep['old_string'], list) else rep['old_string']
+                        new_string = rep['new_string'][0] if isinstance(rep['new_string'], list) else rep['new_string']
+                        replacements_cleaned.append({
+                            'old_string': old_string,
+                            'new_string': new_string
+                        })
                     else:
                         return self.fail_response("Invalid replacement format")
-                # Write the updated content back to the file
-                encoded_content = base64.b64encode(content.encode()).decode()
-                command = f"echo {encoded_content} | base64 -d > {path}"
+
+                replacements_json = json.dumps(replacements_cleaned)
+                # Base64 encode the script and the replacements JSON
+                script_base64 = base64.b64encode(python_script.encode('utf-8')).decode('ascii')
+                replacements_base64 = base64.b64encode(replacements_json.encode('utf-8')).decode('ascii')
+                # Build the command to execute inside the container
+                # Use shlex.quote to safely quote arguments
+                commands = [
+                    f"echo {shlex.quote(script_base64)} | base64 -d > /tmp/edit_file.py",
+                    f"python /tmp/edit_file.py {shlex.quote(path)} {shlex.quote(replacements_base64)}"
+                ]
+                command = ' && '.join(commands)
+                # Execute the command
                 stdout, stderr, returncode = await self._bash_executor.execute(command)
                 if returncode == 0:
                     return self.success_response(f"File {path} edited successfully.")
                 else:
-                    return self.fail_response(f"Failed to write to file {path}: {stderr}")
+                    return self.fail_response(f"Failed to edit file {path}: {stderr}")
             else:
                 return self.fail_response(f"File {path} is not open.")
         except Exception as e:
@@ -663,8 +699,10 @@ print("Hello, World!")
         <!-- Parameters:
              - path: The file path to add to the workspace (REQUIRED)
         -->
+        <!-- It's recommended to open multiple relevant files in the same time like this -->
         <open_file path="/testbed/.../example.py" />
         <open_file path="/testbed/.../example2.py" />
+        <open_file path="/testbed/.../example3.py" />
         '''
     )
     async def open_file(self, path: str) -> ToolResult:
