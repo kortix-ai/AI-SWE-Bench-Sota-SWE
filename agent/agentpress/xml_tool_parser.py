@@ -211,7 +211,6 @@ class XMLToolParser(ToolParserBase):
             for child in children:
                 child_result = self._xml_element_to_dict(child)
                 if child.tag in result:
-                    # Ensure result[child.tag] is always a list
                     if not isinstance(result[child.tag], list):
                         result[child.tag] = [result[child.tag]]
                     result[child.tag].append(child_result)
@@ -219,7 +218,7 @@ class XMLToolParser(ToolParserBase):
                     result[child.tag] = child_result
             return result
         else:
-            return element.text.strip() if element.text else ''
+            return element.text
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
         """Parse XML chunk into tool call format.

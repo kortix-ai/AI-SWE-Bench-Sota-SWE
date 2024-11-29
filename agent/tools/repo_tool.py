@@ -2,9 +2,39 @@ import asyncio
 import base64
 import shlex
 import json
+import re
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 from typing import List, Optional
+
+def transform_string_to_dict(input_string):
+    """
+    Transform a string containing replacement tags into a dictionary format using regex.
+    
+    Args:
+        input_string (str): Input string with XML-like tags
+        
+    Returns:
+        dict: Transformed dictionary with replacement information
+    """
+    # Pattern to match old_string and new_string content
+    pattern = r'<old_string>(.*?)</old_string>\s*<new_string>(.*?)</new_string>'
+    
+    # Use re.DOTALL flag to make dot match newlines
+    matches = re.finditer(pattern, input_string, re.DOTALL)
+    
+    replacements = []
+    for match in matches:
+        old_string = match.group(1).strip()
+        new_string = match.group(2).strip()
+        
+        replacement = {
+            "old_string": old_string,
+            "new_string": new_string
+        }
+        replacements.append(replacement)
+    
+    return {"replacement": replacements}
 
 class BashExecutor:
     """Executes bash commands in Docker container using individual exec calls."""
@@ -563,14 +593,17 @@ print("Hello, World!")
                         replacements_list = [replacements]
                 elif isinstance(replacements, list):
                     replacements_list = replacements
+                elif isinstance(replacements, str):
+                    replacements = transform_string_to_dict(replacements)
+                    replacements_list = replacements['replacement']
                 else:
                     return self.fail_response("Invalid replacements format")
 
                 # Apply all replacements
                 for rep in replacements_list:
                     if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
-                        old_string = rep['old_string'][0] if isinstance(rep['old_string'], list) else rep['old_string']
-                        new_string = rep['new_string'][0] if isinstance(rep['new_string'], list) else rep['new_string']
+                        old_string = rep['old_string'] if isinstance(rep['old_string'], list) else rep['old_string']
+                        new_string = rep['new_string'] if isinstance(rep['new_string'], list) else rep['new_string']
                         content = content.replace(old_string, new_string)
                     else:
                         return self.fail_response("Invalid replacement format")
