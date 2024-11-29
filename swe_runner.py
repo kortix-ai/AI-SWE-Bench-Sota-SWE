@@ -3,7 +3,8 @@ import subprocess
 import os
 import sys
 import time
-from inference import convert_outputs_to_jsonl  # Add this import
+import json
+from inference import convert_outputs_to_jsonl
 
 def main():
     parser = argparse.ArgumentParser(description='SWE Runner')
@@ -55,6 +56,8 @@ def main():
                         help="Identifier for the run, replaces YourModelName (default: KortixAI)")
     parser.add_argument("--submission", action="store_true", default=False,
                         help="Enable submission mode to generate files in SWE-bench format.")
+    parser.add_argument("--rerun-failed", action="store_true", default=False,
+                        help="Rerun inference and evaluation for failed instances")
     
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
@@ -63,7 +66,54 @@ def main():
                                help="Type of dataset to use: 'lite' for SWE-bench_Lite, 'verified' for SWE-bench_Verified")
     
     args = parser.parse_args()
-    
+
+    if args.rerun_failed:
+        evaluation_results_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
+        if not os.path.exists(evaluation_results_file):
+            print(f"Evaluation results file not found at {evaluation_results_file}")
+            sys.exit(1)
+        
+        failed_instance_ids = []
+        successful_lines = []
+        with open(evaluation_results_file, 'r') as f:
+            lines = f.readlines()
+        
+        for line in lines:
+            try:
+                data = json.loads(line)
+                instance_id = data['instance_id']
+                test_result = data.get('test_result', {})
+                report = test_result.get('report', {})
+                # Determine if instance failed
+                if report.get('resolved') == False or 'failed_apply_patch' in report or 'error_eval' in report or 'empty_generation' in report:
+                    failed_instance_ids.append(instance_id)
+                else:
+                    successful_lines.append(line)
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON in evaluation_results.jsonl: {e}")
+                continue
+
+        if not failed_instance_ids:
+            print("No failed instances found in evaluation_results.jsonl")
+            sys.exit(0)
+        
+        # Write back the successful lines to evaluation_results.jsonl
+        with open(evaluation_results_file, 'w') as f:
+            f.writelines(successful_lines)
+        
+        # Write failed instance IDs to a file
+        failed_instances_file = os.path.join(args.output_dir, 'failed_instances.json')
+        with open(failed_instances_file, 'w') as f:
+            json.dump(failed_instance_ids, f)
+        
+        # Set args.instances_file to failed_instances_file
+        args.instances_file = failed_instances_file
+        # Reset other instance selection arguments to avoid conflicts
+        args.instance_id = None
+        args.test_index = None
+        args.range = None
+        args.num_examples = None
+
     if args.only_eval:
         args.run_eval = True
 

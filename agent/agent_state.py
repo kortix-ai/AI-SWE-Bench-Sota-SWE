@@ -12,30 +12,30 @@ agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues.
 
-STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT IN A SINGLE <ACTIONS> TAG:\n"
+STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT IN A SINGLE <ACTIONS> TAG:
 <AVAILABLE_XML_TOOLS>
 {xml_format}
 </AVAILABLE_XML_TOOLS>
 
-- You must rely on the text provided in the workspace. Do not make assumptions about file contents or command outputs.
-- Firstly, use <OBSERVE> and <REASON> tags to document your thought process, finally put all actions to take within <ACTIONS> tag and wait for the results.
+- A <last_try> solution and its result may be provided for reference. Note that the codebase is reset to the original state, so rely solely on the code provided in the <file> tags of the workspace. Do not assume file contents or command outputs.
+- If a <last_try> is provided, review it critically. Ensure the changes are minimal to solve the PR without breaking existing functionalities and tests. If the fix is correct and minimal, submit the PR.
+- Use <ANALYZE_LAST_TRY>, <OBSERVE>, <REASON> and <MULTIPLE_POSSIBLE_FIX> tags to document your thought process. Select the best solution that addresses the root cause while maintaining the codebase's functionalities. Finally, list all actions in the <ACTIONS> tag and wait for results.
+- In <MULTIPLE_POSSIBLE_FIX>, provide multiple possible solutions to the issue with short code snippets to demonstrate the fix.
 """
 
-user_prompt = """
-I've uploaded a Python code repository in the directory `/testbed`. Consider the following PR description:
+user_prompt = """I've uploaded a Python code repository in the directory /testbed. Consider the following PR description:
 
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository so that the requirements specified in the <pr_description> are met?
+Can you help me implement the necessary changes to the repository to meet the requirements specified in the <pr_description>?
 
 The current state of the repository is as follows:
 {workspace}
 
-- Make sure you have the all relevant context before making any changes. Do not hesitate to open new files related to the issue.
-- After applying the changes, create test scripts if not exist (e.g reproduce.py, edge_cases.py) and run them to check if the fix is working and it covers edge cases.
-- Only submit if all tests passed.
+- Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue.
+- Modify and run test files to confirm the issue is fixed, make sure it use -q -ra option to only show failed testcases (e.g. <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />).
 """
 
 

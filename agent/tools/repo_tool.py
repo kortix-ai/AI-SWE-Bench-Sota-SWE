@@ -80,7 +80,7 @@ class RepositoryTools(Tool):
             workspace = {
                 "open_folders": {},        # Dictionary with folder paths as keys and depths as values
                 "open_files": [],          # List of paths to open files
-                "terminal_session": [],    # Current terminal session output (last N commands)
+                "last_terminal_session": [],    # Current terminal session output (last N commands)
             }
             
             # Find and add only main source code folders with depth 3
@@ -105,16 +105,16 @@ class RepositoryTools(Tool):
     async def _update_terminal(self, command: str, output: Optional[str] = None, success: Optional[bool] = None):
         """Update terminal session with new command and optionally outputs."""
         workspace = await self.state_manager.get("workspace")
-        if "terminal_session" not in workspace:
-            workspace["terminal_session"] = []
+        if "last_terminal_session" not in workspace:
+            workspace["last_terminal_session"] = []
         # Add new command to terminal session
-        workspace["terminal_session"].append({
+        workspace["last_terminal_session"].append({
             "command": command,
             "output": output,
             "success": success,
         })
         # Keep only last 5 commands
-        workspace["terminal_session"] = workspace["terminal_session"][-5:]
+        # workspace["last_terminal_session"] = workspace["last_terminal_session"][-5:]
         await self.state_manager.set("workspace", workspace)
 
     async def execute_command_in_container(self, command: str):
@@ -162,18 +162,37 @@ class RepositoryTools(Tool):
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
         # Execute pending commands in terminal_session
-        # for session_entry in workspace.get("terminal_session", []):
-        #     if session_entry.get("output") is None:
-        #         stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
-        #         success = returncode == 0
-        #         output = stdout + stderr
-        #         # Update the session entry with the output and success
-        #         session_entry["output"] = output
-        #         session_entry["success"] = success
+        for session_entry in workspace.get("last_terminal_session", []):
+            if session_entry.get("output") is None:
+                stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
+                success = returncode == 0
+                output = stdout + stderr
+                # Update the session entry with the output and success
+                session_entry["output"] = output
+                session_entry["success"] = success
         # Save updated workspace
-        # await self.state_manager.set("workspace", workspace)
+        await self.state_manager.set("workspace", workspace)
 
         xml_output = "<workspace>\n"
+
+        # add <current_changes> (result of "git diff")
+        stdout, stderr, returncode = await self._bash_executor.execute('git diff')
+        xml_output += f"<last_try>\n<git_diff>{stdout}<git_diff>\n"
+        
+        xml_output += "<last_terminal_session>\n"
+        for session_entry in workspace.get("last_terminal_session", []):
+            xml_output += f"<command success=\"{session_entry['success']}\">\n"
+            xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
+            xml_output += "<output>\n"
+            xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
+            xml_output += "</output>\n"
+            xml_output += "</command>\n"
+        xml_output += "</last_terminal_session>\n"
+        xml_output += "</last_try>\n"
+
+        # run git reset --hard to discard changes
+        await self._bash_executor.execute('git reset --hard')
+
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
             result = await self._fetch_folder_contents(path=path, depth=depth)
@@ -187,16 +206,12 @@ class RepositoryTools(Tool):
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
-        # xml_output += "<terminal_session>\n"
-        # for session_entry in workspace.get("terminal_session", []):
-        #     xml_output += f"<command success=\"{session_entry['success']}\">\n"
-        #     xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
-        #     xml_output += "<output>\n"
-        #     xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
-        #     xml_output += "</output>\n"
-        #     xml_output += "</command>\n"
-        # xml_output += "</terminal_session>\n"
+
         xml_output += "</workspace>"
+
+        # reset terminal session
+        workspace["last_terminal_session"] = []
+
         return xml_output
 
     async def _fetch_folder_contents(self, path: str, depth: Optional[int]) -> ToolResult:
@@ -599,7 +614,11 @@ print("Hello, World!")
         <!-- Parameters:
              - command: The shell command to execute (REQUIRED)
         -->
-        <run_command command="python example_edge_cases.py" />
+        <!-- Examples -->
+
+        <run_command command="python example_reproduce_error.py" />
+        <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />
+
         '''
     )
     async def run_command(self, command: str) -> ToolResult:
