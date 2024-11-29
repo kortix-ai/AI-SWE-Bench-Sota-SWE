@@ -12,7 +12,7 @@ class BashExecutor:
     def __init__(self, container_name: str):
         self.container_name = container_name
         
-    async def execute(self, command: str) -> tuple[str, str, int]:
+    async def execute(self, command: str, input_data: Optional[bytes] = None) -> tuple[str, str, int]:
         """Execute a command in the container using docker exec."""
         try:
             # Ensure we're in /testbed and have conda environment
@@ -35,6 +35,7 @@ class BashExecutor:
             # Execute the command
             process = await asyncio.create_subprocess_exec(
                 *cmd,
+                stdin=asyncio.subprocess.PIPE if input_data else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -42,15 +43,15 @@ class BashExecutor:
             # Wait for command completion with timeout
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=300  # 5 minute timeout
+                    process.communicate(input=input_data),
+                    timeout=120  # 2 minute timeout
                 )
             except asyncio.TimeoutError:
                 try:
                     process.terminate()
                 except:
                     pass
-                return '', 'Command execution timed out after 5 minutes', 1
+                return '', 'Command execution timed out after 2 minutes', 1
                 
             # Decode outputs
             stdout_str = stdout.decode().strip() if stdout else ''
@@ -61,7 +62,7 @@ class BashExecutor:
                 stdout_str = "Command completed successfully but produced no output"
                 
             return stdout_str, stderr_str, process.returncode
-            
+                
         except Exception as e:
             return '', f"Error executing command: {str(e)}", 1
 
@@ -161,16 +162,16 @@ class RepositoryTools(Tool):
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
         # Execute pending commands in terminal_session
-        for session_entry in workspace.get("terminal_session", []):
-            if session_entry.get("output") is None:
-                stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
-                success = returncode == 0
-                output = stdout + stderr
-                # Update the session entry with the output and success
-                session_entry["output"] = output
-                session_entry["success"] = success
+        # for session_entry in workspace.get("terminal_session", []):
+        #     if session_entry.get("output") is None:
+        #         stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
+        #         success = returncode == 0
+        #         output = stdout + stderr
+        #         # Update the session entry with the output and success
+        #         session_entry["output"] = output
+        #         session_entry["success"] = success
         # Save updated workspace
-        await self.state_manager.set("workspace", workspace)
+        # await self.state_manager.set("workspace", workspace)
 
         xml_output = "<workspace>\n"
         # Include content from open folders with their specified depths
@@ -186,15 +187,15 @@ class RepositoryTools(Tool):
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
-        xml_output += "<terminal_session>\n"
-        for session_entry in workspace.get("terminal_session", []):
-            xml_output += f"<command success=\"{session_entry['success']}\">\n"
-            xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
-            xml_output += "<output>\n"
-            xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
-            xml_output += "</output>\n"
-            xml_output += "</command>\n"
-        xml_output += "</terminal_session>\n"
+        # xml_output += "<terminal_session>\n"
+        # for session_entry in workspace.get("terminal_session", []):
+        #     xml_output += f"<command success=\"{session_entry['success']}\">\n"
+        #     xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
+        #     xml_output += "<output>\n"
+        #     xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
+        #     xml_output += "</output>\n"
+        #     xml_output += "</command>\n"
+        # xml_output += "</terminal_session>\n"
         xml_output += "</workspace>"
         return xml_output
 
@@ -528,44 +529,20 @@ print("Hello, World!")
         try:
             workspace = await self.state_manager.get("workspace")
             if path in workspace["open_files"]:
-                # Prepare the Python script
-                python_script = '''
-import sys
-import json
-import base64
+                # Read the current content from the file system
+                command = f"cat {shlex.quote(path)}"
+                stdout, stderr, returncode = await self._bash_executor.execute(command)
+                if returncode != 0:
+                    return self.fail_response(f"Failed to read file {path}: {stderr}")
+                content = stdout
 
-try:
-    path = sys.argv[1]
-    replacements_base64 = sys.argv[2]
-
-    replacements_json = base64.b64decode(replacements_base64).decode('utf-8')
-    replacements = json.loads(replacements_json)
-
-    with open(path, 'r') as f:
-        content = f.read()
-
-    for replacement in replacements:
-        old_string = replacement['old_string']
-        new_string = replacement['new_string']
-        content = content.replace(old_string, new_string)
-
-    with open(path, 'w') as f:
-        f.write(content)
-except Exception as e:
-    print(f"Error: {str(e)}", file=sys.stderr)
-    sys.exit(1)
-'''
-                # Serialize the script and arguments
-                # First, process the replacements into a list of dicts
-                replacements_list = []
+                # Ensure replacements is a list of replacement objects
                 if isinstance(replacements, dict):
                     # Handle single replacement from XML parsing
                     if 'replacement' in replacements:
-                        replacements_data = replacements['replacement']
-                        if isinstance(replacements_data, dict):
-                            replacements_list = [replacements_data]
-                        elif isinstance(replacements_data, list):
-                            replacements_list = replacements_data
+                        replacements_list = replacements['replacement']
+                        if isinstance(replacements_list, dict):
+                            replacements_list = [replacements_list]
                     else:
                         # Direct dictionary case
                         replacements_list = [replacements]
@@ -574,35 +551,23 @@ except Exception as e:
                 else:
                     return self.fail_response("Invalid replacements format")
 
-                replacements_cleaned = []
+                # Apply all replacements
                 for rep in replacements_list:
                     if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
                         old_string = rep['old_string'][0] if isinstance(rep['old_string'], list) else rep['old_string']
                         new_string = rep['new_string'][0] if isinstance(rep['new_string'], list) else rep['new_string']
-                        replacements_cleaned.append({
-                            'old_string': old_string,
-                            'new_string': new_string
-                        })
+                        content = content.replace(old_string, new_string)
                     else:
                         return self.fail_response("Invalid replacement format")
 
-                replacements_json = json.dumps(replacements_cleaned)
-                # Base64 encode the script and the replacements JSON
-                script_base64 = base64.b64encode(python_script.encode('utf-8')).decode('ascii')
-                replacements_base64 = base64.b64encode(replacements_json.encode('utf-8')).decode('ascii')
-                # Build the command to execute inside the container
-                # Use shlex.quote to safely quote arguments
-                commands = [
-                    f"echo {shlex.quote(script_base64)} | base64 -d > /tmp/edit_file.py",
-                    f"python /tmp/edit_file.py {shlex.quote(path)} {shlex.quote(replacements_base64)}"
-                ]
-                command = ' && '.join(commands)
-                # Execute the command
-                stdout, stderr, returncode = await self._bash_executor.execute(command)
+                # Write the updated content back to the file using stdin
+                input_data = content.encode('utf-8')
+                command = f"cat > {shlex.quote(path)}"
+                stdout, stderr, returncode = await self._bash_executor.execute(command, input_data=input_data)
                 if returncode == 0:
                     return self.success_response(f"File {path} edited successfully.")
                 else:
-                    return self.fail_response(f"Failed to edit file {path}: {stderr}")
+                    return self.fail_response(f"Failed to write to file {path}: {stderr}")
             else:
                 return self.fail_response(f"File {path} is not open.")
         except Exception as e:
