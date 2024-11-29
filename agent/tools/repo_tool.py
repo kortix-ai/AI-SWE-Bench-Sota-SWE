@@ -191,18 +191,6 @@ class RepositoryTools(Tool):
     async def format_workspace_xml(self) -> str:
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
-        # Execute pending commands in terminal_session
-        for session_entry in workspace.get("last_terminal_session", []):
-            if session_entry.get("output") is None:
-                stdout, stderr, returncode = await self._bash_executor.execute(session_entry["command"])
-                success = returncode == 0
-                output = stdout + stderr
-                # Update the session entry with the output and success
-                session_entry["output"] = output
-                session_entry["success"] = success
-        # Save updated workspace
-        await self.state_manager.set("workspace", workspace)
-
         xml_output = "<workspace>\n"
 
         # add <current_changes> (result of "git diff")
@@ -219,9 +207,6 @@ class RepositoryTools(Tool):
             xml_output += "</command>\n"
         xml_output += "</last_terminal_session>\n"
         xml_output += "</last_try>\n"
-
-        # run git reset --hard to discard changes
-        await self._bash_executor.execute('git reset --hard')
 
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
@@ -655,9 +640,8 @@ print("Hello, World!")
         '''
     )
     async def run_command(self, command: str) -> ToolResult:
-        """Add command to terminal session without executing it immediately."""
-        await self._update_terminal(command)
-        return self.success_response(f"Command '{command}' added to terminal session.")
+        """Execute a shell command and update the terminal session."""
+        return await self._execute_command(command)
 
     async def _execute_command(self, command: str) -> ToolResult:
         """Execute a shell command and update the terminal session."""
@@ -668,7 +652,7 @@ print("Hello, World!")
             if success:
                 return self.success_response(f"Command executed successfully:\n{stdout}")
             else:
-                return self.fail_response(f"Command failed with error:\n{stderr}")
+                return self.fail_response(f"Command failed with error:\n{stdout + stderr}")
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 
