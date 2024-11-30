@@ -452,7 +452,7 @@ if __name__ == '__main__':
         "type": "function",
         "function": {
             "name": "create_file",
-            "description": "Create a new file with the specified content and add it to the workspace state.",
+            "description": "Create a new file with the specified content and add it to the workspace state. Do not create new test files.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -637,10 +637,10 @@ print("Hello, World!")
         <run_bash command="python -m pytest /testbed/.../test_example.py -q -rFE" />
 
         <!-- For Django-like -->
-        <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
+        <run_bash command="/testbed/tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1 example.tests.test_example1 example.tests.test_example2" />
         '''
     )
-        # <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.tests.test_example1 example.tests.test_example2" />
+        # <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
     async def run_bash(self, command: str) -> ToolResult:
         """Execute a shell command and update the terminal session."""
         return await self._execute_command(command)

@@ -13,13 +13,15 @@ agentops.init(os.environ['AGENTOPS_API_KEY'])
 system_prompt = """You are an autonomous expert software engineer specializing in implementing precise, high-quality modifications to resolve specific issues within a Python code repository.
 
 - Base all reasoning on the provided workspace, including opened files, folders, and the PR description. Do not make assumptions beyond the provided information.
+- Analyze in detail the content of the opened files in the current workspace.
 
 IMPORTANT:
 - Use only one `<ACTIONS>` tag containing all your actions at the end of your response.
+- Propose multiple solutions or possible approaches with code snippets for each related file, each approach may involve different files.
 - Always run tests after making modifications at the end of `<ACTIONS>` tag to ensure the code functions as expected.
+- Do not any edit file that is not opened yet in the workspace.
+- DO NOT CREATE NEW TEST FILES, you only can modify existing test files.
 """
-
-
 user_prompt = """Below is the current state of the workspace:
 {workspace}
 
@@ -37,16 +39,16 @@ Can you assist in implementing the necessary changes to the repository to fulfil
 
 Guidelines:
 - Initial Step: Ensure that relevant files and existing tests are opened, and their content is displayed in the workspace.
-- Review Last Attempt: If a `<last_try>` tag is provided, critically review it and analyze the output of test commands. Determine if the fix is correct and if all tests pass. If not, decide whether to continue from the last attempt or start anew by running "git reset --hard".
+- Detailed Analysis of Workspace: Analyze in detail the opened files in the current workspace, understanding their functionality and how they relate to the PR description.
+- Review Last Attempt: If a `<last_try>` tag is provided, critically review it and analyze the output of test commands. If it failed, think deeply about why it failed, if the last approach was incorrect.
 - Analysis: Take time to evaluate the current state of the code and consider various approaches before making changes.
-- Solution Selection: Choose the best solution that fully addresses the root cause, maintains existing functionalities, and ensures all tests pass.
+- Solution Exploration: Propose multiple solutions or possible approaches with code snippets, this may involve multiple different files.
+- Solution Selection: Choose the best solution to implement that fully addresses the root cause, maintains existing functionalities, and ensures all tests pass.
 - Edge Cases: Consider edge cases and ensure your fix handles them appropriately.
-- Action Execution: You may perform multiple actions in your response. Make sure to always run tests after making modifications. However, if you require the output of an action to proceed, wait for the results before continuing.
+- Action Execution: If last attempt was failed, you should start fresh with "git reset --hard". You may perform multiple actions in your response. Make sure to always run tests after making modifications. However, if you require the output of an action to proceed, wait for the results before continuing. DO NOT CREATE NEW TEST FILES, you should find and update existing tests relevant to the issue instead if it isn't in workspace.
 
-You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE>`, `<REASON>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results.
+You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>` and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results. Your thinking should be thorough and so it's fine if it's very long.
 """
-
-# always run tests
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
