@@ -10,38 +10,40 @@ import agentops
 agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 
-system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues of a Python code repository.
+system_prompt = """You are an autonomous expert software engineer specializing in implementing precise, high-quality modifications to resolve specific issues within a Python code repository.
 
-STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT IN A SINGLE <ACTIONS> TAG:
-<AVAILABLE_XML_TOOLS>
-{xml_format}
-</AVAILABLE_XML_TOOLS>
-
-- Base all reasoning on the provided workspace, opened files, folders and PR description; do not make assumptions beyond the given information.
+- Base all reasoning on the provided workspace, including opened files, folders, and the PR description. Do not make assumptions beyond the provided information.
 
 IMPORTANT:
-- Use only one `<ACTIONS>` tag containing all your actions in the end of your response.
+- Use only one `<ACTIONS>` tag containing all your actions at the end of your response.
+- Always run tests after making modifications at the end of `<ACTIONS>` tag to ensure the code functions as expected.
 """
 
 
 user_prompt = """Below is the current state of the workspace:
 {workspace}
 
-A Python code repository has been uploaded to the `/testbed` directory. Consider the following PR  description:
+STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT ENCLOSED WITH A SINGLE `<ACTIONS>` TAG:
+<AVAILABLE_XML_TOOLS>
+{xml_format}
+</AVAILABLE_XML_TOOLS>
+
+A Python code repository has been uploaded to the `/testbed` directory. Please consider the following PR description:
 <pr_description>
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository to meet the requirements specified in the <pr_description>?
+Can you assist in implementing the necessary changes to the repository to fulfill the requirements specified in the `<pr_description>`?
 
-- As a first step, make sure relevant files and existing tests are opened, and their content is shown in the workspace.
-- If the last attempt is provided under <last_try> tag, review it critically, analyze output of test commands. If the fix is correct and all tests pass. Otherwise, decide whether to continue from it or start over.
-- Take time to analyze the current state of the code and consider different approaches before implementing changes.
-- Choose the best solution that fully resolves the root cause while maintaining existing functionalities and passing all tests.
-- Think about edgecases and make sure your fix handles them as well.
-- You can make multiple actions in your response, but if you need to their output to proceed, you should wait for the results before continuing.
+Guidelines:
+- Initial Step: Ensure that relevant files and existing tests are opened, and their content is displayed in the workspace.
+- Review Last Attempt: If a `<last_try>` tag is provided, critically review it and analyze the output of test commands. Determine if the fix is correct and if all tests pass. If not, decide whether to continue from the last attempt or start anew by running "git reset --hard".
+- Analysis: Take time to evaluate the current state of the code and consider various approaches before making changes.
+- Solution Selection: Choose the best solution that fully addresses the root cause, maintains existing functionalities, and ensures all tests pass.
+- Edge Cases: Consider edge cases and ensure your fix handles them appropriately.
+- Action Execution: You may perform multiple actions in your response. Make sure to always run tests after making modifications. However, if you require the output of an action to proceed, wait for the results before continuing.
 
-You're working autonomously from now on. Start with <ASSESS_LAST_TRY> then follow by <OBSERVE>, <REASON> and <POSSIBLE_FIX> tags to document your thought process. Finally, list all actions in the <ACTIONS> tag and wait for results.
+You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE>`, `<REASON>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results.
 """
 
 # always run tests
@@ -70,7 +72,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     xml_format = f"{json.dumps(xml_examples, indent=2)}"
     system_message = {
         "role": "system",
-        "content": system_prompt.format(xml_format=xml_format)
+        "content": system_prompt
+        #.format(xml_format=xml_format)
     }
     await thread_manager.add_to_history_only(thread_id, system_message)
 
@@ -87,7 +90,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 "content": user_prompt.format(
                     problem_statement=problem_statement, 
                     workspace=workspace,
-                    # xml_format=xml_format,
+                    xml_format=xml_format,
                 )
             })
 

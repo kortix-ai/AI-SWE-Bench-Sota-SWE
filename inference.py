@@ -72,7 +72,7 @@ export LC_ALL=en_US.UTF-8
 
 git config --global --add safe.directory /testbed
 python -m pip install pytest
-# python -m pip install -e '.[test]'
+python -m pip install -e '.[test]'
 '''
         result = execute_command_in_container(container_name, installation_commands)
         if result.returncode != 0:

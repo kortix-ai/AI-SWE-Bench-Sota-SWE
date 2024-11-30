@@ -363,46 +363,46 @@ if __name__ == '__main__':
         except Exception as e:
             return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "mark_pr_as_solved",  # Renamed from 'submit_last_try'
-            "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="mark_pr_as_solved",
-        mappings=[],
-        example='''
-        <!-- Repository Tool: Mark PR as Solved -->
-        <!-- Use when all tests of last_try pass and the issue is resolved -->
+    # @openapi_schema({
+    #     "type": "function",
+    #     "function": {
+    #         "name": "mark_pr_as_solved",  # Renamed from 'submit_last_try'
+    #         "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {},
+    #             "required": []
+    #         }
+    #     }
+    # })
+    # @xml_schema(
+    #     tag_name="mark_pr_as_solved",
+    #     mappings=[],
+    #     example='''
+    #     <!-- Repository Tool: Mark PR as Solved -->
+    #     <!-- Use when all tests of last_try pass and the issue is resolved -->
 
-        <!-- No Parameters Required -->
+    #     <!-- No Parameters Required -->
 
-        <!-- Mark the PR as solved -->
-        <mark_pr_as_solved />
+    #     <!-- Mark the PR as solved -->
+    #     <mark_pr_as_solved />
 
-        <!-- Important Notes:
-             - Can only be used within <ASSESS_LAST_TRY> tag
-             - Only use when all test files of last_try are working
-             - Ensure edge cases are covered
-             - Verify existing tests pass
-        -->
-        '''
-    )
-    async def mark_pr_as_solved(self) -> ToolResult:
-        """
-        Signals that the task is completed.
+    #     <!-- Important Notes:
+    #          - Can only be used within <ASSESS_LAST_TRY> tag
+    #          - Only use when all test files of last_try are working
+    #          - Ensure edge cases are covered
+    #          - Verify existing tests pass
+    #     -->
+    #     '''
+    # )
+    # async def mark_pr_as_solved(self) -> ToolResult:
+    #     """
+    #     Signals that the task is completed.
 
-        Returns:
-            ToolResult: Success message indicating task completion.
-        """
-        return self.success_response("Task completed successfully.")
+    #     Returns:
+    #         ToolResult: Success message indicating task completion.
+    #     """
+    #     return self.success_response("Task completed successfully.")
 
     # @openapi_schema({
     #     "type": "function",
@@ -631,20 +631,16 @@ print("Hello, World!")
         ],
         example='''
         <!-- Run Bash Command Tool -->
-        <!-- Run a shell command in the terminal -->
         <!-- Please avoid commands that can produce lengthy output -->
 
-        <!-- Parameters:
-             - command: The shell command to execute (REQUIRED)
-        -->
         <!-- Examples -->
-
         <run_bash command="python -m pytest /testbed/.../test_example.py -q -rFE" />
 
         <!-- For Django-like -->
         <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
         '''
     )
+        # <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.tests.test_example1 example.tests.test_example2" />
     async def run_bash(self, command: str) -> ToolResult:
         """Execute a shell command and update the terminal session."""
         return await self._execute_command(command)
