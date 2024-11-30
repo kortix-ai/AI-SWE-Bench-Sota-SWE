@@ -10,43 +10,99 @@ import agentops
 agentops.init(os.environ['AGENTOPS_API_KEY'])
 
 
-system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues in a Python code repository while passing existing tests.
+# system_prompt = """You are an autonomous expert software engineer focused on implementing precise, high-quality changes to solve specific issues in a Python code repository while passing existing tests.
 
-STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT WITHIN A SINGLE <ACTIONS> TAG:
+# STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT WITHIN A SINGLE <ACTIONS> TAG:
+
+# <AVAILABLE_XML_TOOLS>
+# {xml_format}
+# </AVAILABLE_XML_TOOLS>
+
+# GUIDELINES:
+
+# 1. Use only one <ACTIONS> tag containing all actions. Do not use multiple <ACTIONS> tags.
+# 2. Do not repeat tags or output multiple instances of the same tag.
+# 3. Always run tests before closing the </ACTIONS> tag to verify your changes.
+# 4. Do not produce any output after the closing </ACTIONS> tag. Wait for the results of action execution.
+
+# THOUGHT PROCESS TAGS (use these before the <ACTIONS> tag):
+
+# 1. <ASSESS_LAST_TRY>: If a <last_try> is provided, review it critically. Decide whether to submit the last try using <mark_pr_as_solved /> (if the fix was correct and all test cases passed), continue from it, or start over.
+# 2. <OBSERVE>: Note relevant information from the codebase based on the <file> tags of the workspace. Do not assume file contents or command outputs beyond what is provided.
+# 3. <REASON>: Determine the necessary changes to solve the issue described in the PR. Identify the root cause based on your observations.
+# 4. <MULTIPLE_POSSIBLE_FIX>: If appropriate, propose multiple solutions. For each solution, provide code snippets and a deep analysis explaining its impact on the codebase functionalities and existing tests. Choose the best solution to implement, ensuring it fully addresses the issue.
+
+# INSTRUCTIONS:
+
+# - Prioritize correctness and code quality over making minimal changes.
+# - Select the best solution that fully addresses the root cause while maintaining existing functionalities and passing all tests.
+# - In the <ACTIONS> tag, list all actions using the available XML tools, including modifications, file creations, and command executions.
+# - Use "git reset --hard" at the start of <ACTIONS> if you decide to start from scratch.
+# - Run tests to confirm the issue is fixed.
+# - Use `<mark_pr_as_solved />` within `<ASSESS_LAST_TRY>` only if you are confident that the last try has successfully resolved the issue, all tests pass, and no further changes are needed.
+
+# REMEMBER:
+
+# - Be clear and precise in your analysis and actions.
+# - The goal is to pass all existing tests while fixing the issue described in the PR.
+# - Base all your reasoning on the provided workspace and PR description.
+# - Do not make assumptions beyond the given information.
+# - Always execute tests as your final action before closing the </ACTIONS> tag.
+# """
+
+# user_prompt = """The current state of the repository is as follows:
+# {workspace}
+
+# A Python code repository has been uploaded to the `/testbed` directory. Please consider the following PR description:
+
+# <pr_description>
+# {problem_statement}
+# </pr_description>
+
+# Can you help me implement the necessary changes to the repository to meet the requirements specified in the <pr_description>?
+
+# Additional Instructions:
+
+# - Assess the last attempt first if a <last_try> is provided. Decide whether to submit it using `<mark_pr_as_solved />` and terminate (if the fix was correct and all test cases passed), continue from it, or start over with "git reset --hard".
+# - Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue if necessary.
+# - Modify and run test files to confirm the issue is fixed. You MUST run tests as your final actions before closing the </ACTIONS> tag using the `-q -ra` options to show failed test cases (e.g., `<run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />`).
+# - After closing the `</ACTIONS>` tag, wait for the results of action execution without producing further output.
+
+# Please proceed to analyze the PR and implement the required changes using the guidelines provided.
+# """
+
+system_prompt = """You are an expert software engineer tasked with implementing precise, high-quality changes to solve specific issues in a Python code repository while ensuring all existing tests pass.
+
+Output your actions in the following XML format within a single `<ACTIONS>` tag:
 
 <AVAILABLE_XML_TOOLS>
 {xml_format}
 </AVAILABLE_XML_TOOLS>
 
-GUIDELINES:
+**Guidelines:**
 
-1. Use only one <ACTIONS> tag containing all actions. Do not use multiple <ACTIONS> tags.
-2. Do not repeat tags or output multiple instances of the same tag.
-3. Do not produce any output after the closing </ACTIONS> tag. Wait for the results of action execution.
+1. **Single `<ACTIONS>` Tag**: Use only one `<ACTIONS>` tag containing all your actions. Do not output multiple `<ACTIONS>` tags or repeat any tags.
+2. **Thought Process Tags** (use these before the `<ACTIONS>` tag):
+   - `<ASSESS_LAST_TRY>`: If a `<last_try>` is provided, critically review it. Decide whether to submit it using `<mark_pr_as_solved />` (if the fix is correct and all tests pass), continue from it, or start over.
+   - `<OBSERVE>`: Note relevant information from the codebase based on the `<file>` tags in the workspace. Do not assume file contents or command outputs beyond what is provided.
+   - `<REASON>`: Determine the necessary changes to solve the issue described in the PR, identifying the root cause based on your observations.
+   - `<MULTIPLE_POSSIBLE_FIX>`: If appropriate, propose multiple solutions with code snippets and detailed analyses of their impact on the codebase and existing tests. Choose the best solution that fully addresses the issue.
+3. **Instructions for Actions**:
+   - Prioritize correctness and code quality over minimal changes.
+   - Select the best solution that fully resolves the root cause while maintaining existing functionalities and passing all tests.
+   - In the `<ACTIONS>` tag, list all actions using the available XML tools, including modifications, file creations, and command executions.
+   - If starting over, include `<run_command command="git reset --hard" />` at the beginning of the `<ACTIONS>` tag.
+   - Run tests as your final actions before closing the `</ACTIONS>` tag to verify your changes, using the `-q -ra` options to display failed test cases (e.g., `<run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />`).
+4. **Post-Actions**:
+   - After closing the `</ACTIONS>` tag, do not produce any further output. Wait for the results of action execution.
 
-THOUGHT PROCESS TAGS (use these before the <ACTIONS> tag):
-
-1. <ASSESS_LAST_TRY>: If a <last_try> is provided, review it critically. Decide whether to submit, continue from it, or start over.
-2. <OBSERVE>: Note relevant information from the codebase based on the <file> tags of the workspace. Do not assume file contents or command outputs beyond what is provided.
-3. <REASON>: Determine the necessary changes to solve the issue described in the PR. Identify the root cause based on your observations.
-4. <MULTIPLE_POSSIBLE_FIX>: If appropriate, propose multiple solutions. For each solution, provide code snippets and a deep analysis explaining its impact on the codebase functionalities and existing tests. Choose the best solution to implement, ensuring it fully addresses the issue.
-
-INSTRUCTIONS:
-
-- Prioritize correctness and code quality over making minimal changes.
-- Select the best solution that fully addresses the root cause while maintaining existing functionalities and passing all tests.
-- In the <ACTIONS> tag, list all actions using the available XML tools, including modifications, file creations, and command executions.
-- Use "git reset --hard" at the start of <ACTIONS> if you decide to start from scratch.
-- Run tests to confirm the issue is fixed.
-- **You can only use `<mark_pr_as_solved />` after you have assessed the last try using `<ASSESS_LAST_TRY>`.**
-
-REMEMBER:
+**Remember:**
 
 - Be clear and precise in your analysis and actions.
-- The goal is to pass all existing tests while fixing the issue described in the PR.
-- Base all your reasoning on the provided workspace and PR description.
-- Do not make assumptions beyond the given information.
-"""
+- Your goal is to pass all existing tests while fixing the issue described in the PR.
+- Base all reasoning on the provided workspace and PR description.
+- Do not make assumptions beyond the given information."""
+
 
 user_prompt = """The current state of the repository is as follows:
 {workspace}
@@ -57,21 +113,19 @@ A Python code repository has been uploaded to the `/testbed` directory. Please c
 {problem_statement}
 </pr_description>
 
-Can you help me implement the necessary changes to the repository to meet the requirements specified in the <pr_description>?
+Can you help implement the necessary changes to the repository to meet the requirements specified in the `<pr_description>`?
 
-Additional Instructions:
+**Additional Instructions:**
 
-- Assess the last attempt first if a <last_try> is provided. Decide whether to submit it and terminate (if the fix was correct and all test cases passed), continue from it, or start over with "git reset --hard".
-- Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue if necessary.
-- Modify and run test files to confirm the issue is fixed. Use the `-q -ra` options to only show failed test cases (e.g., `<run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />`).
+- Assess the Last Attempt: If a `<last_try>` is provided, review it first. Decide whether to submit it using `<mark_pr_as_solved />` (if the fix was correct and all test cases passed), continue from it, or start over with `git reset --hard`.
+- Gather Context: Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue if necessary.
+- You MUST run tests as your final actions before closing the `</ACTIONS>` tag (e.g., `<run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />`).
 - After closing the `</ACTIONS>` tag, wait for the results of action execution without producing further output.
 
-Please proceed to analyze the PR and implement the required changes using the guidelines provided.
-"""
+Please proceed to analyze the PR and implement the required changes using the guidelines provided."""
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
-    # Start agentops session at the beginning of run_agent
     agentops_session = agentops.start_session()
     
     thread_manager = ThreadManager(threads_dir=threads_dir)
@@ -88,15 +142,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     thread_manager.add_tool(RepositoryTools, container_name=container_name, state_manager=state_manager)
     repo_tool = RepositoryTools(container_name=container_name, state_manager=state_manager)
 
-    # Initialize the workspace explicitly
     await repo_tool._init_workspace()
-
-    # from tools.bash_tool import BashTool
-    # thread_manager.add_tool(BashTool, container_name=container_name, state_file=state_file)
-    # from tools.edit_and_run_tool import EditTool
-    # thread_manager.add_tool(EditTool, container_name=container_name, state_file=state_file)
-    # from tools.report_tool import ReportTool
-    # report_tool = ReportTool(state_file=state_file)
 
     xml_examples = thread_manager.tool_registry.get_xml_examples()
     xml_format = f"{json.dumps(xml_examples, indent=2)}"
@@ -113,7 +159,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             iteration += 1
             await thread_manager.reset_messages(thread_id)
 
-            # Retrieve the current workspace
             workspace = await repo_tool.format_workspace_xml()
             await thread_manager.add_message(thread_id, {
                 "role": "user",
@@ -130,16 +175,13 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 native_tool_calling=False,
                 xml_tool_calling=True,
                 parallel_tool_execution=False,
-                # agentops_session=agentops_session,
             )
 
-            # Check for submit in XML response
             if iteration > 5:
                 assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
                 if assistant_messages:
                     last_assistant = assistant_messages[0]['content']
                     try:
-                        # Look for mark_pr_as_solved tag in the response
                         if '<mark_pr_as_solved />' in last_assistant:
                             print("Task completed via mark_pr_as_solved tool, stopping...")
                             agentops_session.end_session()
@@ -188,7 +230,5 @@ if __name__ == "__main__":
             max_iterations=args.max_iterations,
             model_name=model_name
         )
-
-    asyncio.run(main())
 
     asyncio.run(main())

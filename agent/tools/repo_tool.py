@@ -217,9 +217,9 @@ class RepositoryTools(Tool):
         
         xml_output += "<last_terminal_session>\n"
         for session_entry in workspace.get("last_terminal_session", []):
-            xml_output += f"<run_command success=\"{session_entry['success']}\" command=\"{session_entry['command']}\">\n"
+            xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
             xml_output += f"{session_entry['output']}\n"
-            xml_output += "</command>\n"
+            xml_output += "</bash_command_executed>\n"
         xml_output += "</last_terminal_session>\n"
         xml_output += f"<git_diff>{stdout}<git_diff>\n"
         xml_output += "</last_try>\n"
@@ -642,7 +642,6 @@ print("Hello, World!")
         '''
     )
     async def run_command(self, command: str) -> ToolResult:
-        # Example: <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />
         """Execute a shell command and update the terminal session."""
         return await self._execute_command(command)
 

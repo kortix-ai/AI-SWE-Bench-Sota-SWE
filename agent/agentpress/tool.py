@@ -88,7 +88,6 @@ class ToolResult:
     output: str
 
     def __str__(self) -> str:
-        # return f'<ToolResult>{self.output}</ToolResult>'
         return self.output
 
 class Tool(ABC):
