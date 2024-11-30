@@ -161,7 +161,7 @@ def display_run_details(run_data: List[Dict]):
                 else:
                     # Add iteration number for assistant messages
                     if role == "assistant":
-                        st.code(f"[{assistant_count}] {formatted_content}")
+                        st.code(f"[{assistant_count}] {formatted_content}", wrap_lines=True)
                     else:
                         st.markdown(formatted_content)
                 
@@ -294,7 +294,7 @@ def main():
             st.stop()
 
         selected_run = None
-        for run in runs:
+        for i, run in enumerate(runs):
             run_name = run['name']
             # Modify icon based on status
             if run.get('status') == 'running':
@@ -303,7 +303,7 @@ def main():
                 icon = '✅'
             else:
                 icon = '❌'
-            if st.button(f"{icon} {run_name}", key=f"run_{run_name}"):
+            if st.button(f"({i+1}){icon} {run_name}", key=f"run_{run_name}"):
                 selected_run = run_name
                 run_dir = run['path']
 

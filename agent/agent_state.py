@@ -21,7 +21,9 @@ STRICTLY OUTPUT YOUR ACTIONS IN THE FOLLOWING XML FORMAT IN A SINGLE <ACTIONS> T
 - If a <last_try> is provided, review it critically. Ensure the changes are minimal to solve the PR without breaking existing functionalities and tests. If the fix is correct and minimal, submit the PR.
 - In <MULTIPLE_POSSIBLE_FIX>, provide multiple possible solutions to the issue with short code snippets to demonstrate the fix. Select the best solution that addresses the root cause while maintaining the codebase's functionalities.
 - Use <ASSET_LAST_TRY>, <OBSERVE>, <REASON> and <MULTIPLE_POSSIBLE_FIX> tags to document your thought process. Finally, list all actions in the <ACTIONS> tag and wait for results.
-- ONLY SUBMIT if the current fix is correct and all tests cases are passed. 
+- ONLY SUBMIT if the current fix is correct and all tests cases are passed.
+- After asset the quality of the changes made, you can choose to continue the work of previous try, or use "git reset --hard" at the start of <ACTIONS> to start from scratch.
+- No more output should be made after closing </ACTIONS>, wait the output of actions execution.
 """
 
 user_prompt = """I've uploaded a Python code repository in the directory /testbed. Consider the following PR description:
@@ -36,7 +38,7 @@ The current state of the repository is as follows:
 {workspace}
 
 - Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue.
-- Modify and run test files to confirm the issue is fixed, make sure it use -q -ra option to only show failed testcases (e.g. <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />).
+- Modify and run test files to confirm the issue is fixed, make sure it use -q -ra option to only show failed testcases (e.g. <run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />).
 """
 
 
@@ -105,18 +107,18 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             )
 
             # Check for submit in XML response
-            assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-            if assistant_messages:
-                last_assistant = assistant_messages[0]['content']
-                try:
-                    # Look for submit tag in the response
-                    if '<submit' in last_assistant:
-                        print("Task completed via submit tool, stopping...")
-                        agentops_session.end_session()
-                        return
-                except Exception as e:
-                    print(f"Error parsing XML response: {str(e)}")
-                    continue
+            # assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+            # if assistant_messages:
+            #     last_assistant = assistant_messages[0]['content']
+            #     try:
+            #         # Look for submit tag in the response
+            #         if '<submit' in last_assistant:
+            #             print("Task completed via submit tool, stopping...")
+            #             agentops_session.end_session()
+            #             return
+            #     except Exception as e:
+            #         print(f"Error parsing XML response: {str(e)}")
+            #         continue
 
         except Exception as e:
             print(f"Error in iteration {iteration}: {str(e)}")

@@ -635,11 +635,12 @@ print("Hello, World!")
         <!-- Examples -->
 
         <run_command command="python example_reproduce_error.py" />
-        <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />
+        <run_command command="python -m pytest /testbed/.../test_example.py -q -ra />
 
         '''
     )
     async def run_command(self, command: str) -> ToolResult:
+        # Example: <run_command command="python -m pytest /testbed/.../test_example.py -q -ra 2>&1 | grep -v 'RuntimeWarning'" />
         """Execute a shell command and update the terminal session."""
         return await self._execute_command(command)
 
@@ -649,10 +650,7 @@ print("Hello, World!")
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
             await self._update_terminal(command, stdout + stderr, success)
-            if success:
-                return self.success_response(f"Command executed successfully:\n{stdout}")
-            else:
-                return self.fail_response(f"Command failed with error:\n{stdout + stderr}")
+            return self.success_response(f"Command executed:\n{stdout + stderr}")
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 

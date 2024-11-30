@@ -38,3 +38,4 @@ new_agentpress/
 *.ipynb
 *.zip
 .vscode/
+output/

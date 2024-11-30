@@ -68,6 +68,7 @@ def main():
     args = parser.parse_args()
 
     if args.rerun_failed:
+        args.archive = False  # Disable archiving when rerunning failed tests
         evaluation_results_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
         if not os.path.exists(evaluation_results_file):
             print(f"Evaluation results file not found at {evaluation_results_file}")
@@ -75,6 +76,8 @@ def main():
         
         failed_instance_ids = []
         successful_lines = []
+        evaluated_instances = set()
+        
         with open(evaluation_results_file, 'r') as f:
             lines = f.readlines()
         
@@ -82,6 +85,7 @@ def main():
             try:
                 data = json.loads(line)
                 instance_id = data['instance_id']
+                evaluated_instances.add(instance_id)
                 test_result = data.get('test_result', {})
                 report = test_result.get('report', {})
                 # Determine if instance failed
@@ -93,9 +97,22 @@ def main():
                 print(f"Error decoding JSON in evaluation_results.jsonl: {e}")
                 continue
 
+        # Check outputs directory for missing instances
+        output_dirs = [d for d in os.listdir(args.output_dir) 
+                      if os.path.isdir(os.path.join(args.output_dir, d)) 
+                      and not d.startswith('__')]
+        
+        for dir_name in output_dirs:
+            instance_id = dir_name  # Directory name is the instance ID
+            if instance_id not in evaluated_instances:
+                print(f"Found unevaluated instance: {instance_id}")
+                failed_instance_ids.append(instance_id)
+
         if not failed_instance_ids:
-            print("No failed instances found in evaluation_results.jsonl")
+            print("No failed or missing instances found")
             sys.exit(0)
+        
+        print(f"Found {len(failed_instance_ids)} instances to rerun")
         
         # Write back the successful lines to evaluation_results.jsonl
         with open(evaluation_results_file, 'w') as f:
