@@ -194,20 +194,6 @@ class RepositoryTools(Tool):
         workspace = await self.state_manager.get("workspace")
         xml_output = "<workspace>\n"
 
-        # add <current_changes> (result of "git diff")
-        stdout, stderr, returncode = await self._bash_executor.execute('git diff')
-        xml_output += f"<last_try>\n<git_diff>{stdout}<git_diff>\n"
-        
-        xml_output += "<last_terminal_session>\n"
-        for session_entry in workspace.get("last_terminal_session", []):
-            xml_output += f"<command success=\"{session_entry['success']}\">\n"
-            xml_output += f"<![CDATA[\n{session_entry['command']}\n]]>\n"
-            xml_output += "<output>\n"
-            xml_output += f"<![CDATA[\n{session_entry['output']}\n]]>\n"
-            xml_output += "</output>\n"
-            xml_output += "</command>\n"
-        xml_output += "</last_terminal_session>\n"
-        xml_output += "</last_try>\n"
 
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
@@ -223,7 +209,20 @@ class RepositoryTools(Tool):
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
-        xml_output += "</workspace>"
+        xml_output += "</workspace>\n"
+
+        # add <current_changes> (result of "git diff")
+        stdout, stderr, returncode = await self._bash_executor.execute('git diff')
+        xml_output += f"<last_try>\n"
+        
+        xml_output += "<last_terminal_session>\n"
+        for session_entry in workspace.get("last_terminal_session", []):
+            xml_output += f"<run_command success=\"{session_entry['success']}\" command=\"{session_entry['command']}\">\n"
+            xml_output += f"{session_entry['output']}\n"
+            xml_output += "</command>\n"
+        xml_output += "</last_terminal_session>\n"
+        xml_output += f"<git_diff>{stdout}<git_diff>\n"
+        xml_output += "</last_try>\n"
 
         # reset terminal session
         workspace["last_terminal_session"] = []
