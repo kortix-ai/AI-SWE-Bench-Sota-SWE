@@ -3,6 +3,7 @@ import base64
 import shlex
 import json
 import re
+import os
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 from typing import List, Optional
@@ -483,8 +484,11 @@ print("Hello, World!")
     )
     async def create_file(self, path: str, content: str) -> ToolResult:
         try:
-            encoded_content = base64.b64encode(content.encode()).decode()
-            command = f"echo {encoded_content} | base64 -d > {shlex.quote(path)}"
+            # Ensure the directory exists before creating the file
+            command = (
+                f"mkdir -p $(dirname {shlex.quote(path)}) && "
+                f"echo {shlex.quote(content)} > {shlex.quote(path)}"
+            )
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
                 # Add to open_files
