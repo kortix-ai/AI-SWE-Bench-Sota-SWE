@@ -26,18 +26,19 @@ GUIDELINES:
 
 THOUGHT PROCESS TAGS (use these before the <ACTIONS> tag):
 
-1. <ASSESS_LAST_TRY>: If a <last_try> is provided, review it critically. Decide whether to submit or continue from it or start over.
+1. <ASSESS_LAST_TRY>: If a <last_try> is provided, review it critically. Decide whether to submit, continue from it, or start over.
 2. <OBSERVE>: Note relevant information from the codebase based on the <file> tags of the workspace. Do not assume file contents or command outputs beyond what is provided.
 3. <REASON>: Determine the necessary changes to solve the issue described in the PR. Identify the root cause based on your observations.
-4. <MULTIPLE_POSSIBLE_FIX>: Propose multiple possible solutions, provide each solution with code snippets follow by deep analysis explaining its impact on the codebase functionalities and existing tests. The best solution is chosen to implement.
+4. <MULTIPLE_POSSIBLE_FIX>: If appropriate, propose multiple solutions. For each solution, provide code snippets and a deep analysis explaining its impact on the codebase functionalities and existing tests. Choose the best solution to implement, ensuring it fully addresses the issue.
 
 INSTRUCTIONS:
 
-- Select the best solution that addresses the root cause while maintaining existing functionalities, testcases.
+- Prioritize correctness and code quality over making minimal changes.
+- Select the best solution that fully addresses the root cause while maintaining existing functionalities and passing all tests.
 - In the <ACTIONS> tag, list all actions using the available XML tools, including modifications, file creations, and command executions.
 - Use "git reset --hard" at the start of <ACTIONS> if you decide to start from scratch.
 - Run tests to confirm the issue is fixed.
-- Only submit the PR if the fix is correct and all tests pass by including <submit_last_try /> within the <ACTIONS> tag.
+- **You can only use `<mark_pr_as_solved />` after you have assessed the last try using `<ASSESS_LAST_TRY>`.**
 
 REMEMBER:
 
@@ -58,13 +59,12 @@ A Python code repository has been uploaded to the `/testbed` directory. Please c
 
 Can you help me implement the necessary changes to the repository to meet the requirements specified in the <pr_description>?
 
-
 Additional Instructions:
 
-- Assess the last attempt first if a <last_try> is provided, decide whether to submit it and terminate if the fix was correct and all testcases were passed, or continue from it or start over with "git reset --hard".
+- Assess the last attempt first if a <last_try> is provided. Decide whether to submit it and terminate (if the fix was correct and all test cases passed), continue from it, or start over with "git reset --hard".
 - Ensure you have all relevant context before making any changes. Do not hesitate to open new files related to the issue if necessary.
-- Modify and run test files to confirm the issue is fixed. Use the -q -ra options to only show failed test cases (e.g., <run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />).
-- After closing the </ACTIONS> tag, wait for the results of action execution without producing further output.
+- Modify and run test files to confirm the issue is fixed. Use the `-q -ra` options to only show failed test cases (e.g., `<run_command command="python -m pytest /testbed/.../test_example.py -q -ra" />`).
+- After closing the `</ACTIONS>` tag, wait for the results of action execution without producing further output.
 
 Please proceed to analyze the PR and implement the required changes using the guidelines provided.
 """
@@ -134,18 +134,19 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             )
 
             # Check for submit in XML response
-            assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-            if assistant_messages:
-                last_assistant = assistant_messages[0]['content']
-                try:
-                    # Look for submit tag in the response
-                    if '<submit />' in last_assistant:
-                        print("Task completed via submit tool, stopping...")
-                        agentops_session.end_session()
-                        return
-                except Exception as e:
-                    print(f"Error parsing XML response: {str(e)}")
-                    continue
+            if iteration > 5:
+                assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+                if assistant_messages:
+                    last_assistant = assistant_messages[0]['content']
+                    try:
+                        # Look for mark_pr_as_solved tag in the response
+                        if '<mark_pr_as_solved />' in last_assistant:
+                            print("Task completed via mark_pr_as_solved tool, stopping...")
+                            agentops_session.end_session()
+                            return
+                    except Exception as e:
+                        print(f"Error parsing XML response: {str(e)}")
+                        continue
 
         except Exception as e:
             print(f"Error in iteration {iteration}: {str(e)}")
@@ -187,5 +188,7 @@ if __name__ == "__main__":
             max_iterations=args.max_iterations,
             model_name=model_name
         )
+
+    asyncio.run(main())
 
     asyncio.run(main())

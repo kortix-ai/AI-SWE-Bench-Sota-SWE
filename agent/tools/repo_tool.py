@@ -364,8 +364,8 @@ if __name__ == '__main__':
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "submit",
-            "description": "If all test files is working including edge cases, and existings tests and you are confident that the issue is resolve, submit the fix.",
+            "name": "mark_pr_as_solved",  # Renamed from 'submit_last_try'
+            "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -374,27 +374,26 @@ if __name__ == '__main__':
         }
     })
     @xml_schema(
-        tag_name="submit",
+        tag_name="mark_pr_as_solved",
         mappings=[],
         example='''
-        <!-- Repository Submit Tool -->
-        <!-- Submit the fix when all tests pass and the issue is resolved -->
+        <!-- Repository Tool: Mark PR as Solved -->
+        <!-- Use when all tests of last_try pass and the issue is resolved -->
 
         <!-- No Parameters Required -->
 
-        <!-- Submit the completed fix -->
-        <submit />
+        <!-- Mark the PR as solved -->
+        <mark_pr_as_solved />
 
         <!-- Important Notes:
-             - Only use when all test files are working
+             - Can only be used within <ASSESS_LAST_TRY> tag
+             - Only use when all test files of last_try are working
              - Ensure edge cases are covered
              - Verify existing tests pass
-             - Be confident the issue is fully resolved
-             - This marks the task as completed
         -->
         '''
     )
-    async def submit(self, ) -> ToolResult:
+    async def mark_pr_as_solved(self) -> ToolResult:
         """
         Signals that the task is completed.
 
