@@ -124,12 +124,14 @@ class RepositoryTools(Tool):
             stdout, stderr, returncode = await self._bash_executor.execute(cmd)
             
             folders = [f for f in stdout.splitlines() if not any(exclude_dir in f for exclude_dir in exclude_dirs)]
+
+            # Add initial view of /testbed with depth 1
+            workspace["open_folders"]["/testbed"] = 1
+
             if len(folders) == 1:
                 workspace["open_folders"][folders[0]] = 4
             else: 
                 self.fail_response(f"Error finding main source code folder: {stderr}")
-                # Add initial view of /testbed with depth 1
-                workspace["open_folders"]["/testbed"] = 1
             
             await self.state_manager.set("workspace", workspace)
 
@@ -402,49 +404,49 @@ if __name__ == '__main__':
         """
         return self.success_response("Task completed successfully.")
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "close_file",
-            "description": "Close a file and remove its content from the workspace state.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "The file path to close."},
-                },
-                "required": ["path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="close_file",
-        mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
-        example='''
-        <!-- Close File Tool -->
-        <!-- Close a file and remove its content from the workspace state -->
+    # @openapi_schema({
+    #     "type": "function",
+    #     "function": {
+    #         "name": "close_file",
+    #         "description": "Close a file and remove its content from the workspace state.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "path": {"type": "string", "description": "The file path to close."},
+    #             },
+    #             "required": ["path"]
+    #         }
+    #     }
+    # })
+    # @xml_schema(
+    #     tag_name="close_file",
+    #     mappings=[{"param_name": "path", "node_type": "attribute", "path": "."}],
+    #     example='''
+    #     <!-- Close File Tool -->
+    #     <!-- Close a file and remove its content from the workspace state -->
 
-        <!-- Parameters:
-             - path: The file path to close (REQUIRED)
-        -->
-        <close_file path="/testbed/.../example.py" />
-        '''
-    )
-    async def close_item(self, path: str) -> ToolResult:
-        """Close a file or folder by removing its path from the workspace."""
-        try:
-            workspace = await self.state_manager.get("workspace")
-            if path in workspace["open_folders"]:
-                del workspace["open_folders"][path]
-                await self.state_manager.set("workspace", workspace)
-                return self.success_response(f"Folder {path} closed successfully.")
-            elif path in workspace["open_files"]:
-                workspace["open_files"].remove(path)
-                await self.state_manager.set("workspace", workspace)
-                return self.success_response(f"File {path} closed successfully.")
-            else:
-                return self.fail_response(f"Item {path} is not open.")
-        except Exception as e:
-            return self.fail_response(f"Error closing item {path}: {str(e)}")
+    #     <!-- Parameters:
+    #          - path: The file path to close (REQUIRED)
+    #     -->
+    #     <close_file path="/testbed/.../example.py" />
+    #     '''
+    # )
+    # async def close_item(self, path: str) -> ToolResult:
+    #     """Close a file or folder by removing its path from the workspace."""
+    #     try:
+    #         workspace = await self.state_manager.get("workspace")
+    #         if path in workspace["open_folders"]:
+    #             del workspace["open_folders"][path]
+    #             await self.state_manager.set("workspace", workspace)
+    #             return self.success_response(f"Folder {path} closed successfully.")
+    #         elif path in workspace["open_files"]:
+    #             workspace["open_files"].remove(path)
+    #             await self.state_manager.set("workspace", workspace)
+    #             return self.success_response(f"File {path} closed successfully.")
+    #         else:
+    #             return self.fail_response(f"Item {path} is not open.")
+    #     except Exception as e:
+    #         return self.fail_response(f"Error closing item {path}: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -611,7 +613,7 @@ print("Hello, World!")
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "run_command",
+            "name": "run_bash",
             "description": "Run a shell command in the terminal and update the workspace state.",
             "parameters": {
                 "type": "object",
@@ -623,25 +625,27 @@ print("Hello, World!")
         }
     })
     @xml_schema(
-        tag_name="run_command",
+        tag_name="run_bash",
         mappings=[
             {"param_name": "command", "node_type": "attribute", "path": "command"}
         ],
         example='''
-        <!-- Run Command Tool -->
+        <!-- Run Bash Command Tool -->
         <!-- Run a shell command in the terminal -->
+        <!-- Please avoid commands that can produce lengthy output -->
 
         <!-- Parameters:
              - command: The shell command to execute (REQUIRED)
         -->
         <!-- Examples -->
 
-        <run_command command="python example_reproduce_error.py" />
-        <run_command command="python -m pytest /testbed/.../test_example.py -q -ra />
+        <run_bash command="python -m pytest /testbed/.../test_example.py -q -rFE" />
 
+        <!-- For Django-like -->
+        <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
         '''
     )
-    async def run_command(self, command: str) -> ToolResult:
+    async def run_bash(self, command: str) -> ToolResult:
         """Execute a shell command and update the terminal session."""
         return await self._execute_command(command)
 
