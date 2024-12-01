@@ -380,46 +380,45 @@ if __name__ == '__main__':
         except Exception as e:
             return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
-    # @openapi_schema({
-    #     "type": "function",
-    #     "function": {
-    #         "name": "mark_pr_as_solved",  # Renamed from 'submit_last_try'
-    #         "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {},
-    #             "required": []
-    #         }
-    #     }
-    # })
-    # @xml_schema(
-    #     tag_name="mark_pr_as_solved",
-    #     mappings=[],
-    #     example='''
-    #     <!-- Repository Tool: Mark PR as Solved -->
-    #     <!-- Use when all tests of last_try pass and the issue is resolved -->
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "PR_SOLVED_SUBMIT_AND_TERMINATE",
+            "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="PR_SOLVED_SUBMIT_AND_TERMINATE",
+        mappings=[],
+        example='''
+        <!-- Repository Tool: PR_SOLVED_SUBMIT_AND_TERMINATE -->
+        <!-- Use when all tests of last_try pass and the issue is resolved -->
 
-    #     <!-- No Parameters Required -->
+        <!-- No Parameters Required -->
 
-    #     <!-- Mark the PR as solved -->
-    #     <mark_pr_as_solved />
+        <!-- Mark the PR as solved -->
+        <PR_SOLVED_SUBMIT_AND_TERMINATE />
 
-    #     <!-- Important Notes:
-    #          - Can only be used within <ASSESS_LAST_TRY> tag
-    #          - Only use when all test files of last_try are working
-    #          - Ensure edge cases are covered
-    #          - Verify existing tests pass
-    #     -->
-    #     '''
-    # )
-    # async def mark_pr_as_solved(self) -> ToolResult:
-    #     """
-    #     Signals that the task is completed.
+        <!-- Important Notes:
+             - Only use when all test files of last_try are working perfectly
+             - Ensure edge cases are covered and existing tests pass
+             - Use this tool only when the implementation works perfectly and all tests pass
+        -->
+        '''
+    )
+    async def PR_SOLVED_SUBMIT_AND_TERMINATE(self) -> ToolResult:
+        """
+        Signals that the task is completed.
 
-    #     Returns:
-    #         ToolResult: Success message indicating task completion.
-    #     """
-    #     return self.success_response("Task completed successfully.")
+        Returns:
+            ToolResult: Success message indicating task completion.
+        """
+        return self.success_response("Task terminated, Agent stopped!")
 
     # @openapi_schema({
     #     "type": "function",

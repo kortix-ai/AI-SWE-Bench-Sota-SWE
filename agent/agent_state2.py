@@ -157,7 +157,7 @@ CRITICAL REMINDERS:
 - Consider long-term maintainability
 - If tests are not found, examine the relevant "tests" directory to locate the correct test paths
 
-**IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and newly added tests specified for the PR, submit directly without proposing further solutions or implementations.**
+**IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and newly added tests specified for the PR, submit directly by the tool without proposing further solutions or implementations.**
 
 You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag. Your thinking should be thorough, and it's fine if it's very long.
 
@@ -253,8 +253,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 if assistant_messages:
                     last_assistant = assistant_messages[0]['content']
                     try:
-                        # if '<mark_pr_as_solved />' in last_assistant:
-                        if "LAST TRY SUCCESSFUL, TERMINATING" in last_assistant:
+                        if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
                             print("Task completed via mark_pr_as_solved tool, stopping...")
                             agentops_session.end_session()
                             return
