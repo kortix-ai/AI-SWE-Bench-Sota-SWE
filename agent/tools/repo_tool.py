@@ -232,6 +232,17 @@ class RepositoryTools(Tool):
         xml_output += f"<git_diff>{stdout}<git_diff>\n"
         xml_output += "</last_try>\n"
 
+        # Add implementation trials
+        if "implementation_trials" in workspace:
+            xml_output += "<implementation_trials>\n"
+            for trial_id, data in workspace["implementation_trials"].items():
+                status = data.get("status", "")
+                note = data.get("note", "")
+                xml_output += f'<implementation_trial id="{trial_id}" status="{status}">\n{note}\n</implementation_trial>\n'
+            xml_output += "</implementation_trials>\n"
+
+        xml_output += "</workspace>\n"
+
         # reset terminal session
         workspace["last_terminal_session"] = []
 
@@ -725,3 +736,64 @@ print("Hello, World!")
                 return self.fail_response(f"File {path} is already open in the workspace.")
         except Exception as e:
             return self.fail_response(f"Error adding file {path} to workspace: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "track_implementation",
+            "description": "Track implementation trials with IDs, statuses, and optional notes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for the implementation trial (e.g., 'A', 'B')."
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": (
+                            "Status of the implementation trial (e.g., 'not tried', 'currently implementing', "
+                            "'waiting for test', 'tried; not working')."
+                        )
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "Optional note containing additional information, code snippets, or analysis.",
+                        "nullable": True
+                    }
+                },
+                "required": ["id", "status"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="track_implementation",
+        mappings=[
+            {"param_name": "id", "node_type": "attribute", "path": "id"},
+            {"param_name": "status", "node_type": "attribute", "path": "status"},
+            {"param_name": "note", "node_type": "content", "path": "."}
+        ],
+        example='''
+        <!-- Track Implementation Tool -->
+        <!-- Track implementation trials with IDs, statuses, and optional notes -->
+
+        <!-- Example Usage -->
+        <track_implementation id="A" status="currently implementing;waiting for test">
+            Implemented solution using method X, awaiting test results.
+        </track_implementation>
+        '''
+    )
+    async def track_implementation(self, id: str, status: str, note: Optional[str] = None) -> ToolResult:
+        """Track implementation trials with IDs, statuses, and optional notes."""
+        try:
+            workspace = await self.state_manager.get("workspace")
+            if "implementation_trials" not in workspace:
+                workspace["implementation_trials"] = {}
+            workspace["implementation_trials"][id] = {
+                "status": status,
+                "note": note or ""
+            }
+            await self.state_manager.set("workspace", workspace)
+            return self.success_response(f"Implementation trial '{id}' status updated to '{status}'.")
+        except Exception as e:
+            return self.fail_response(f"Error tracking implementation trial '{id}': {str(e)}")
