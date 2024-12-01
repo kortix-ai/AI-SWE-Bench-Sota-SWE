@@ -210,13 +210,11 @@ class RepositoryTools(Tool):
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
                 # remove (/testbed)
-                MAX_LENGTH = 40000 if "test" in file_path[9:] else 100000
+                MAX_LENGTH = 30000 if "test" in file_path[9:] else 140000
                 if len(stdout) > MAX_LENGTH:
                     stdout = stdout[:MAX_LENGTH] + "\n... File content truncated due to length ... \n"
-                    xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
-                    debug_files.append((file_path,
-                            len(tiktoken.get_encoding("cl100k_base").encode(stdout)
-                                )))
+                xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
+                debug_files.append((file_path, len(tiktoken.get_encoding("cl100k_base").encode(stdout))))
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
@@ -652,9 +650,10 @@ print("Hello, World!")
         <!-- Please AVOID commands that can produce lengthy output -->
 
         <!-- Examples -->
-        <run_bash command="python -m pytest /testbed/.../test_example.py -q -vv --tb=short -ra" />
+        <!-- Avoid -v for verbose output; instead use the recommended options like the following -->
+        <run_bash command="python -m pytest /testbed/.../test_example.py -q --tb=short --no-header -rFE" />
 
-        <!-- For Django-like -->
+        <!-- For Django-like recommended command-->
         <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
         '''
     )
@@ -669,9 +668,9 @@ print("Hello, World!")
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
             
-            MAX_OUTPUT = 12000  
-            KEEP_HEAD = 4000   
-            KEEP_TAIL = 8000   
+            MAX_OUTPUT = 15000  
+            KEEP_HEAD = 5000   
+            KEEP_TAIL = 10000   
             
             combined_output = stdout + stderr
             if not combined_output:

@@ -51,6 +51,7 @@ TECHNICAL REQUIREMENTS:
 - Use exactly one `<ACTIONS>` tag containing all actions at the end.
 - Propose multiple solution approaches with detailed code snippets.
 - Always run tests after modifications at the end of the `<ACTIONS>` tag.
+- When running pytest, use short options (e.g "-q -vv --tb=short --no-header -rFE") to reduce output verbosity.
 - Do not edit files that are not opened in the workspace.
 
 REASONING FRAMEWORK:
@@ -152,7 +153,7 @@ REQUIRED STEPS:
 IMPLEMENTATION GUIDELINES:
 - Start fresh with `git reset --hard` if the last attempt failed.
 - Execute multiple actions as needed.
-- Always run tests after modifications.
+- Always run tests after modifications and add new tests.
 - Wait for action results before proceeding.
 - Modify existing tests only; do not create new test files.
 - If `<IMPLEMENTATION_TRAILS>` is provided:
