@@ -209,7 +209,7 @@ class RepositoryTools(Tool):
             command = f"cat {file_path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                if len(stdout) > 80000: # (20k tokens)
+                if len(stdout) > 80000:
                     stdout = stdout[:80000] + "\n... File content truncated due to length ... "
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
             else:
@@ -663,8 +663,26 @@ print("Hello, World!")
         try:
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
-            await self._update_terminal(command, stdout + stderr, success)
-            return self.success_response(f"Command executed:\n{stdout + stderr}")
+            
+            MAX_OUTPUT_LINES = 20000  
+            KEEP_HEAD_LINES = 5000   
+            KEEP_TAIL_LINES = 15000   
+            
+            combined_output = stdout + stderr
+            if combined_output:
+                lines = combined_output.splitlines()
+                if len(lines) > MAX_OUTPUT_LINES:
+                    head = lines[:KEEP_HEAD_LINES]
+                    tail = lines[-KEEP_TAIL_LINES:]
+                    truncated_output = '\n'.join(head + ['...LENGTHY OUTPUT TRUNCATED...'] + tail)
+                else:
+                    truncated_output = combined_output
+                    
+                await self._update_terminal(command, truncated_output, success)
+                return self.success_response(f"Command executed:\n{truncated_output}")
+            
+            await self._update_terminal(command, combined_output, success)
+            return self.success_response(f"Command executed:\n{combined_output}")
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 
