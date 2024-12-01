@@ -29,6 +29,7 @@ CORE PRINCIPLES:
 3. Comprehensive Evaluation
    - Consider multiple approaches before selecting a solution
    - Evaluate trade-offs, potential drawbacks, and failure modes for each solution
+   - Update existing implementation trials if available
    - Think through edge cases
    - Prioritize robustness and correctness over simplicity when necessary
    - Consider how changes might affect other parts of the system
@@ -39,7 +40,10 @@ CRITICAL GUIDELINES:
 - After using `<open_file>` and `<view_folder>` actions, their content is only available in the next iteration
 - Take time to deeply understand the context before making changes
 - Think through potential side effects of each modification
-- Track all implementation approaches using the track_implementation tool after running tests
+- Use track_implementation tool ONLY within <PROPOSE_SOLUTIONS> tag to:
+  * Add new approaches if needed
+  * Update existing implementation trials if available
+  * Document analysis of previous attempts
 - Check tests directories to make sure test paths exist
 
 TECHNICAL REQUIREMENTS:
@@ -114,8 +118,19 @@ SYSTEMATIC APPROACH REQUIRED:
    - Document pros and cons, potential drawbacks, and failure modes for each
    - Think through edge cases
    - Consider maintenance implications
-   - Track each implementation approach after running tests, using track_implementation tool at the end of your response, with detailed notes about the approach, code snippets, and analysis
    - Propose multiple solutions with code snippets
+   - Review existing implementation trials in <IMPLEMENTATION_TRAILS> if available
+   - For each existing trial:
+     * Update status based on last attempt results
+     * Add analysis of what worked/didn't work
+     * Modify approach if needed based on learnings
+   - Consider additional approaches if needed
+   - Within <PROPOSE_SOLUTIONS> tag, always use track_implementation tool to:
+     * Add new trials if necessary
+     * Update existing implementation trials 
+     * Include detailed notes about each approach
+     * Update status appropriately based on last attempt
+   - Ensure comprehensive coverage of solution space
 
 4. IMPLEMENTATION STRATEGY
    - Break down changes into logical steps
@@ -147,7 +162,12 @@ IMPLEMENTATION GUIDELINES:
 - Always run tests after modifications
 - Wait for action results before proceeding
 - Modify existing tests only - DO NOT create new test files
+- If <IMPLEMENTATION_TRAILS> provided:
+  * Review and update existing trials
+  * Modify approaches based on learnings
+  * Add new approaches if needed
 - If you require output of an action to proceed, wait for results
+- NEVER use track_implementation in <ACTIONS> tag - it belongs in <PROPOSE_SOLUTIONS>
 
 CRITICAL REMINDERS:
 - Take time to think deeply about each step
@@ -156,8 +176,10 @@ CRITICAL REMINDERS:
 - Validate assumptions
 - Consider long-term maintainability
 - If tests are not found, examine the relevant "tests" directory to locate the correct test paths
+- Update trial status and notes based on previous attempts
+- Make sure that new tests for this PR are created and executed
 
-**IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and newly added tests specified for the PR, submit directly by the tool without proposing further solutions or implementations.**
+**IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and NEWLY ADDED TESTS SPECIFY for the PR, submit directly by the tool without proposing further solutions or implementations.**
 
 You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag. Your thinking should be thorough, and it's fine if it's very long.
 
@@ -193,6 +215,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     await thread_manager.add_to_history_only(thread_id, system_message)
 
     iteration = 0
+    reminder_custom_test = False
 
     while iteration < max_iterations:
         try:
@@ -234,6 +257,12 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                     "role": "user", 
                     "content": continuation_prompt
                 }
+                if reminder_custom_test:
+                    temporary_message = {
+                        "role": "user",
+                        "content": continuation_prompt + "\n\n<**IMPORTANT**> : HAVE YOU CREATED AND RAN NEW TESTS SPECIFIED FOR THIS PR. IF YOU HAVE NOT DONE SO, PLEASE DO IT NOW.</**IMPORTANT**>"
+                    }
+                    reminder_custom_test = False
 
             response = await thread_manager.run_thread(
                 thread_id=thread_id,
@@ -248,18 +277,20 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 temporary_message=temporary_message  # Add the temporary message parameter
             )
 
-            if iteration > 4:
-                assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-                if assistant_messages:
-                    last_assistant = assistant_messages[0]['content']
-                    try:
-                        if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
+            assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+            if assistant_messages:
+                last_assistant = assistant_messages[0]['content']
+                try:
+                    if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
+                        if iteration > 6:
                             print("Task completed via mark_pr_as_solved tool, stopping...")
                             agentops_session.end_session()
                             return
-                    except Exception as e:
-                        print(f"Error parsing XML response: {str(e)}")
-                        continue
+                        else:
+                            reminder_custom_test = True
+                except Exception as e:
+                    print(f"Error parsing XML response: {str(e)}")
+                    continue
 
         except Exception as e:
             print(f"Error in iteration {iteration}: {str(e)}")

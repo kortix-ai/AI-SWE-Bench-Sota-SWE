@@ -232,14 +232,13 @@ class RepositoryTools(Tool):
         xml_output += f"<git_diff>{stdout}<git_diff>\n"
         xml_output += "</last_try>\n"
 
-        # Add implementation trials
         if "implementation_trials" in workspace:
-            xml_output += "<implementation_trials>\n"
+            xml_output += "<IMPLEMENTATION_TRAILS>\n"
             for trial_id, data in workspace["implementation_trials"].items():
                 status = data.get("status", "")
                 note = data.get("note", "")
                 xml_output += f'<implementation_trial id="{trial_id}" status="{status}">\n{note}\n</implementation_trial>\n'
-            xml_output += "</implementation_trials>\n"
+            xml_output += "</IMPLEMENTATION_TRAILS>\n"
 
         xml_output += "</workspace>\n"
 
@@ -778,7 +777,7 @@ print("Hello, World!")
 
         <!-- Example Usage -->
         <track_implementation id="A" status="currently implementing;waiting for test">
-        [Approach Title]
+        [Approach Title] [Iteration + 1]
         `file:/testbed/.../example.py
         [Short update snippet]
         `
@@ -786,6 +785,7 @@ print("Hello, World!")
         [Short update snippet]
         `
         [Analysis] 
+        [Log based on last try]
         [Test results summary]
         </track_implementation>
         
