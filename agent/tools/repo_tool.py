@@ -779,7 +779,23 @@ print("Hello, World!")
 
         <!-- Example Usage -->
         <track_implementation id="A" status="currently implementing;waiting for test">
-            Implemented solution using method X, awaiting test results.
+        [Approach Title]
+        `file:/testbed/.../example.py
+        [Short update snippet]
+        `
+        `file:/testbed/.../example2.py
+        [Short update snippet]
+        `
+        [Analysis] 
+        [Test results summary]
+        </track_implementation>
+        
+        <track_implementation id="B" status="tried; not working, bad resolution">
+        [...example content...]
+        </track_implementation>
+
+        <track_implementation id="C" status="not tried">
+        [...example content...]
         </track_implementation>
         '''
     )
