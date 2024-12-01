@@ -4,6 +4,7 @@ import shlex
 import json
 import re
 import os
+import tiktoken
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 from typing import List, Optional
@@ -198,13 +199,13 @@ class RepositoryTools(Tool):
         workspace = await self.state_manager.get("workspace")
         xml_output = "<workspace>\n"
 
-
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
             result = await self._fetch_folder_contents(path=path, depth=depth)
             if result.success:
                 xml_output += f"{result.output}\n"
         # use reversed order because we want important files to be at the end
+        debug_files = []
         for file_path in reversed(workspace["open_files"]):
             command = f"cat {file_path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
@@ -212,6 +213,9 @@ class RepositoryTools(Tool):
                 if len(stdout) > 80000:
                     stdout = stdout[:80000] + "\n... File content truncated due to length ... "
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
+                debug_files.append((file_path,
+                                   len(tiktoken.get_encoding("cl100k_base").encode(stdout)
+                                       )))
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
@@ -664,25 +668,24 @@ print("Hello, World!")
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
             
-            MAX_OUTPUT_LINES = 20000  
-            KEEP_HEAD_LINES = 5000   
-            KEEP_TAIL_LINES = 15000   
+            MAX_OUTPUT = 20000  
+            KEEP_HEAD = 5000   
+            KEEP_TAIL = 15000   
             
             combined_output = stdout + stderr
-            if combined_output:
-                lines = combined_output.splitlines()
-                if len(lines) > MAX_OUTPUT_LINES:
-                    head = lines[:KEEP_HEAD_LINES]
-                    tail = lines[-KEEP_TAIL_LINES:]
-                    truncated_output = '\n'.join(head + ['...LENGTHY OUTPUT TRUNCATED...'] + tail)
-                else:
-                    truncated_output = combined_output
-                    
-                await self._update_terminal(command, truncated_output, success)
-                return self.success_response(f"Command executed:\n{truncated_output}")
+            if not combined_output:
+                combined_output = "Command completed successfully but produced no output"
+                
+            if len(combined_output) > MAX_OUTPUT:
+                head = combined_output[:KEEP_HEAD]
+                tail = combined_output[-KEEP_TAIL:]
+                truncated_output = head + '...LENGTHY OUTPUT TRUNCATED...' + tail
+            else:
+                truncated_output = combined_output
+                
+            await self._update_terminal(command, truncated_output, success)
+            return self.success_response(f"Command executed:\n{truncated_output}")
             
-            await self._update_terminal(command, combined_output, success)
-            return self.success_response(f"Command executed:\n{combined_output}")
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 
