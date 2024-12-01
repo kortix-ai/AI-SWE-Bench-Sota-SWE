@@ -56,7 +56,7 @@ CRITICAL GUIDELINES:
 TECHNICAL REQUIREMENTS:
 - Use exactly one `<ACTIONS>` tag containing all actions at the end.
 - Propose multiple solution approaches with detailed code snippets.
-- Always run tests after modifications at the end of the `<ACTIONS>` tag, following the tool usage example.
+- Always run tests after modifications, following the tool usage example.
 - Do not edit files that are not opened in the workspace.
 
 REASONING FRAMEWORK:
@@ -147,7 +147,6 @@ SYSTEMATIC APPROACH REQUIRED:
    - Choose the best solution that:
      - Fully addresses the root cause.
      - Maintains existing functionalities.
-     - Ensures all tests pass.
      - Does not introduce regressions.
      - Prioritizes correctness and robustness over simplicity when necessary.
 
@@ -155,8 +154,8 @@ REQUIRED STEPS:
 1. Open and analyze relevant files, folders, and tests.
 2. Review previous attempts if available.
 3. Document your complete reasoning process using these tags:
-   - `<OBSERVE_WORKSPACE>`: Analyze the current workspace state.
    - `<ASSESS_LAST_TRY>`: Review previous attempt results.
+   - `<OBSERVE_WORKSPACE>`: Analyze the current workspace state.
    - `<REASON>`: Detail your step-by-step thinking.
    - `<PROPOSE_SOLUTIONS>`: List multiple approaches.
    - `<POSSIBLE_FIX>`: Document the selected solution rationale.
@@ -164,9 +163,9 @@ REQUIRED STEPS:
 IMPLEMENTATION GUIDELINES:
 - Start fresh with `git reset --hard` if the last attempt failed.
 - Execute multiple actions as needed.
-- Always run tests after modifications and add new tests, refer to tool usage for test commands example.
+- Always run tests after modifications and add new tests to confirm the PR, refer to tool usage for test commands example.
 - Wait for action results before proceeding.
-- Modify existing tests only; do not create new test files.
+- Modify existing tests only
 - If `<IMPLEMENTATION_TRAILS>` is provided:
   - Review and update existing trials.
   - Modify approaches based on learnings.
@@ -184,9 +183,13 @@ CRITICAL REMINDERS:
 - Update trial status and notes based on previous attempts.
 - Ensure new tests for this PR are created and executed.
 
-IMPORTANT: If the last try solution was correct and all test cases passed—including existing and newly added tests specified for the PR—submit directly using the tool without proposing further solutions or implementations.
+IMPORTANT: Only submit directly using the tool when both of these conditions are met:
+1. All test cases pass completely (including existing and newly added tests specified for the PR)
+2. The implemented changes correctly addresses the requirements in the PR description with appropriate code changes
 
-You will operate autonomously from this point forward. Begin with  `<OBSERVE_WORKSPACE>`, followed by `<ASSESS_LAST_TRY>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` to document your thought process. Finally, list all actions within the `<ACTIONS>` tag. Your thinking should be thorough.
+If either condition is not fully satisfied, continue iterating with alternative solutions.
+
+You will operate autonomously from this point forward. Begin with  `<ASSESS_LAST_TRY>`, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` to document your thought process. Finally, list all actions within the `<ACTIONS>` tag. Your thinking should be thorough.
 
 ALWAYS TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP.
 """
