@@ -39,7 +39,7 @@ CRITICAL GUIDELINES:
 - After using `<open_file>` and `<view_folder>` actions, their content is only available in the next iteration
 - Take time to deeply understand the context before making changes
 - Think through potential side effects of each modification
-- Track all implementation approaches using the track_implementation tool
+- Track all implementation approaches using the track_implementation tool after running tests
 - Check tests directories to make sure test paths exist
 
 TECHNICAL REQUIREMENTS:
@@ -71,7 +71,6 @@ REASONING FRAMEWORK:
    - What specific changes are needed?
    - In what order should changes be made?
    - How can we verify each step?
-   - Track each implementation approach with detailed notes
 
 ALWAYS:
 - Take a step back to see the bigger picture
@@ -115,7 +114,7 @@ SYSTEMATIC APPROACH REQUIRED:
    - Document pros and cons, potential drawbacks, and failure modes for each
    - Think through edge cases
    - Consider maintenance implications
-   - Track each implementation approach using track_implementation tool at the end of your response, with detailed notes about the approach, code snippets, and analysis
+   - Track each implementation approach after running tests, using track_implementation tool at the end of your response, with detailed notes about the approach, code snippets, and analysis
    - Propose multiple solutions with code snippets
 
 4. IMPLEMENTATION STRATEGY
@@ -141,7 +140,6 @@ REQUIRED STEPS:
    - `<REASON>`: Detail your step-by-step thinking
    - `<PROPOSE_SOLUTIONS>`: List multiple approaches
    - `<POSSIBLE_FIX>`: Document selected solution rationale
-   - `<TRIALS_LOG>`: Track and update implementation approachs
 
 IMPLEMENTATION GUIDELINES:
 - Start fresh with "git reset --hard" if last attempt failed
@@ -161,7 +159,7 @@ CRITICAL REMINDERS:
 
 **IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and newly added tests specified for the PR, submit directly without proposing further solutions or implementations.**
 
-You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and append your documentation within the new `<TRIALS_LOG>` tag. Your thinking should be thorough, and it's fine if it's very long.
+You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag. Your thinking should be thorough, and it's fine if it's very long.
 
 ALWAYS TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP.
 """
