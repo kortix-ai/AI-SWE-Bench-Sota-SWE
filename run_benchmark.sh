@@ -74,3 +74,6 @@ python swe_runner.py --instance-id django__django-11001 --dataset-type lite --ma
 
 
 python swe_runner.py --instances-file repo/debug1.json --dataset-type lite --max-iterations 10 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --no-archive --num-worker 4 --install-packages
+
+
+python swe_runner.py --range 151 160 --dataset-type lite --max-iterations 10 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --num-worker 5 --install-packages 

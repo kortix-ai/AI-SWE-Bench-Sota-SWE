@@ -150,8 +150,6 @@ class RepositoryTools(Tool):
             "output": output,
             "success": success,
         })
-        # Keep only last 5 commands
-        # workspace["last_terminal_session"] = workspace["last_terminal_session"][-5:]
         await self.state_manager.set("workspace", workspace)
 
     async def execute_command_in_container(self, command: str):

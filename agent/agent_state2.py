@@ -216,6 +216,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
     iteration = 0
     reminder_custom_test = False
+    consecutive_pr_solved = 0  # Add counter for consecutive PR solved submissions
 
     while iteration < max_iterations:
         try:
@@ -282,12 +283,19 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 last_assistant = assistant_messages[0]['content']
                 try:
                     if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
-                        if iteration > 6:
+                        consecutive_pr_solved += 1
+                        if consecutive_pr_solved >= 2:
+                            print("PR solved in two consecutive iterations, stopping...")
+                            agentops_session.end_session()
+                            return
+                        if iteration > 5:
                             print("Task completed via mark_pr_as_solved tool, stopping...")
                             agentops_session.end_session()
                             return
                         else:
                             reminder_custom_test = True
+                    else:
+                        consecutive_pr_solved = 0 
                 except Exception as e:
                     print(f"Error parsing XML response: {str(e)}")
                     continue
