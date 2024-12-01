@@ -50,8 +50,7 @@ CRITICAL GUIDELINES:
 TECHNICAL REQUIREMENTS:
 - Use exactly one `<ACTIONS>` tag containing all actions at the end.
 - Propose multiple solution approaches with detailed code snippets.
-- Always run tests after modifications at the end of the `<ACTIONS>` tag.
-- When running pytest, use short options (e.g "-q -vv --tb=short --no-header -rFE") to reduce output verbosity.
+- Always run tests after modifications at the end of the `<ACTIONS>` tag, following the tool usage example.
 - Do not edit files that are not opened in the workspace.
 
 REASONING FRAMEWORK:
@@ -153,7 +152,7 @@ REQUIRED STEPS:
 IMPLEMENTATION GUIDELINES:
 - Start fresh with `git reset --hard` if the last attempt failed.
 - Execute multiple actions as needed.
-- Always run tests after modifications and add new tests, avoid verbose output, use e.g `-q -vv --tb=short --no-header -rFE`.
+- Always run tests after modifications and add new tests, refer to tool usage for test commands example.
 - Wait for action results before proceeding.
 - Modify existing tests only; do not create new test files.
 - If `<IMPLEMENTATION_TRAILS>` is provided:
@@ -211,7 +210,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
     iteration = 0
     reminder_custom_test = False
-    consecutive_pr_solved = 0  # Add counter for consecutive PR solved submissions
 
     while iteration < max_iterations:
         try:
@@ -279,19 +277,12 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 last_assistant = assistant_messages[0]['content']
                 try:
                     if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
-                        consecutive_pr_solved += 1
-                        if consecutive_pr_solved >= 2:
-                            print("PR solved in two consecutive iterations, stopping...")
-                            agentops_session.end_session()
-                            return
                         if iteration > 5:
                             print("Task completed via mark_pr_as_solved tool, stopping...")
                             agentops_session.end_session()
                             return
                         else:
                             reminder_custom_test = True
-                    else:
-                        consecutive_pr_solved = 0 
                 except Exception as e:
                     print(f"Error parsing XML response: {str(e)}")
                     continue

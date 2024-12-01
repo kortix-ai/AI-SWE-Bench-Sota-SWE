@@ -118,7 +118,10 @@ class RepositoryTools(Tool):
             # Find and add only main source code folders with depth 3
             exclude_dirs = ['tests', 'doc', 'docs', 'examples', 
                             'utils', 'tools', 'egg-info', 'build', 'dist',
-                            '__pycache__', '.git', '.github', 'licenses', 'scripts', 'extras']
+                            '__pycache__', '.git', '.github', 'licenses', 'scripts', 'script', 'extras', 'properties', 'asv', 'ci', 'extern', 'lib', 'galleries', 'requirements', 'tmp',
+                            '.devcontainer', 'ext', '.binder', 'design_notes', 'bench', 'changelog', '.circleci', '.spin' , 'benchmark', 'bin',
+                            'data', 'release'
+                            ]
             
             # Command to list directories in /testbed
             cmd = 'ls -d /testbed/*/'
@@ -134,7 +137,7 @@ class RepositoryTools(Tool):
                 workspace["open_folders"]["/testbed/tests"] = 2
 
             if len(folders) == 1:
-                workspace["open_folders"][folders[0]] = 4
+                workspace["open_folders"][folders[0]] = 2
             else: 
                 self.fail_response(f"Error finding main source code folder: {stderr}")
             
@@ -210,7 +213,7 @@ class RepositoryTools(Tool):
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
                 # remove (/testbed)
-                MAX_LENGTH = 30000 if "test" in file_path[9:] else 140000
+                MAX_LENGTH = 30000 if "test" in file_path[9:] else 100000
                 if len(stdout) > MAX_LENGTH:
                     stdout = stdout[:MAX_LENGTH] + "\n... File content truncated due to length ... \n"
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
@@ -557,8 +560,8 @@ print("Hello, World!")
         <!-- Edit an existing file by replacing specified strings -->
 
         <!-- Parameters:
-             - path: The file path to edit (REQUIRED)
-             - replacements: List of string replacements (REQUIRED)
+            - path: The file path to edit (REQUIRED)
+            - replacements: List of string replacements (REQUIRED)
         -->
         <edit_file path="/testbed/.../example.py">
             <replacements>
@@ -574,55 +577,74 @@ print("Hello, World!")
         </edit_file>
         '''
     )
-    async def edit_file(self, path: str, replacements: dict) -> ToolResult:
+    async def edit_file(self, path: str, replacements) -> ToolResult:
         """Edit an existing file by replacing specified strings."""
         try:
+            # Ensure the file is open in the workspace
             workspace = await self.state_manager.get("workspace")
-            if path in workspace["open_files"]:
-                # Read the current content from the file system
-                command = f"cat {shlex.quote(path)}"
-                stdout, stderr, returncode = await self._bash_executor.execute(command)
-                if returncode != 0:
-                    return self.fail_response(f"Failed to read file {path}: {stderr}")
-                content = stdout
+            if "open_files" not in workspace or path not in workspace["open_files"]:
+                return self.fail_response(f"File {path} is not open. Please open the file before editing.")
 
-                # Ensure replacements is a list of replacement objects
-                if isinstance(replacements, dict):
-                    # Handle single replacement from XML parsing
-                    if 'replacement' in replacements:
-                        replacements_list = replacements['replacement']
-                        if isinstance(replacements_list, dict):
-                            replacements_list = [replacements_list]
+            # Read the current content from the file system
+            command = f"cat {shlex.quote(path)}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command)
+            if returncode != 0:
+                return self.fail_response(f"Failed to read file {path}: {stderr.strip()}")
+
+            content = stdout
+
+            # Process the replacements
+            replacements_list = []
+
+            if isinstance(replacements, dict):
+                if 'replacement' in replacements:
+                    replacements_data = replacements['replacement']
+                    if isinstance(replacements_data, list):
+                        replacements_list = replacements_data
+                    elif isinstance(replacements_data, dict):
+                        replacements_list = [replacements_data]
                     else:
-                        # Direct dictionary case
-                        replacements_list = [replacements]
-                elif isinstance(replacements, list):
-                    replacements_list = replacements
-                elif isinstance(replacements, str):
-                    replacements = transform_string_to_dict(replacements)
-                    replacements_list = replacements['replacement']
+                        return self.fail_response("Invalid 'replacement' format in 'replacements'.")
+                elif 'old_string' in replacements and 'new_string' in replacements:
+                    replacements_list = [replacements]
                 else:
-                    return self.fail_response("Invalid replacements format")
-
-                # Apply all replacements
-                for rep in replacements_list:
-                    if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
-                        old_string = rep['old_string'] if isinstance(rep['old_string'], list) else rep['old_string']
-                        new_string = rep['new_string'] if isinstance(rep['new_string'], list) else rep['new_string']
-                        content = content.replace(old_string, new_string)
-                    else:
-                        return self.fail_response("Invalid replacement format")
-
-                # Write the updated content back to the file using stdin
-                input_data = content.encode('utf-8')
-                command = f"cat > {shlex.quote(path)}"
-                stdout, stderr, returncode = await self._bash_executor.execute(command, input_data=input_data)
-                if returncode == 0:
-                    return self.success_response(f"File {path} edited successfully.")
+                    return self.fail_response("Invalid replacements format.")
+            elif isinstance(replacements, list):
+                replacements_list = replacements
+            elif isinstance(replacements, str):
+                # Try to parse the string as XML-like tags
+                replacements_dict = transform_string_to_dict(replacements)
+                if 'replacement' in replacements_dict:
+                    replacements_list = replacements_dict['replacement']
                 else:
-                    return self.fail_response(f"Failed to write to file {path}: {stderr}")
+                    return self.fail_response("Invalid replacements format in string.")
             else:
-                return self.fail_response(f"File {path} is not open.")
+                return self.fail_response("Invalid replacements format.")
+
+            if not replacements_list:
+                return self.fail_response("No valid replacements provided.")
+
+            # Apply replacements
+            for rep in replacements_list:
+                if isinstance(rep, dict) and 'old_string' in rep and 'new_string' in rep:
+                    old_string = rep['old_string']
+                    new_string = rep['new_string']
+                    if not isinstance(old_string, str) or not isinstance(new_string, str):
+                        return self.fail_response("Both 'old_string' and 'new_string' must be strings.")
+                    if old_string not in content:
+                        return self.fail_response(f"The string to replace '{old_string}' was not found in the file.")
+                    content = content.replace(old_string, new_string)
+                else:
+                    return self.fail_response("Invalid replacement format in one of the replacements.")
+
+            # Write the updated content back to the file
+            input_data = content.encode('utf-8')
+            command = f"cat > {shlex.quote(path)}"
+            stdout, stderr, returncode = await self._bash_executor.execute(command, input_data=input_data)
+            if returncode != 0:
+                return self.fail_response(f"Failed to write to file {path}: {stderr.strip()}")
+
+            return self.success_response(f"File {path} edited successfully.")
         except Exception as e:
             return self.fail_response(f"Error editing file {path}: {str(e)}")
 
