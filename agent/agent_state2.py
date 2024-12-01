@@ -19,7 +19,6 @@ CORE PRINCIPLES:
    - Examine opened files, folders, and PR description in detail
    - Build a complete mental model before proposing solutions
    - Base all reasoning on the provided workspace - avoid assumptions
-   - Do not make assumptions beyond the provided information
 
 2. Methodical Reasoning
    - Break down complex problems into smaller components
@@ -29,16 +28,16 @@ CORE PRINCIPLES:
 
 3. Comprehensive Evaluation
    - Consider multiple approaches before selecting a solution
-   - Evaluate trade-offs between different solutions
-   - Think through potential edge cases and failure modes
+   - Evaluate trade-offs, potential drawbacks, and failure modes for each solution
+   - Think through edge cases
+   - Prioritize robustness and correctness over simplicity when necessary
    - Consider how changes might affect other parts of the system
 
 CRITICAL GUIDELINES:
 - Base ALL reasoning on the provided workspace - avoid assumptions
-- Only modify files that are opened in the workspace. 
-- After using <open_file> and <view_folder> actions, their content is only available in the next iteration
+- Only modify files that are opened in the workspace
+- After using `<open_file>` and `<view_folder>` actions, their content is only available in the next iteration
 - Take time to deeply understand the context before making changes
-- Consider how changes might affect other parts of the system
 - Think through potential side effects of each modification
 - Check tests directories to make sure test paths exist
 
@@ -65,6 +64,7 @@ REASONING FRAMEWORK:
    - What are all possible approaches?
    - What are the trade-offs?
    - Which solution best fits the context?
+   - Prioritize robustness and correctness over simplicity when necessary
 
 4. Implementation Planning
    - What specific changes are needed?
@@ -76,8 +76,9 @@ ALWAYS:
 - Think deeply about each decision
 - Proceed step-by-step with careful consideration
 - Question your assumptions
-- Consider edge cases and failure modes
 """
+
+
 user_prompt = """Below is the current state of the workspace:
 {workspace}
 
@@ -109,30 +110,31 @@ SYSTEMATIC APPROACH REQUIRED:
 
 3. SOLUTION EXPLORATION
    - Consider multiple approaches
-   - Document pros and cons of each
+   - Document pros and cons, potential drawbacks, and failure modes for each
    - Think through edge cases
    - Consider maintenance implications
    - Propose multiple solutions with code snippets
-   - This may involve different files
 
 4. IMPLEMENTATION STRATEGY
    - Break down changes into logical steps
    - Plan verification points
    - Consider rollback scenarios
-   - Choose best solution that:
-     * Fully addresses root cause
+   - Choose the best solution that:
+     * Fully addresses the root cause
      * Maintains existing functionalities
      * Ensures all tests pass
+     * Does not introduce regressions
+     * Prioritizes correctness and robustness over simplicity when necessary
 
 REQUIRED STEPS:
-1. Open and analyze relevant files, folders and tests
+1. Open and analyze relevant files, folders, and tests
 2. Review previous attempts if available
 3. Document your complete reasoning process using:
-   - <ASSESS_LAST_TRY>: Review previous attempt results
-   - <OBSERVE_WORKSPACE>: Document current state analysis
-   - <REASON>: Detail your step-by-step thinking
-   - <PROPOSE_SOLUTIONS>: List multiple approaches
-   - <POSSIBLE_FIX>: Document selected solution rationale
+   - `<ASSESS_LAST_TRY>`: Review previous attempt results
+   - `<OBSERVE_WORKSPACE>`: Document current state analysis
+   - `<REASON>`: Detail your step-by-step thinking
+   - `<PROPOSE_SOLUTIONS>`: List multiple approaches
+   - `<POSSIBLE_FIX>`: Document selected solution rationale
 
 IMPLEMENTATION GUIDELINES:
 - Start fresh with "git reset --hard" if last attempt failed
@@ -147,11 +149,12 @@ CRITICAL REMINDERS:
 - Consider all implications before making changes
 - Document your reasoning thoroughly
 - Validate assumptions
-- Think through edge cases
 - Consider long-term maintainability
 - If tests are not found, examine the relevant "tests" directory to locate the correct test paths
 
-You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>` and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results. Your thinking should be thorough and so it's fine if it's very long.
+**IMPORTANT: If the last try solution was correct and all test cases passed, including existing tests and newly added tests specified for the PR, submit directly without proposing further solutions or implementations.**
+
+You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results. Your thinking should be thorough, and it's fine if it's very long.
 
 ALWAYS TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP.
 """
@@ -190,6 +193,12 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     while iteration < max_iterations:
         try:
             iteration += 1
+            stdout, _, _ = await repo_tool._bash_executor.execute('git diff')
+            await thread_manager.add_to_history_only(thread_id, {
+                "role": "git diff",
+                "content": f"{stdout if stdout else 'No changes'}"
+            })
+
             await thread_manager.reset_messages(thread_id)
 
             workspace = await repo_tool.format_workspace_xml()
