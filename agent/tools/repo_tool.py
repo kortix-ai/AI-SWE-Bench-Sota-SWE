@@ -227,7 +227,7 @@ class RepositoryTools(Tool):
             xml_output += f"{session_entry['output']}\n"
             xml_output += "</bash_command_executed>\n"
         xml_output += "</last_terminal_session>\n"
-        xml_output += f"<git_diff>{stdout}<git_diff>\n"
+        xml_output += f"<git_diff>{stdout}</git_diff>\n"
         xml_output += "</last_try>\n"
 
         if "implementation_trials" in workspace:
