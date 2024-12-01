@@ -677,6 +677,9 @@ print("Hello, World!")
 
         <!-- For Django-like recommended command-->
         <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
+
+        <!-- Reset changes -->
+        <run_bash command="git reset --hard" />
         '''
     )
         # <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
@@ -814,11 +817,11 @@ print("Hello, World!")
         ],
         example='''
         <!-- Track Implementation Tool -->
-        <!-- Track implementation trials with IDs, statuses, and optional notes -->
+        <!-- Track implementation trials with IDs, statuses, and notes -->
 
         <!-- Example Usage -->
         <track_implementation id="A" status="currently implementing;waiting for test">
-        [Approach Title] [Iteration + 1]
+        [Approach Title]
         `file:/testbed/.../example.py
         [Short update snippet]
         `
