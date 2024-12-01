@@ -206,8 +206,8 @@ class RepositoryTools(Tool):
             result = await self._fetch_folder_contents(path=path, depth=depth)
             if result.success:
                 xml_output += f"{result.output}\n"
-        # Include content from open files
-        for file_path in workspace["open_files"]:
+        # use reversed order because we want important files to be at the end
+        for file_path in reversed(workspace["open_files"]):
             command = f"cat {file_path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
