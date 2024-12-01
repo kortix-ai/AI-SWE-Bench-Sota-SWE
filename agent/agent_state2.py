@@ -130,8 +130,11 @@ REQUIRED STEPS:
 1. Open and analyze relevant files, folders, and tests
 2. Review previous attempts if available
 3. Document your complete reasoning process using:
-   - `<ASSESS_LAST_TRY>`: Review previous attempt results
-   - `<OBSERVE_WORKSPACE>`: Document current state analysis
+   - `<ASSESS_LAST_TRY>`: Detail review previous attempt results
+     * Compare the changes made in the last attempt with the original code
+     * Critically evaluate alternative implementation strategies
+     * Determine next steps: improve current solution, update dependent code, or pursue alternative approach
+   - `<OBSERVE_WORKSPACE>`: Analyze and document current workspace state
    - `<REASON>`: Detail your step-by-step thinking
    - `<PROPOSE_SOLUTIONS>`: List multiple approaches
    - `<POSSIBLE_FIX>`: Document selected solution rationale
