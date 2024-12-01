@@ -198,7 +198,6 @@ class RepositoryTools(Tool):
         """Format the workspace into an XML string for the Agent."""
         workspace = await self.state_manager.get("workspace")
         xml_output = "<workspace>\n"
-
         # Include content from open folders with their specified depths
         for path, depth in workspace["open_folders"].items():
             result = await self._fetch_folder_contents(path=path, depth=depth)
@@ -210,12 +209,14 @@ class RepositoryTools(Tool):
             command = f"cat {file_path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
-                if len(stdout) > 80000:
-                    stdout = stdout[:80000] + "\n... File content truncated due to length ... "
-                xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
-                debug_files.append((file_path,
-                                   len(tiktoken.get_encoding("cl100k_base").encode(stdout)
-                                       )))
+                # remove (/testbed)
+                MAX_LENGTH = 40000 if "test" in file_path[9:] else 100000
+                if len(stdout) > MAX_LENGTH:
+                    stdout = stdout[:MAX_LENGTH] + "\n... File content truncated due to length ... \n"
+                    xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
+                    debug_files.append((file_path,
+                            len(tiktoken.get_encoding("cl100k_base").encode(stdout)
+                                )))
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
@@ -648,10 +649,10 @@ print("Hello, World!")
         ],
         example='''
         <!-- Run Bash Command Tool -->
-        <!-- Please avoid commands that can produce lengthy output -->
+        <!-- Please AVOID commands that can produce lengthy output -->
 
         <!-- Examples -->
-        <run_bash command="python -m pytest /testbed/.../test_example.py -q -rFE" />
+        <run_bash command="python -m pytest /testbed/.../test_example.py -q -vv --tb=short -ra" />
 
         <!-- For Django-like -->
         <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
@@ -668,9 +669,9 @@ print("Hello, World!")
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             success = returncode == 0
             
-            MAX_OUTPUT = 20000  
-            KEEP_HEAD = 5000   
-            KEEP_TAIL = 15000   
+            MAX_OUTPUT = 12000  
+            KEEP_HEAD = 4000   
+            KEEP_TAIL = 8000   
             
             combined_output = stdout + stderr
             if not combined_output:
@@ -679,7 +680,7 @@ print("Hello, World!")
             if len(combined_output) > MAX_OUTPUT:
                 head = combined_output[:KEEP_HEAD]
                 tail = combined_output[-KEEP_TAIL:]
-                truncated_output = head + '...LENGTHY OUTPUT TRUNCATED...' + tail
+                truncated_output = head + '\n\n...LENGTHY OUTPUT TRUNCATED...\n\n' + tail
             else:
                 truncated_output = combined_output
                 
