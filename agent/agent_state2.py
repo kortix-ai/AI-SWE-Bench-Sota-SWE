@@ -153,7 +153,7 @@ REQUIRED STEPS:
 IMPLEMENTATION GUIDELINES:
 - Start fresh with `git reset --hard` if the last attempt failed.
 - Execute multiple actions as needed.
-- Always run tests after modifications and add new tests.
+- Always run tests after modifications and add new tests, avoid verbose output, use e.g `-q -vv --tb=short --no-header -rFE`.
 - Wait for action results before proceeding.
 - Modify existing tests only; do not create new test files.
 - If `<IMPLEMENTATION_TRAILS>` is provided:
@@ -260,11 +260,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
 
                     }
                     reminder_custom_test = False
-            if iteration == 11:
-                temporary_message = {
-                    "role": "user",
-                    "content": "You only have 4 iterations left! It seems that the current approach is not working. It's a suggestion but how about trying a different approach ?"
-                }
 
             response = await thread_manager.run_thread(
                 thread_id=thread_id,

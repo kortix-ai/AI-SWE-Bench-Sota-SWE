@@ -651,7 +651,7 @@ print("Hello, World!")
 
         <!-- Examples -->
         <!-- Avoid -v for verbose output; instead use the recommended options like the following -->
-        <run_bash command="python -m pytest /testbed/.../test_example.py -q --tb=short --no-header -rFE" />
+        <run_bash command="python -m pytest /testbed/.../test_example.py -q -vv --tb=short --no-header -rFE" />
 
         <!-- For Django-like recommended command-->
         <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
