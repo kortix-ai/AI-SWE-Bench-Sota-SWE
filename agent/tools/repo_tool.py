@@ -128,6 +128,10 @@ class RepositoryTools(Tool):
             # Add initial view of /testbed with depth 1
             workspace["open_folders"]["/testbed"] = 1
 
+            # Check if tests/ is a folder of /testbed and add it with depth 1
+            if '/testbed/tests/' in folders:
+                workspace["open_folders"]["/testbed/tests"] = 2
+
             if len(folders) == 1:
                 workspace["open_folders"][folders[0]] = 4
             else: 
@@ -637,7 +641,7 @@ print("Hello, World!")
         <run_bash command="python -m pytest /testbed/.../test_example.py -q -rFE" />
 
         <!-- For Django-like -->
-        <run_bash command="/testbed/tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1 example.tests.test_example1 example.tests.test_example2" />
+        <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
         '''
     )
         # <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />

@@ -62,3 +62,12 @@ python swe_runner.py --range 1 1 --dataset-type lite --max-iterations 31 --model
 python swe_runner.py --range 1 300 --dataset-type lite --max-iterations 31 --model-name "sonnet" --execute-file agent/agent_with_state_reset.py --run-eval --no-archive --num-worker 4 --install-packages --submission
 
 python swe_runner.py --range 33 39 --dataset-type lite --max-iterations 31 --model-name "sonnet" --execute-file agent/agent_state.py --run-eval --no-archive --num-worker 4 --install-packages --submission
+
+
+
+python swe_runner.py --instance-id django__django-12497 --dataset-type lite --max-iterations 6 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --no-archive --num-worker 4 --install-packages
+
+
+python swe_runner.py --instances-file repo/swing_lite.json --dataset-type lite --max-iterations 6 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --no-archive --num-worker 4 --install-packages
+
+python swe_runner.py --instance-id django__django-11001 --dataset-type lite --max-iterations 6 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --no-archive --num-worker 4 --install-packages

@@ -187,6 +187,8 @@ def main():
         inference_cmd += ["--run_id", args.run_id]
         if args.submission:
             inference_cmd += ["--submission"]
+        if not args.archive:
+            inference_cmd += ["--no-archive"]
         subprocess.run(inference_cmd, check=True)
 
     if args.run_eval:

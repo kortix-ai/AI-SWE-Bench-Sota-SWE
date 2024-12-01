@@ -175,7 +175,7 @@ def display_run_details(run_data: List[Dict]):
                             language="json"
                         )
 
-def get_chat_content(run_data):
+def get_chat_content(run_data, truncate=False):
     """Collect the chat content."""
     content = ""
     if not run_data:
@@ -186,6 +186,8 @@ def get_chat_content(run_data):
             role = message.get("role", "unknown")
             content_msg = message.get("content", "")
             formatted_content = format_message_content(content_msg)
+            if truncate and role in ["tool", "tool_result"]:
+                formatted_content = truncate_text(formatted_content)
             content += f"{role.upper()}:\n{formatted_content}\n\n"
     return content
 
@@ -201,9 +203,11 @@ def get_eval_log_content(eval_log_content):
 
 def get_combined_content(run_data, diff_content, eval_log_content, run_dir):
     """Combine Chat, Code Diff, Ground Truth and Eval Logs into a single string."""
+    # Get truncation setting from session state
+    should_truncate = st.session_state.get('show_log', False) and st.session_state.get('truncate_tool', False)
 
     content = "<full-log>\n<agent-reason-execution-process>\n"
-    content += get_chat_content(run_data)
+    content += get_chat_content(run_data, truncate=should_truncate)
     content += "</agent-reason-execution-process>\n\n"
     content += "<eval_logs>\n"
     content += get_eval_log_content(eval_log_content)

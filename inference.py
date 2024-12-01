@@ -233,6 +233,8 @@ def main():
                         help="Identifier for the run, name of model (default: KortixAI)")
     parser.add_argument("--submission", action="store_true", default=False,
                         help="Enable submission mode to generate files in SWE-bench format")
+    parser.add_argument("--no-archive", action="store_true", default=False,
+                        help="Do not keep previous evaluation results for selected instances (default: False)")
     dataset_group = parser.add_argument_group('Dataset Options')
     dataset_group.add_argument("--dataset", default="princeton-nlp/SWE-bench_Lite",
                                help="Dataset to use (default: princeton-nlp/SWE-bench_Lite)")
@@ -283,6 +285,23 @@ def main():
 
     # Create list of (args, instance) tuples
     args_instance_list = [(args, instance) for instance in instances]
+
+    if args.no_archive:
+        evaluation_results_file = os.path.join(args.output_dir, 'evaluation_results.jsonl')
+        if os.path.exists(evaluation_results_file):
+            instance_ids_to_remove = [instance['instance_id'] for _, instance in args_instance_list]
+            filtered_lines = []
+            with open(evaluation_results_file, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            result = json.loads(line)
+                            if result.get('instance_id') not in instance_ids_to_remove:
+                                filtered_lines.append(line)
+                        except json.JSONDecodeError:
+                            pass  # Ignore malformed lines
+            with open(evaluation_results_file, 'w') as f:
+                f.writelines(filtered_lines)
 
     total_instances = len(args_instance_list)
     pbar = tqdm(total=total_instances, desc='Instances processed')
