@@ -81,3 +81,6 @@ python swe_runner.py --range 151 160 --dataset-type lite --max-iterations 10 --m
 python swe_runner.py --range 21 30 --dataset-type lite --max-iterations 10 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --num-worker 5 --install-packages
 
 python swe_runner.py --range 21 30 --dataset-type lite --max-iterations 10 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --num-worker 5 --install-packages --submission
+
+
+python swe_runner.py --range 1 40 --dataset-type lite --max-iterations 12 --model-name "sonnet" --execute-file agent/agent_state2.py --run-eval --num-worker 5 --install-packages --submission --disable-streamlit
