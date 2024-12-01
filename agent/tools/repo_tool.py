@@ -211,6 +211,8 @@ class RepositoryTools(Tool):
             command = f"cat {file_path}"
             stdout, stderr, returncode = await self._bash_executor.execute(command)
             if returncode == 0:
+                if len(stdout) > 80000: # (20k tokens)
+                    stdout = stdout[:80000] + "\n... File content truncated due to length ... "
                 xml_output += f'<file path="{file_path}">\n{stdout}\n</file>\n'
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
