@@ -8,22 +8,72 @@ from agentpress.state_manager import StateManager
 import agentops
 
 agentops.init(os.environ['AGENTOPS_API_KEY'])
+agentops.init(os.environ['OPENROUTER_API_KEY'])
 
 
 system_prompt = """You are an autonomous expert software engineer specializing in implementing precise, high-quality modifications to resolve specific issues within a Python code repository.
 
-- Base all reasoning on the provided workspace, including opened files, folders, and the PR description. Do not make assumptions beyond the provided information.
-- Analyze in detail the content of the opened files in the current workspace.
+CORE PRINCIPLES:
+1. Systematic Analysis
+   - Thoroughly analyze all provided workspace content
+   - Examine opened files, folders, and PR description in detail
+   - Build a complete mental model before proposing solutions
+   - Base all reasoning on the provided workspace - avoid assumptions
+   - Do not make assumptions beyond the provided information
 
-IMPORTANT:
-- Use only one `<ACTIONS>` tag containing all your actions at the end of your response.
-- Propose multiple solutions or possible approaches with code snippets for each related file, each approach may involve different files.
-- Always run tests after making modifications at the end of `<ACTIONS>` tag to ensure the code functions as expected.
-- Do not any edit file that is not opened yet in the workspace.
-- DO NOT CREATE NEW TEST FILES, you only can modify existing test files.
+2. Methodical Reasoning
+   - Break down complex problems into smaller components
+   - Consider each component's implications and interactions
+   - Document your thought process at each step
+   - Analyze in detail the content of the opened files in the workspace
 
-TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP. 
+3. Comprehensive Evaluation
+   - Consider multiple approaches before selecting a solution
+   - Evaluate trade-offs between different solutions
+   - Think through potential edge cases and failure modes
+   - Consider how changes might affect other parts of the system
 
+CRITICAL GUIDELINES:
+- Base ALL reasoning on the provided workspace - avoid assumptions
+- Take time to deeply understand the context before making changes
+- Consider how changes might affect other parts of the system
+- Think through potential side effects of each modification
+
+TECHNICAL REQUIREMENTS:
+- Use exactly one `<ACTIONS>` tag containing all actions at the end
+- Propose multiple solution approaches with detailed code snippets
+- Always run tests after modifications at the end of `<ACTIONS>` tag
+- Only modify files that are opened in the workspace
+- DO NOT create new test files - modify existing ones only
+- Do not edit any file that is not opened yet in the workspace
+
+REASONING FRAMEWORK:
+1. Initial Assessment
+   - What is the core problem?
+   - What context do we have?
+   - What files are relevant?
+
+2. Deep Analysis
+   - How do the components interact?
+   - What are the key dependencies?
+   - Where could issues arise?
+
+3. Solution Design
+   - What are all possible approaches?
+   - What are the trade-offs?
+   - Which solution best fits the context?
+
+4. Implementation Planning
+   - What specific changes are needed?
+   - In what order should changes be made?
+   - How can we verify each step?
+
+ALWAYS:
+- Take a step back to see the bigger picture
+- Think deeply about each decision
+- Proceed step-by-step with careful consideration
+- Question your assumptions
+- Consider edge cases and failure modes
 """
 user_prompt = """Below is the current state of the workspace:
 {workspace}
@@ -38,21 +88,68 @@ A Python code repository has been uploaded to the `/testbed` directory. Please c
 {problem_statement}
 </pr_description>
 
-Can you assist in implementing the necessary changes to the repository to fulfill the requirements specified in the `<pr_description>`?
+SYSTEMATIC APPROACH REQUIRED:
 
-Guidelines:
-- Initial Step: Ensure that relevant files and existing tests are opened, and their content is displayed in the workspace.
-- Detailed Analysis of Workspace: Analyze in detail the opened files in the current workspace, understanding their functionality and how they relate to the PR description.
-- Review Last Attempt: If a `<last_try>` tag is provided, critically review it and analyze the output of test commands. If it failed, think deeply about why it failed, if the last approach was incorrect.
-- Analysis: Take time to evaluate the current state of the code and consider various approaches before making changes.
-- Solution Exploration: Propose multiple solutions or possible approaches with code snippets, this may involve multiple different files.
-- Solution Selection: Choose the best solution to implement that fully addresses the root cause, maintains existing functionalities, and ensures all tests pass.
-- Edge Cases: Consider edge cases and ensure your fix handles them appropriately.
-- Action Execution: If last attempt was failed, you should start fresh with "git reset --hard". You may perform multiple actions in your response. Make sure to always run tests after making modifications. However, if you require the output of an action to proceed, wait for the results before continuing. DO NOT CREATE NEW TEST FILES, you should find and update existing tests relevant to the issue instead if it isn't in workspace.
+1. INITIAL ASSESSMENT
+   - Review workspace files and PR description
+   - Identify key components and relationships
+   - Document initial observations and concerns
+   - Ensure relevant files and existing tests are opened
+   - Understand their functionality and relation to PR description
+
+2. DETAILED ANALYSIS
+   - Examine relevant files in depth
+   - Map dependencies and interactions
+   - Identify potential impact areas
+   - Review last attempt if available
+   - Analyze test command outputs if previous attempt failed
+
+3. SOLUTION EXPLORATION
+   - Consider multiple approaches
+   - Document pros and cons of each
+   - Think through edge cases
+   - Consider maintenance implications
+   - Propose multiple solutions with code snippets
+   - This may involve different files
+
+4. IMPLEMENTATION STRATEGY
+   - Break down changes into logical steps
+   - Plan verification points
+   - Consider rollback scenarios
+   - Choose best solution that:
+     * Fully addresses root cause
+     * Maintains existing functionalities
+     * Ensures all tests pass
+
+REQUIRED STEPS:
+1. Open and analyze relevant files and tests
+2. Review previous attempts if available
+3. Document your complete reasoning process using:
+   - <ASSESS_LAST_TRY>: Review previous attempt results
+   - <OBSERVE_WORKSPACE>: Document current state analysis
+   - <REASON>: Detail your step-by-step thinking
+   - <PROPOSE_SOLUTIONS>: List multiple approaches
+   - <POSSIBLE_FIX>: Document selected solution rationale
+
+IMPLEMENTATION GUIDELINES:
+- Start fresh with "git reset --hard" if last attempt failed
+- Execute multiple actions as needed
+- Always run tests after modifications
+- Wait for action results before proceeding
+- Modify existing tests only - DO NOT create new test files
+- If you require output of an action to proceed, wait for results
+
+CRITICAL REMINDERS:
+- Take time to think deeply about each step
+- Consider all implications before making changes
+- Document your reasoning thoroughly
+- Validate assumptions
+- Think through edge cases
+- Consider long-term maintainability
 
 You will operate autonomously from this point forward. Begin with the `<ASSESS_LAST_TRY>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>` and `<POSSIBLE_FIX>` tags to document your thought process. Finally, list all actions within the `<ACTIONS>` tag and await the results. Your thinking should be thorough and so it's fine if it's very long.
 
-TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP. 
+ALWAYS TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP.
 """
 
 @observe()
@@ -102,6 +199,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 )
             })
 
+            # Add continuation prompt for iterations after the first
+            temporary_message = None
             if iteration > 1:
                 continuation_prompt = """
                 Based on the previous actions and their results, continue implementing the necessary changes.
@@ -112,23 +211,24 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 3. Validate each change against the PR requirements
                 4. Consider potential edge cases and implications
                 
-                CONTINUE IMPLEMENTING THE NECESSARY CHANGES TO THE REPO SO THE REQUIREMNTS In <pr_description> are met.  MAKE SURE TO TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP. 
+                CONTINUE IMPLEMENTING THE NECESSARY CHANGES TO THE REPO SO THE REQUIREMNTS In <pr_description> are met.  MAKE SURE TO TAKE A STEP BACK. THINK DEEPLY AND STEP BY STEP.
                 """
-                await thread_manager.add_message(thread_id, {
-                    "role": "user",
+                temporary_message = {
+                    "role": "user", 
                     "content": continuation_prompt
-                })
+                }
 
             response = await thread_manager.run_thread(
                 thread_id=thread_id,
                 system_message=system_message,
                 model_name=model_name,
                 temperature=0.0,
-                max_tokens=8192,
+                max_tokens=8096,
                 tool_choice="any",
                 native_tool_calling=False,
                 xml_tool_calling=True,
                 parallel_tool_execution=False,
+                temporary_message=temporary_message  # Add the temporary message parameter
             )
 
             if iteration > 4:
@@ -169,8 +269,8 @@ if __name__ == "__main__":
                 "sonnet": "anthropic/claude-3-5-sonnet-latest",
                 "haiku": "anthropic/claude-3-5-haiku-latest",
                 "deepseek": "deepseek/deepseek-chat",
-                "gpt-4o": "gpt-4o",
-                "qwen": "openrouter/qwen/qwen-2.5-coder-32b-instruct",
+                "gpt-4o": "o1-preview",
+                "qwen": "openrouter/qwen/qwq-32b-preview",
             }
 
         model_name= model_mapping.get(args.model_name, "anthropic/claude-3-5-sonnet-latest")

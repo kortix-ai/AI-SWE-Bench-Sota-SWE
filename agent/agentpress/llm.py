@@ -12,6 +12,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
+OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
 
 LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY', '')
 LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY', '')
@@ -68,7 +69,7 @@ async def make_llm_api_call(
     Raises:
         Exception: If API call fails after retries
     """
-    # litellm.set_verbose = True
+    litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         """
@@ -182,7 +183,7 @@ async def make_llm_api_call(
 
 if __name__ == "__main__":
     import asyncio
-    async def test_llm_api_call(stream=True):
+    async def test_llm_api_call(stream=False):
         """
         Test function for the LLM API call functionality.
         
@@ -193,9 +194,13 @@ if __name__ == "__main__":
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Complex essay on economics"}
         ]
-        model_name = "gpt-4o"
+        model_name = "openrouter/qwen/qwq-32b-preview"
 
-        response = await make_llm_api_call(messages, model_name, stream=stream)
+        response = await make_llm_api_call(
+            messages, 
+            model_name, 
+            stream=stream,
+        )
 
         if stream:
             print("\n🤖 Streaming response:\n")
