@@ -27,8 +27,8 @@ def transform_string_to_dict(input_string):
     
     replacements = []
     for match in matches:
-        old_string = match.group(1).strip()
-        new_string = match.group(2).strip()
+        old_string = match.group(1)
+        new_string = match.group(2)
         
         replacement = {
             "old_string": old_string,
@@ -388,7 +388,7 @@ if __name__ == '__main__':
                 await self.state_manager.set("workspace", workspace)
                 return self.success_response(f"Folder {path} added to workspace.")
             else:
-                return self.fail_response(f"Folder {path} is already open in the workspace.")
+                return self.success_response(f"Folder {path} is already open in the workspace.")
         except Exception as e:
             return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
@@ -572,6 +572,9 @@ print("Hello, World!")
             - path: The file path to edit (REQUIRED)
             - replacements: List of string replacements (REQUIRED)
         -->
+
+        <!-- Note: For accurate replacements, ensure you match the exact indentation of the exact strings. -->
+
         <edit_file path="/testbed/.../example.py">
             <replacements>
                 <replacement>
@@ -641,7 +644,7 @@ print("Hello, World!")
                     if not isinstance(old_string, str) or not isinstance(new_string, str):
                         return self.fail_response("Both 'old_string' and 'new_string' must be strings.")
                     if old_string not in content:
-                        return self.fail_response(f"The string to replace '{old_string}' was not found in the file.")
+                        return self.fail_response(f"The string to replace '{old_string}' was not found in the file. Please check your old_string: Indentation really matters! When editing a file, make sure to insert appropriate indentation before each line!")
                     content = content.replace(old_string, new_string)
                 else:
                     return self.fail_response("Invalid replacement format in one of the replacements.")
@@ -687,8 +690,6 @@ print("Hello, World!")
         <!-- For Django-like recommended command-->
         <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite --parallel 1 example.test_example " />
 
-        <!-- Reset changes -->
-        <run_bash command="git reset --hard" />
         '''
     )
         # <run_bash command="DJANGO_SETTINGS_MODULE=test_sqlite pytest tests/.../test_example.py -q -rFE" />
@@ -791,9 +792,9 @@ print("Hello, World!")
                 await self.state_manager.set("workspace", workspace)
                 return self.success_response(f"File {path} added to workspace.")
             else:
-                return self.fail_response(f"File {path} is already open in the workspace.")
+                return self.success_response(f"File {path} is already open in the workspace.")
         except Exception as e:
-            return self.fail_response(f"Error adding file {path} to workspace: {str(e)}")
+            return self.fail_response(f"Error adding file {path} to workspace: {str(e)}, please provide a valid file path. You may use view_folder to explore the folder structure.")
 
     @openapi_schema({
         "type": "function",
