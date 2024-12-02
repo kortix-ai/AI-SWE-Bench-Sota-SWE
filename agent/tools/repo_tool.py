@@ -241,6 +241,14 @@ class RepositoryTools(Tool):
             xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
             xml_output += f"{session_entry['output']}\n"
             xml_output += "</bash_command_executed>\n"
+
+        if "latest_failures" in workspace and workspace["latest_failures"]:
+            xml_output += "<latest_failures>\n"
+            for failure_message in workspace["latest_failures"]:
+                xml_output += f"<failure>{failure_message}</failure>\n"
+            xml_output += "</latest_failures>\n"
+            workspace["latest_failures"] = []
+            await self.state_manager.set("workspace", workspace)
         xml_output += "</last_terminal_session>\n"
         xml_output += f"<git_diff>{stdout}</git_diff>\n"
         xml_output += "</last_try>\n"
@@ -384,45 +392,45 @@ if __name__ == '__main__':
         except Exception as e:
             return self.fail_response(f"Error adding folder {path} to workspace: {str(e)}")
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "PR_SOLVED_SUBMIT_AND_TERMINATE",
-            "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="PR_SOLVED_SUBMIT_AND_TERMINATE",
-        mappings=[],
-        example='''
-        <!-- Repository Tool: PR_SOLVED_SUBMIT_AND_TERMINATE -->
-        <!-- Use when all tests of last_try pass and the issue is resolved -->
+    # @openapi_schema({
+    #     "type": "function",
+    #     "function": {
+    #         "name": "PR_SOLVED_SUBMIT_AND_TERMINATE",
+    #         "description": "If all test files are working including edge cases, and existing tests pass, and you are confident that the issue is resolved, mark the pull request as solved.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {},
+    #             "required": []
+    #         }
+    #     }
+    # })
+    # @xml_schema(
+    #     tag_name="PR_SOLVED_SUBMIT_AND_TERMINATE",
+    #     mappings=[],
+    #     example='''
+    #     <!-- Repository Tool: PR_SOLVED_SUBMIT_AND_TERMINATE -->
+    #     <!-- Use when all tests of last_try pass and the issue is resolved -->
 
-        <!-- No Parameters Required -->
+    #     <!-- No Parameters Required -->
 
-        <!-- Mark the PR as solved -->
-        <PR_SOLVED_SUBMIT_AND_TERMINATE />
+    #     <!-- Mark the PR as solved -->
+    #     <PR_SOLVED_SUBMIT_AND_TERMINATE />
 
-        <!-- Important Notes:
-             - Only use when all test files of last_try are working perfectly
-             - Ensure edge cases are covered and existing tests pass
-             - Use this tool only when the implementation works perfectly and all tests pass
-        -->
-        '''
-    )
-    async def PR_SOLVED_SUBMIT_AND_TERMINATE(self) -> ToolResult:
-        """
-        Signals that the task is completed.
+    #     <!-- Important Notes:
+    #          - Only use when all test files of last_try are working perfectly
+    #          - Ensure edge cases are covered and existing tests pass
+    #          - Use this tool only when the implementation works perfectly and all tests pass
+    #     -->
+    #     '''
+    # )
+    # async def PR_SOLVED_SUBMIT_AND_TERMINATE(self) -> ToolResult:
+    #     """
+    #     Signals that the task is completed.
 
-        Returns:
-            ToolResult: Success message indicating task completion.
-        """
-        return self.success_response("Task terminated, Agent stopped!")
+    #     Returns:
+    #         ToolResult: Success message indicating task completion.
+    #     """
+    #     return self.success_response("Task terminated, Agent stopped!")
 
     # @openapi_schema({
     #     "type": "function",
@@ -722,8 +730,15 @@ print("Hello, World!")
 
     def fail_response(self, message: str) -> ToolResult:
         result = super().fail_response(message)
-        # asyncio.create_task(self._add_action(message))
+        asyncio.create_task(self._add_failure(message))
         return result
+
+    async def _add_failure(self, message: str):
+        workspace = await self.state_manager.get("workspace")
+        if "latest_failures" not in workspace:
+            workspace["latest_failures"] = []
+        workspace["latest_failures"].append(message)
+        await self.state_manager.set("workspace", workspace)
 
     async def _add_action(self, message: str):
         workspace = await self.state_manager.get("workspace")

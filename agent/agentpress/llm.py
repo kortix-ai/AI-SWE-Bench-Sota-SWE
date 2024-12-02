@@ -41,7 +41,8 @@ async def make_llm_api_call(
     api_base: str = None, 
     agentops_session: Any = None, 
     stream: bool = False, 
-    top_p: float = None
+    top_p: float = None,
+    stop_sequences: list = None  # Added parameter
 ) -> Union[Dict[str, Any], Any]:
     """
     Make an API call to a language model using litellm.
@@ -62,6 +63,7 @@ async def make_llm_api_call(
         agentops_session (Any, optional): Session for agentops integration
         stream (bool, optional): Whether to stream the response. Defaults to False
         top_p (float, optional): Top-p sampling parameter
+        stop_sequences (list, optional): Sequences to stop the response
         
     Returns:
         Union[Dict[str, Any], Any]: API response, either complete or streaming
@@ -121,6 +123,9 @@ async def make_llm_api_call(
             "stream": stream,
             "metadata": metadata,  # Include metadata with trace_id
         }
+
+        if stop_sequences:
+            api_call_params["stop_sequences"] = stop_sequences
 
         # Add optional parameters if provided
         if api_key:

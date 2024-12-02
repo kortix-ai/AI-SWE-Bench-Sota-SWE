@@ -10,7 +10,13 @@ import agentops
 agentops.init(os.environ['AGENTOPS_API_KEY'])
 agentops.init(os.environ['OPENROUTER_API_KEY'])
 
-system_prompt = """You are an autonomous expert software engineer tasked with making precise, high-quality modifications to resolve specific issues in a Python code repository. Your goal is to analyze the problem, propose solutions, and implement the best fix while maintaining code quality and efficiency."""
+system_prompt = """You are an autonomous expert software engineer tasked with making precise, high-quality modifications to resolve specific issues in a Python code repository. Your goal is to analyze the problem, propose solutions, and implement the best fix while maintaining code quality and efficiency.
+
+Available XML tools to interact with the workspace:
+<xml_tools>
+{xml_format}
+</xml_tools>
+"""
 
 user_prompt = """First, examine the current state of the workspace:
 {workspace}
@@ -49,7 +55,7 @@ Follow this systematic approach to address the issue:
      - Potential drawbacks
      - Possible failure modes
    - Think through edge cases and maintenance implications.
-   - Propose multiple solutions with code snippets.
+   - Propose multiple solutions.
    - If <IMPLEMENTATION_TRAILS> are available:
      - Review existing trials
      - Update their status based on the last attempt results
@@ -58,7 +64,7 @@ Follow this systematic approach to address the issue:
    - Use the `track_implementation` tool within <PROPOSE_SOLUTIONS> to:
      - Add new trials if necessary
      - Update existing trials
-     - Include detailed notes with update code snippet
+     - Include detailed notes.
      - Update status appropriately
    - Ensure comprehensive coverage of the solution space.
    - If the current implementation fails multiple times:
@@ -88,7 +94,7 @@ Important Guidelines:
 - Keep iterating with different approaches until all tests pass.
 - Do not give up if tests fail; always try alternative solutions.
 
-Document your complete reasoning process by wrapping your analysis in these tags when appropriate, each tag can only be used ONCE :
+Document your complete reasoning process by wrapping your analysis in these tags:
 - <PREVIOUS_ATTEMPT_ANALYSIS>: Review previous attempt results, including what worked, what failed, and potential reasons for failure.
 - <OBSERVE_WORKSPACE>: Analyze the current workspace state, listing key files, their purposes, and notable dependencies between them.
 - <REASON>: Detail your step-by-step thinking, including consideration of edge cases and potential side effects.
@@ -101,7 +107,7 @@ Implementation Guidelines:
 - Always run tests after modifications and add new tests to confirm the PR.
 - Wait for action results before proceeding.
 - Modify existing tests only.
-- Never use `track_implementation` in the <ACTIONS> tag; it belongs in <PROPOSE_SOLUTIONS>.
+- Use `track_implementation` in <PROPOSE_SOLUTIONS>.
 
 Critical Reminders:
 - Think deeply about each step.
@@ -115,15 +121,22 @@ Critical Reminders:
 - Only propose solutions, edit file when all relevant files are already opened in the workspace.
 - Only run tests after having the correct test paths.
 
-Only submit your changes when both of these conditions are met:
-1. All test cases pass completely (including existing and newly added tests specified for the PR)
-2. The implemented changes correctly address the requirements in the PR description with appropriate code modifications
+Only submit your changes when both of these conditions are strictly met:
 
-If either condition is not fully satisfied, continue iterating with alternative solutions.
+1. All test cases pass completely (including existing and newly added tests specified for the PR). This includes verifying that the code runs correctly and passes all tests without errors.
 
-Output your actions in the following XML format, enclosed with a single <ACTIONS> tag.
+2. The implemented changes correctly and completely address the requirements in the PR description with appropriate and correct code modifications.
 
-Begin your analysis and problem-solving process. Think deeply and proceed step-by-step through each stage of the process."""
+**If either condition is not fully satisfied, do not submit your changes. Continue iterating with alternative solutions.**
+
+**Do not output `<PR_SOLVED_SUBMIT_AND_TERMINATE />` unless you are completely certain that both conditions are fully satisfied.**
+
+You will operate autonomously from this point forward.
+Begin your analysis and problem-solving process with the `<PREVIOUS_ATTEMPT_ANALYSIS>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. 
+Finally, list all actions within the `<ACTIONS>` tag and await the results. 
+
+Think deeply and proceed step-by-step through each stage of the process. Your thinking should be thorough, and it's fine if it's very long.
+"""
 
 @observe()
 async def run_agent(thread_id: str, container_name: str, problem_file: str, threads_dir: str, max_iterations: int = 10, model_name: str = "sonnet"):
@@ -149,7 +162,7 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
     xml_format = f"{json.dumps(xml_examples, indent=2)}"
     system_message = {
         "role": "system",
-        "content": system_prompt
+        "content": system_prompt.format(xml_format=xml_format)
     }
     await thread_manager.add_to_history_only(thread_id, system_message)
 
@@ -214,7 +227,8 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 native_tool_calling=False,
                 xml_tool_calling=True,
                 parallel_tool_execution=False,
-                temporary_message=temporary_message  # Add the temporary message parameter
+                temporary_message=temporary_message, 
+                stop_sequences=["</ACTIONS>"] 
             )
 
             assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)

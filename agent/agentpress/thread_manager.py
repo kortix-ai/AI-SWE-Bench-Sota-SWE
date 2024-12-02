@@ -300,6 +300,7 @@ class ThreadManager:
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None,
         agentops_session: Any = None,  # Add agentops_session parameter
+        stop_sequences: List[str] = None  # Updated parameter
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with specified parameters.
         
@@ -391,7 +392,8 @@ class ThreadManager:
                 tools=openapi_tool_schemas,
                 tool_choice=tool_choice if native_tool_calling else None,
                 stream=stream,
-                agentops_session=agentops_session 
+                agentops_session=agentops_session,
+                stop_sequences=stop_sequences  # Pass stop_sequences
             )
 
             if stream:
@@ -424,7 +426,8 @@ class ThreadManager:
         tools: Optional[List[Dict[str, Any]]],
         tool_choice: Optional[str],
         stream: bool,
-        agentops_session: Any = None  
+        agentops_session: Any = None,
+        stop_sequences: List[str] = None  
     ) -> Union[Any, AsyncGenerator]:
         """Get completion from LLM API."""
         return await make_llm_api_call(
@@ -435,7 +438,8 @@ class ThreadManager:
             tools=tools,
             tool_choice=tool_choice,
             stream=stream,
-            agentops_session=agentops_session  
+            agentops_session=agentops_session,
+            stop_sequences=stop_sequences 
         )
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
