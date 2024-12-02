@@ -141,6 +141,9 @@ def main():
         }
         args.dataset = dataset_mapping[args.dataset_type]
 
+    if args.submission:
+        args.archive = False  # Disable archiving in submission mode
+
     if args.archive and not args.only_eval:
         import shutil
         from datetime import datetime
