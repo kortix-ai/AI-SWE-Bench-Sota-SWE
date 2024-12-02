@@ -19,7 +19,7 @@ Available XML tools to interact with the workspace:
 
 NOTE ABOUT THE <edit_file> tool: Indentation really matters! When editing a file, make sure to insert appropriate indentation before each line!
 
-TIP: If you are working on Django repository, recommended command: <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite  example.test_example" />
+TIP: If you are working on a Django repository, recommended command: <run_bash command="/testbed/tests/runtests.py --verbosity 1 --settings=test_sqlite example.test_example" />
 """
 
 user_prompt = """First, examine the current state of the workspace:
@@ -124,6 +124,7 @@ Critical Reminders:
 - Ensure new tests for this PR are created and executed.
 - Only propose solutions, edit file when all relevant files are already opened in the workspace.
 - Only run tests after having the correct test paths.
+- Use the `<SUBMIT_FINAL_SOLUTION_ONLY_IF_ALL_TESTS_PASS>` tool only when the output of last attempt show all tests pass and you are confident that the issue is fully resolved.
 
 You will operate autonomously from this point forward.
 Begin your analysis and problem-solving process with the `<PREVIOUS_ATTEMPT_ANALYSIS>` tag, followed by `<OBSERVE_WORKSPACE>`, `<REASON>`, `<PROPOSE_SOLUTIONS>`, and `<POSSIBLE_FIX>` tags to document your thought process. 
@@ -188,21 +189,6 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
             # Add continuation prompt for iterations after the first
             temporary_message = None
             if iteration > 1:
-                # continuation_prompt = """
-                # Based on previous actions and results, continue implementing the necessary changes.
-
-                # Remember to:
-                # 1. Review the current state and previous actions.
-                # 2. Think step-by-step about the next logical changes.
-                # 3. Validate each change against the PR requirements.
-                # 4. Consider potential edge cases and implications.
-
-                # CONTINUE IMPLEMENTING THE NECESSARY CHANGES TO THE REPO SO THE REQUIREMENTS IN <pr_description> ARE MET. TAKE A STEP BACK, THINK DEEPLY AND STEP BY STEP.
-                # """
-                # temporary_message = {
-                #     "role": "user", 
-                #     "content": continuation_prompt
-                # }
                 if reminder_custom_test:
                     temporary_message = {
                         "role": "user",
@@ -224,20 +210,20 @@ async def run_agent(thread_id: str, container_name: str, problem_file: str, thre
                 stop_sequences=["</EXECUTE_ACTIONS>"]
             )
 
-            # assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
-            # if assistant_messages:
-            #     last_assistant = assistant_messages[0]['content']
-            #     try:
-            #         if "PR_SOLVED_SUBMIT_AND_TERMINATE" in last_assistant:
-            #             if iteration > 5:
-            #                 print("Task completed via mark_pr_as_solved tool, stopping...")
-            #                 agentops_session.end_session()
-            #                 return
-            #             else:
-            #                 reminder_custom_test = True
-            #     except Exception as e:
-            #         print(f"Error parsing XML response: {str(e)}")
-            #         continue
+            assistant_messages = await thread_manager.list_messages(thread_id, only_latest_assistant=True)
+            if assistant_messages:
+                last_assistant = assistant_messages[0]['content']
+                try:
+                    if "SUBMIT_FINAL_SOLUTION_ONLY_IF_ALL_TESTS_PASS" in last_assistant:
+                        if iteration > 5:
+                            print("Task completed via SUBMIT_FINAL_SOLUTION_ONLY_IF_ALL_TESTS_PASS tool, stopping...")
+                            agentops_session.end_session()
+                            return
+                        else:
+                            reminder_custom_test = True
+                except Exception as e:
+                    print(f"Error parsing XML response: {str(e)}")
+                    continue
 
         except Exception as e:
             print(f"Error in iteration {iteration}: {str(e)}")
