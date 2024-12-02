@@ -85,9 +85,9 @@ class BashExecutor:
                     pass
                 return '', 'Command execution timed out after 2 minutes', 1
                 
-            # Decode outputs
-            stdout_str = stdout.decode().strip() if stdout else ''
-            stderr_str = stderr.decode().strip() if stderr else ''
+            # Decode outputs with UTF-8 encoding and replace errors
+            stdout_str = stdout.decode('utf-8', errors='replace').strip() if stdout else ''
+            stderr_str = stderr.decode('utf-8', errors='replace').strip() if stderr else ''
             
             # Handle empty output
             if not stdout_str and not stderr_str and process.returncode == 0:
@@ -178,7 +178,10 @@ class RepositoryTools(Tool):
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
-        return stdout.decode(), stderr.decode(), process.returncode
+        # Decode outputs with UTF-8 encoding and replace errors
+        stdout_decoded = stdout.decode('utf-8', errors='replace')
+        stderr_decoded = stderr.decode('utf-8', errors='replace')
+        return stdout_decoded, stderr_decoded, process.returncode
 
     async def _extract_file_content(self, output: str) -> str:
         """Extract file content from view output."""
@@ -206,6 +209,12 @@ class RepositoryTools(Tool):
             result = await self._fetch_folder_contents(path=path, depth=depth)
             if result.success:
                 xml_output += f"{result.output}\n"
+        xml_output += "<last_terminal_session>\n"
+        for session_entry in workspace.get("last_terminal_session", []):
+            xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
+            xml_output += f"{session_entry['output']}\n"
+            xml_output += "</bash_command_executed>\n"
+        xml_output += "</last_terminal_session>\n"
         # use reversed order because we want important files to be at the end
         debug_files = []
         for file_path in reversed(workspace["open_files"]):
@@ -221,21 +230,6 @@ class RepositoryTools(Tool):
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
-        xml_output += "</workspace>\n"
-
-        # add <current_changes> (result of "git diff")
-        stdout, stderr, returncode = await self._bash_executor.execute('git diff')
-        xml_output += f"<last_try>\n"
-        
-        xml_output += "<last_terminal_session>\n"
-        for session_entry in workspace.get("last_terminal_session", []):
-            xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
-            xml_output += f"{session_entry['output']}\n"
-            xml_output += "</bash_command_executed>\n"
-        xml_output += "</last_terminal_session>\n"
-        xml_output += f"<git_diff>{stdout}</git_diff>\n"
-        xml_output += "</last_try>\n"
-
         if "implementation_trials" in workspace:
             xml_output += "<IMPLEMENTATION_TRAILS>\n"
             for trial_id, data in workspace["implementation_trials"].items():
@@ -243,6 +237,14 @@ class RepositoryTools(Tool):
                 note = data.get("note", "")
                 xml_output += f'<implementation_trial id="{trial_id}" status="{status}">\n{note}\n</implementation_trial>\n'
             xml_output += "</IMPLEMENTATION_TRAILS>\n"
+
+        # add <current_changes> (result of "git diff")
+        stdout, stderr, returncode = await self._bash_executor.execute('git diff')
+        xml_output += f"<last_try>\n" 
+        xml_output += f"<git_diff>{stdout}</git_diff>\n"
+        xml_output += "</last_try>\n"
+        xml_output += "</workspace>\n"
+
 
         xml_output += "</workspace>\n"
 
