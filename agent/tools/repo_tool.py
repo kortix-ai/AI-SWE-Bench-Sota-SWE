@@ -209,12 +209,15 @@ class RepositoryTools(Tool):
             result = await self._fetch_folder_contents(path=path, depth=depth)
             if result.success:
                 xml_output += f"{result.output}\n"
-        xml_output += "<last_terminal_session>\n"
-        for session_entry in workspace.get("last_terminal_session", []):
-            xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
-            xml_output += f"{session_entry['output']}\n"
-            xml_output += "</bash_command_executed>\n"
-        xml_output += "</last_terminal_session>\n"
+
+        if "implementation_trials" in workspace:
+            xml_output += "<IMPLEMENTATION_TRAILS>\n"
+            for trial_id, data in workspace["implementation_trials"].items():
+                status = data.get("status", "")
+                note = data.get("note", "")
+                xml_output += f'<implementation_trial id="{trial_id}" status="{status}">\n{note}\n</implementation_trial>\n'
+            xml_output += "</IMPLEMENTATION_TRAILS>\n"
+
         # use reversed order because we want important files to be at the end
         debug_files = []
         for file_path in reversed(workspace["open_files"]):
@@ -230,21 +233,17 @@ class RepositoryTools(Tool):
             else:
                 xml_output += f'<!-- Error reading file {file_path}: {stderr} -->\n'
 
-        if "implementation_trials" in workspace:
-            xml_output += "<IMPLEMENTATION_TRAILS>\n"
-            for trial_id, data in workspace["implementation_trials"].items():
-                status = data.get("status", "")
-                note = data.get("note", "")
-                xml_output += f'<implementation_trial id="{trial_id}" status="{status}">\n{note}\n</implementation_trial>\n'
-            xml_output += "</IMPLEMENTATION_TRAILS>\n"
-
         # add <current_changes> (result of "git diff")
         stdout, stderr, returncode = await self._bash_executor.execute('git diff')
         xml_output += f"<last_try>\n" 
+        xml_output += "<last_terminal_session>\n"
+        for session_entry in workspace.get("last_terminal_session", []):
+            xml_output += f"<bash_command_executed command=\"{session_entry['command']}\">\n"
+            xml_output += f"{session_entry['output']}\n"
+            xml_output += "</bash_command_executed>\n"
+        xml_output += "</last_terminal_session>\n"
         xml_output += f"<git_diff>{stdout}</git_diff>\n"
         xml_output += "</last_try>\n"
-        xml_output += "</workspace>\n"
-
 
         xml_output += "</workspace>\n"
 

@@ -88,11 +88,11 @@ Important Guidelines:
 - Keep iterating with different approaches until all tests pass.
 - Do not give up if tests fail; always try alternative solutions.
 
-Document your complete reasoning process by wrapping your analysis in these tags:
+Document your complete reasoning process by wrapping your analysis in these tags when appropriate, each tag can only be used ONCE :
 - <PREVIOUS_ATTEMPT_ANALYSIS>: Review previous attempt results, including what worked, what failed, and potential reasons for failure.
 - <OBSERVE_WORKSPACE>: Analyze the current workspace state, listing key files, their purposes, and notable dependencies between them.
 - <REASON>: Detail your step-by-step thinking, including consideration of edge cases and potential side effects.
-- <PROPOSE_SOLUTIONS>: List multiple approaches, rating each on a scale of 1-5 for effectiveness, complexity, and maintainability.
+- <PROPOSE_SOLUTIONS>: List multiple best approaches, minimal or complex, to solve the problem, including code snippets and analysis.
 - <POSSIBLE_FIX>: Document the selected solution rationale.
 
 Implementation Guidelines:
@@ -112,6 +112,8 @@ Critical Reminders:
 - If tests are not found, examine the relevant `tests` directory to locate correct test paths.
 - Update trial status and notes based on previous attempts.
 - Ensure new tests for this PR are created and executed.
+- Only propose solutions, edit file when all relevant files are already opened in the workspace.
+- Only run tests after having the correct test paths.
 
 Only submit your changes when both of these conditions are met:
 1. All test cases pass completely (including existing and newly added tests specified for the PR)
