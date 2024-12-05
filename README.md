@@ -1,8 +1,10 @@
 # Kortix SWE Bench
 
+A streamlined framework for testing coding agents on SWE-Bench with minimal setup overhead. This tool handles all the infrastructure complexities (Docker, dataset management, tool interactions) so you can focus on developing and testing your agent's core logic.
+
 This Repo contains:
 - SWE Runner: Evaluating AI Agents on SWE-Bench
-- Git Agent CLI: An AI-powered command-line tool for automated GitHub issue resolution (using our Agent)
+- Git Agent CLI: An AI-powered command-line tool for automated GitHub issue resolution (using our Agent) (WIP)
 
 # SWE Runner: Evaluating AI Agents on SWE-Bench
 
