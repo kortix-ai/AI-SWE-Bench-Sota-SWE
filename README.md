@@ -16,52 +16,58 @@ SWE Runner is a tool for running and evaluating AI agents on the [SWE-Bench](htt
 
 1. **Prepare Your Agent**:
 
-   Place your agent implementation in the `agent/` directory. Ensure it includes an `agent.py` script that defines your agent logic.
+   Place your agent implementation in the `agent/` directory. Ensure it includes an `agent_state.py` script that defines your agent logic.
 
 2. **Run the Benchmark**:
 
-   Execute the `run_benchmark.sh` script to start the benchmarking process.
+   Execute the `swe_bench/swe_runner.py` script to start the benchmarking process.
 
    ```bash
-   bash run_benchmark.sh
+   python swe_bench/swe_runner.py
    ```
 
-   This script runs `swe_runner.py` with default settings, which processes one example from the SWE-Bench Lite dataset.
+   This script runs `swe_bench/swe_runner.py` with default settings, which processes one example from the SWE-Bench Lite dataset.
 
 3. **Customize Benchmark Settings**:
 
-   You can customize the number of examples, dataset, agent directory, and more by directly running `swe_runner.py` with arguments.
+   You can customize the number of examples, dataset, agent, and more by directly running `swe_bench/swe_runner.py` with arguments.
 
    ```bash
-   python swe_runner.py --range 1 5 --max-iterations 7 --streamlit
+   python swe_bench/swe_runner.py --range 1 5 --max-iterations 7 --model-name haiku
    ```
 
-   - `--num-examples`: Number of examples to test.
-   - `--test-index`: Run a specific test by index.
+   - `--num-examples`: Number of examples to test (default: 1).
+   - `--test-index`: Run a specific test by index (starting from 1).
    - `--range`: Run tests from START to END index (inclusive).
-   - `--dataset`: Dataset to use (default: `princeton-nlp/SWE-bench_Lite`).
+   - `--instance-id`: Choose a specific instance by instance_id.
+   - `--instances-file`: JSON file containing list of instance IDs to run.
    - `--split`: Dataset split to use (default: `test`).
-   - `--agent-dir`: Path to your agent directory.
+   - `--track-files`: List of files and/or folders to track.
    - `--output-dir`: Directory to save outputs (default: `./outputs`).
-   - `--track-files`: List of files and/or folders to track and copy to outputs directory.
-   - `--streamlit`: Launch Streamlit thread viewer after execution.
-   - `--max-iterations`: Maximum number of iterations.
-   - `--disable-streamlit`: Disable the Streamlit app.
+   - `--join-only`: Only join existing JSON files to JSONL, skip running tests.
+   - `--max-iterations`: Maximum number of iterations (default: 10).
+   - `--model-name`: Model name to use (choices: `sonnet`, `haiku`, `deepseek`, `gpt-4o`, `qwen`; default: `sonnet`).
+   - `--num-workers`: Number of parallel workers (default: 1).
+   - `--execute-file`: Path to the script to execute (default: `agent/agent.py`).
+   - `--install-packages`: Install packages inside Docker container (default: `False`).
+   - `--run_id`: Identifier for the run, name of model (default: `KortixAI`).
+   - `--submission`: Enable submission mode to generate files in SWE-bench format.
+   - `--no-archive`: Do not keep previous evaluation results for selected instances.
 
 4. **Run Evaluation**:
 
-   After benchmarking, run the `evaluation.py` script to evaluate the results.
+   After benchmarking, run the `swe_bench/evaluation.py` script to evaluate the results.
 
    ```bash
-   python evaluation.py --input-file ./outputs/__combined_agentpress_output_*.jsonl --output-dir ./outputs --dataset princeton-nlp/SWE-bench_Lite --split test --num-workers 4
+   python swe_bench/evaluation.py --input-file ./outputs/__combined_agentpress_output_*.jsonl --output-dir ./outputs --dataset princeton-nlp/SWE-bench_Lite --split test --num-workers 4
    ```
 
-   - `--input-file`: Path to the combined output file.
-   - `--output-dir`: Directory to save evaluation outputs.
-   - `--dataset`: Dataset name to use.
-   - `--split`: Dataset split to use.
+   - `--input-file`: Path to input predictions file (required).
+   - `--output-dir`: Directory to save evaluation outputs (default: `./outputs`).
+   - `--dataset`: Dataset name to use (default: `princeton-nlp/SWE-bench_Lite`).
+   - `--split`: Dataset split to use (default: `test`).
    - `--timeout`: Timeout for evaluation in seconds (default: 1800).
-   - `--num-workers`: Number of parallel workers.
+   - `--num-workers`: Number of parallel workers (default: 1).
 
 5. **View Results**:
 
@@ -78,14 +84,10 @@ SWE Runner is a tool for running and evaluating AI agents on the [SWE-Bench](htt
 
 ## File Overview
 
-- **run_benchmark.sh**: Shell script to run the benchmarking process with default settings.
-- **swe_runner.py**: Main script that handles loading the dataset, running each instance in a Docker container, and collecting outputs.
-- **evaluation.py**: Script to evaluate the results from the benchmarking process.
-- **agent/agent.py**: Your agent implementation. Contains the logic for how the agent interacts with the problem instances.
-- **agentpress**: Directory containing AgentPress utilities for building AI agents, including:
-  - **thread_manager.py**: Manages conversations between the agent and the LLM.
-  - **state_manager.py**: Manages the agent's state across iterations.
-  - **tools**: Directory for agent tools like `FilesTool` and `TerminalTool`.
+- **swe_bench/swe_runner.py**: Main script that handles loading the dataset, running each instance in a Docker container, and collecting outputs.
+- **swe_bench/evaluation.py**: Script to evaluate the results from the benchmarking process.
+- **swe_bench/streamlit_dashboard.py**: Streamlit application to visualize agent interactions.
+- **agent/agent_state.py**: Your agent implementation. Contains the logic for how the agent interacts with the problem instances.
 - **outputs/**: Directory where outputs from the benchmarking and evaluation processes are saved.
 - **agentpress_README.md**: Readme for AgentPress, providing detailed information about its components.
 
@@ -93,11 +95,11 @@ SWE Runner is a tool for running and evaluating AI agents on the [SWE-Bench](htt
 
 - **Using a Different LLM**:
 
-  The agent uses `anthropic/claude-3-5-sonnet-latest` by default. You can change the model in `agent/agent.py` by modifying the `model_name` parameter in the `run_agent` function.
+  The agent uses `anthropic/claude-3-5-sonnet-latest` by default. You can change the model in `agent/agent_state.py` by modifying the `model_name` parameter in the `run_agent` function.
 
 - **Adding Tools**:
 
-  You can add or customize tools available to the agent in `agent/agent.py`. Tools extend the agent's capabilities, such as interacting with files or executing terminal commands.
+  You can add or customize tools available to the agent in `agent/agent_state.py`. Tools extend the agent's capabilities, such as interacting with files or executing terminal commands.
 
 ## Philosophy
 

@@ -48,7 +48,7 @@ def main():
     parser.add_argument("--only-eval", action="store_true", default=False,
                         help="Only run evaluation step, skip inference")
     parser.add_argument("--input-file", help="Path to the input file for evaluation")
-    parser.add_argument("--execute-file", default="agent/agent.py",
+    parser.add_argument("--execute-file", default="agent/agent_simple.py",
                         help="Path to the script to execute (default: agent/agent.py)")
     parser.add_argument("--install-packages", action="store_true", default=False,
                         help="Install packages inside Docker container (default: False)")
