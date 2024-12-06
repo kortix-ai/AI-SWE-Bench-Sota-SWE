@@ -10,8 +10,10 @@ class StreamlitRunner:
         self.process = None
 
     def run(self, output_dir):
+        # Get the absolute path to streamlit_dashboard.py
+        dashboard_path = os.path.join(os.path.dirname(__file__), "streamlit_dashboard.py")
         # Start Streamlit as a separate process
-        cmd = [sys.executable, "-m", "streamlit", "run", "streamlit_dashboard.py", "--", output_dir]
+        cmd = [sys.executable, "-m", "streamlit", "run", dashboard_path, "--", output_dir]
         self.process = subprocess.Popen(cmd)
 
     def stop(self):

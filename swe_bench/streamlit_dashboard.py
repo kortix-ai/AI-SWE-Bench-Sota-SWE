@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import List, Dict
 import re
+import sys
 
 def load_evaluation_result(run_dir: str) -> Dict:
     """Load evaluation result JSON for a given run."""
@@ -457,4 +458,6 @@ def main():
         st.info("👈 Please select a run from the sidebar")
 
 if __name__ == "__main__":
-    main()
+    print("Please run :\n\npython -m swe_bench.streamlit_runner\n\n instead of running this file directly.")
+    print("This ensures proper process management and clean shutdown.")
+    sys.exit(1)

@@ -17,6 +17,7 @@ python-dotenv = "^1.0.1"
 openai = "^1.54.5"
 pytest = "^8.3.3"
 swebench = "^2.1.3"
+streamlit = "^1.40.2"
 
 
 [build-system]
